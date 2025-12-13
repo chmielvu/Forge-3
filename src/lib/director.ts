@@ -9,7 +9,8 @@ import { selectNarratorMode, NARRATOR_VOICES } from "../services/narratorEngine"
 
 // ==================== CONFIGURATION ====================
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Lazy initialization in functions
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // ==================== SCHEMAS ====================
 
@@ -101,7 +102,7 @@ export async function executeDirectorTurn(
     const branches = await simulateNarrativeBranches(context, winningBid);
     const selectedBranch = branches.sort((a, b) => b.final_score - a.final_score)[0];
 
-    // 6. Execution (Gemini 3 Pro)
+    // 6. Execution (Gemini 3 Pro) with Safety Retry
     // We explicitly instruct the model to EXECUTE the selected branch.
     const prompt = `
     CONTEXT:
@@ -130,51 +131,72 @@ export async function executeDirectorTurn(
     - Optional: 'psychosis_text' for fleeting intrusive thoughts if Trauma > 60.
     `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: [
-        { role: 'user', parts: [{ text: prompt }] }
-      ],
-      config: {
-        systemInstruction: DIRECTOR_SYSTEM_PROMPT_TEMPLATE,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            thought_signature: { type: "STRING" },
-            ledger_update: { type: "OBJECT", additionalProperties: true },
-            narrative_text: { type: "STRING" },
-            visual_prompt: { type: "STRING" },
-            choices: { type: "ARRAY", items: { type: "STRING" } },
-            psychosis_text: { type: "STRING" }, 
-            audio_cues: {
-               type: "ARRAY",
-               items: {
-                  type: "OBJECT",
-                  properties: {
-                      speaker: { type: "STRING" },
-                      text: { type: "STRING" },
-                      emotion: { type: "STRING" }
-                  }
-               }
-            },
-            kgot_mutations: {
-               type: "ARRAY",
-               items: {
-                  type: "OBJECT",
-                  properties: {
-                      operation: { type: "STRING", enum: ['add_edge', 'update_node', 'remove_edge', 'add_node', 'add_memory', 'update_grudge'] },
-                      params: { type: "OBJECT", additionalProperties: true }
-                  }
-               }
-            }
-          }
-        }
-      }
-    });
+    let directorOutput: any = null;
+    let attempts = 0;
+    const MAX_RETRIES = 3;
 
-    const outputText = response.text || "{}";
-    const directorOutput = JSON.parse(outputText);
+    while (attempts < MAX_RETRIES && !directorOutput) {
+        try {
+            const ai = getAI();
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-pro-preview',
+                contents: [
+                    { role: 'user', parts: [{ text: prompt }] }
+                ],
+                config: {
+                    systemInstruction: DIRECTOR_SYSTEM_PROMPT_TEMPLATE,
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            thought_signature: { type: "STRING" },
+                            ledger_update: { type: "OBJECT", additionalProperties: true },
+                            narrative_text: { type: "STRING" },
+                            visual_prompt: { type: "STRING" },
+                            choices: { type: "ARRAY", items: { type: "STRING" } },
+                            psychosis_text: { type: "STRING" }, 
+                            audio_cues: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        speaker: { type: "STRING" },
+                                        text: { type: "STRING" },
+                                        emotion: { type: "STRING" }
+                                    }
+                                }
+                            },
+                            kgot_mutations: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        operation: { type: "STRING", enum: ['add_edge', 'update_node', 'remove_edge', 'add_node', 'add_memory', 'update_grudge'] },
+                                        params: { type: "OBJECT", additionalProperties: true }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            const outputText = response.text;
+            if (outputText) {
+                directorOutput = JSON.parse(outputText);
+            }
+        } catch (retryError) {
+            console.warn(`[Director] Generation attempt ${attempts + 1} failed:`, retryError);
+            attempts++;
+            if (attempts >= MAX_RETRIES) throw retryError;
+            // Linear backoff
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+        }
+    }
+
+    if (!directorOutput) {
+        throw new Error("Failed to generate valid Director output after retries.");
+    }
 
     // 7. Apply Mutations
     if (directorOutput.kgot_mutations) {
@@ -271,6 +293,7 @@ Output as JSON array.
   `.trim();
   
   // Use Flash-Lite for speed
+  const ai = getAI();
   const result = await ai.models.generateContent({
       model: 'gemini-2.5-flash-lite-latest',
       contents: [{ role: 'user', parts: [{ text: branchPrompt }]}],
@@ -314,6 +337,7 @@ function identifyActiveAgents(graph: KnowledgeGraph): string[] {
 async function getDialogueBids(context: any) {
   const bids: any[] = [];
   const activeAgents = context.active_agents || [];
+  const ai = getAI();
 
   await Promise.all(activeAgents.map(async (agentId: string) => {
     const agentPrompt = `

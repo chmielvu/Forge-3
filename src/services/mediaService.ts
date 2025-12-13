@@ -1,12 +1,9 @@
 
-import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { YandereLedger, PrefectDNA, CharacterId, MultimodalTurn } from "../types";
 import { BEHAVIOR_CONFIG } from "../config/behaviorTuning"; 
 import { visualCoherenceEngine } from './visualCoherenceEngine';
-import { VISUAL_MANDATE, VIDEO_MANDATE } from '../config/visualMandate';
 import { CharacterId as CId } from '../types';
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+import { generateImageAction, generateSpeechAction, generateVideoAction, distortImageAction } from '../app/media-actions';
 
 // Voice Mapping for specific characters
 export const CHARACTER_VOICE_MAP: Record<string, string> = {
@@ -53,7 +50,8 @@ export function buildVisualPrompt(
 const MAX_IMAGE_RETRIES = 2;
 
 /**
- * Generates a narrative image using the VisualCoherenceEngine to construct the prompt.
+ * Generates a narrative image using the VisualCoherenceEngine to construct the prompt
+ * and the Server Action to execute the generation.
  */
 export const generateNarrativeImage = async (
   target: PrefectDNA | CharacterId | string, 
@@ -69,31 +67,12 @@ export const generateNarrativeImage = async (
     return undefined;
   }
 
-  // 1. Build the coherent prompt internally
+  // 1. Build the coherent prompt internally (Client Side State)
   const finalCoherentPrompt = buildVisualPrompt(target, sceneContext, ledger, narrativeText, previousTurn);
 
-  // Wrap the JSON prompt with a generation directive
-  const qualityEnforcedPrompt = `
-    GENERATE AN IMAGE BASED ON THIS STRICT JSON CONFIGURATION:
-    \`\`\`json
-    ${finalCoherentPrompt}
-    \`\`\`
-  `;
-  
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image', 
-      contents: { parts: [{ text: qualityEnforcedPrompt }] },
-      config: {
-        safetySettings: [
-          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        ],
-        temperature: 0.7, 
-      }
-    });
-
-    const imageData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    // 2. Call Server Action (Server Side Execution)
+    const imageData = await generateImageAction(finalCoherentPrompt);
     
     if (!imageData) {
       if (retryCount < MAX_IMAGE_RETRIES) {
@@ -139,30 +118,8 @@ export const generateSpeech = async (narrative: string, voiceIdOverride?: string
 
   try {
     const voiceName = voiceIdOverride || selectVoiceForNarrative(narrative);
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-preview-tts',
-      contents: { parts: [{ text: narrative }] },
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voiceName }
-          }
-        },
-      }
-    });
-    
-    const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    
-    if (!audioData) return undefined;
-
-    const base64Length = audioData.length;
-    const byteLength = (base64Length * 3) / 4; 
-    const sampleCount = byteLength / 2; 
-    const duration = sampleCount / 24000; 
-
-    return { audioData, duration };
-
+    // Call Server Action
+    return await generateSpeechAction(narrative, voiceName);
   } catch (error) {
     console.error("⚠️ Audio generation failed:", error);
     return undefined;
@@ -182,50 +139,9 @@ export const animateImageWithVeo = async (
   }
 
   try {
-    // Construct the motion prompt using centralized constants
-    const motionPrompt = `
-      ${VISUAL_MANDATE.ZERO_DRIFT_HEADER}
-      ${VIDEO_MANDATE.STYLE}
-      Scene: ${visualPrompt}
-      Directives: ${VIDEO_MANDATE.DIRECTIVES}
-      Aesthetic: ${VISUAL_MANDATE.STYLE}
-    `;
-
-    let operation = await ai.models.generateVideos({
-      model: 'veo-3.1-fast-generate-preview',
-      prompt: motionPrompt,
-      image: {
-        imageBytes: imageB64,
-        mimeType: 'image/jpeg',
-      },
-      config: {
-        numberOfVideos: 1,
-        resolution: '720p',
-        aspectRatio: aspectRatio
-      }
-    });
-
-    let attempts = 0;
-    while (!operation.done && attempts < 12) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      operation = await ai.operations.getVideosOperation({ operation: operation });
-      attempts++;
-    }
-
-    if (!operation.done) return undefined;
-
-    const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (videoUri) {
-      const response = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
-      const blob = await response.blob();
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    }
-    return undefined;
+    // Call Server Action
+    // Note: Motion prompt construction logic moved to Server Action to ensure visual mandate security
+    return await generateVideoAction(imageB64, visualPrompt, aspectRatio);
   } catch (e) {
     console.error("Veo Animation Failed:", e);
     return undefined;
@@ -263,7 +179,7 @@ export const generateEnhancedMedia = async (
           console.warn("Image not available for video generation.");
           return undefined;
         }
-        // Build coherent prompt for video (since generateNarrativeImage handles it internally for image)
+        // Build coherent prompt for video
         const coherentPrompt = buildVisualPrompt(target, visualPrompt, ledger, narrative, previousTurn);
         return await animateImageWithVeo(imageBase64, coherentPrompt, '16:9');
       } catch (e) {
@@ -289,32 +205,7 @@ export const distortImage = async (imageB64: string, instruction: string): Promi
     }
 
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                data: imageB64,
-                mimeType: 'image/jpeg',
-              },
-            },
-            { text: `${VISUAL_MANDATE.ZERO_DRIFT_HEADER} ${instruction}` }, 
-          ],
-        },
-        config: {
-          responseModalities: [Modality.IMAGE],
-          safetySettings: [
-            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-          ],
-        },
-      });
-  
-      const part = response.candidates?.[0]?.content?.parts?.[0];
-      if (part?.inlineData) {
-        return part.inlineData.data;
-      }
-      return undefined;
+      return await distortImageAction(imageB64, instruction);
     } catch (e) {
       console.error("Image Distortion Failed:", e);
       return undefined;

@@ -1,3 +1,2 @@
-
-// DEPRECATED: This project uses Next.js.
-// Entry point is src/app/layout.tsx and src/app/page.tsx
+// IGNORED: Legacy file. Do not use.
+export default function Ignored() { return null; }

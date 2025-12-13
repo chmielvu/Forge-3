@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -9,7 +8,8 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Lazy init
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // ==================== SCHEMAS ====================
 
@@ -111,6 +111,7 @@ export async function generateSceneVisual(
     const masterPrompt = buildMasterPrompt(validated);
     
     // 3. Generate via Nano Banana (gemini-2.5-flash-image)
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-image",
       contents: [{

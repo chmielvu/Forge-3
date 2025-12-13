@@ -21,13 +21,27 @@ const INITIAL_GAME_STATE = {
     links: []  // Legacy compat
 };
 
+// Initial Logs to display on first load to avoid Black Screen
+const INITIAL_LOGS: LogEntry[] = [
+  {
+    id: 'system-init',
+    type: 'system',
+    content: 'NEURO-SYMBOLIC ENGINE INITIALIZED. CONNECTING TO THE LOOM...'
+  },
+  {
+    id: 'narrative-start',
+    type: 'narrative',
+    content: 'The air is thick with humidity, smelling of volcanic ash and old fear. You stand at the precipice of The Forge. The silence is not empty; it is waiting.'
+  }
+];
+
 export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
   gameState: INITIAL_GAME_STATE,
   // New KGoT State
   kgot: INITIAL_GRAPH,
   
-  logs: [],
-  choices: [],
+  logs: INITIAL_LOGS,
+  choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
   
   isThinking: false,
   isMenuOpen: false,
@@ -205,8 +219,8 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
     set({
       gameState: INITIAL_GAME_STATE,
       kgot: freshController.getGraph(),
-      logs: [],
-      choices: [],
+      logs: INITIAL_LOGS,
+      choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
       isThinking: false,
       executedCode: undefined,
       lastSimulationLog: undefined,
