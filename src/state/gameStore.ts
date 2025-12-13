@@ -5,7 +5,7 @@ import { submitTurn } from '../app/actions';
 import { INITIAL_LEDGER } from '../constants';
 import { updateLedgerHelper } from './stateHelpers';
 import { createMultimodalSlice } from './multimodalSlice';
-import { LogEntry, CombinedGameStoreState } from '../types';
+import { LogEntry, CombinedGameStoreState, CharacterId } from '../types';
 import { KGotController } from '../controllers/KGotController';
 import { enqueueTurnForMedia } from './mediaController';
 
@@ -21,7 +21,7 @@ const INITIAL_GAME_STATE = {
     links: []  // Legacy compat
 };
 
-// Initial Logs to display on first load to avoid Black Screen
+// Initial Logs to display on first load
 const INITIAL_LOGS: LogEntry[] = [
   {
     id: 'system-init',
@@ -226,6 +226,8 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
       lastSimulationLog: undefined,
       lastDirectorDebug: undefined,
     });
+    // Immediately start session after reset
+    get().startSession();
   },
 
   saveSnapshot: () => {
@@ -233,5 +235,26 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
   },
   loadSnapshot: () => {
       // ... existing logic ...
+  },
+
+  // NEW: Bootstraps the first turn from INITIAL_LOGS to generate visuals
+  startSession: () => {
+    const state = get();
+    // Only start if timeline is empty and we have logs
+    if (state.multimodalTimeline.length === 0 && state.logs.length > 0) {
+       const firstNarrative = state.logs.find(l => l.type === 'narrative');
+       if (firstNarrative) {
+          const turn = state.registerTurn(
+             firstNarrative.content, 
+             "The Arrival Dock, volcanic ash, oppressed atmosphere.", 
+             {
+               location: "The Arrival Dock",
+               tags: ['intro']
+             }
+          );
+          // Trigger media generation
+          enqueueTurnForMedia(turn, CharacterId.PLAYER, state.gameState.ledger);
+       }
+    }
   }
 }));

@@ -58,88 +58,88 @@ const VisualPromptSchema = z.object({
 
 const CHARACTER_DNA = {
   // --- FACULTY ---
-  "FACULTY_SELENE": { // Fixed ID from FACULTY_PROVOST
+  "FACULTY_SELENE": { 
     consistency_token: "selene_token_x99",
-    base_prompt: "statuesque woman late 40s, regal aristocratic beauty, sharp cheekbones, cold steel-gray eyes, raven-black hair in severe braids, wiry disciplined physique",
+    base_prompt: "statuesque woman late 40s, regal aristocratic beauty, sharp cheekbones, cold steel-gray eyes, raven-black hair in severe braids, wiry disciplined physique. Wears floor-length crimson velvet robes with plunging neckline.",
     costume_variants: {
       "crimson_velvet_robes_v1": "floor-length crimson velvet academic robes, plunging neckline, heavy fabric trailing like royal train",
       "emerald_formal": "emerald green velvet gown, militaristic tailoring, severe high collar"
     },
-    manara_features: "heavy-lidded eyes, high forehead, full lips, Bored God Complex expression, detached sultry boredom"
+    manara_features: "heavy-lidded eyes, high forehead, full lips, Bored God Complex expression, detached sultry boredom, holding a goblet of wine."
   },
   "FACULTY_LOGICIAN": {
     consistency_token: "lysandra_token_x12",
-    base_prompt: "woman early 30s, soft features, intelligent warm-green eyes DECEPTIVE, light freckles, dark wavy chestnut hair in messy scholarly bun",
+    base_prompt: "woman early 30s, Dark Academia aesthetic, soft features, intelligent warm-green eyes DECEPTIVE, light freckles, dark wavy chestnut hair in messy scholarly bun. Wears rimless glasses.",
     costume_variants: {
       "dark_academia_v1": "high-waisted woolen trousers, cream button-down blouse, wide leather belt, rolled sleeves, glasses reflecting light",
       "private_study": "loose antique yellow chemise, soft shoulders exposed, intimate candlelit"
     },
-    manara_features: "kind approachable face HIDING cold analytical mind, disarming softness, non-threatening scholar physique"
+    manara_features: "kind approachable face HIDING cold analytical mind, disarming softness, non-threatening scholar physique, clinical gaze."
   },
-  "FACULTY_PETRA": { // Fixed ID from FACULTY_INQUISITOR
+  "FACULTY_PETRA": { 
     consistency_token: "petra_token_x45",
-    base_prompt: "woman late 20s, athletic lean wiry build, stark white hair in practical braids, sharp green eyes, predatory confident smirk, light freckles, scarred midriff visible",
+    base_prompt: "woman late 20s, feral athletic lean wiry build, stark white hair in practical braids, sharp green eyes, scarred midriff visible. Wears tight leather combat trousers.",
     costume_variants: {
       "kinetic_uniform": "black sleeveless turtleneck, dark tactical trousers, thick leather belt, heavy boots, cigarette",
       "post_session": "deep crimson blouse voluminous sleeves, relaxed dominance, flushed satisfaction"
     },
-    manara_features: "sharp jaw, high cheekbones, predatory grin showing teeth, explosive athletic grace"
+    manara_features: "sharp jaw, high cheekbones, predatory grin showing teeth, explosive athletic grace, smoking incessantly."
   },
   "FACULTY_CONFESSOR": {
     consistency_token: "calista_token_x88",
-    base_prompt: "woman early 30s, voluptuous hourglass soft curves, sultry dark almond eyes, full lips Mona Lisa half-smile, long voluminous dark brown wavy hair",
+    base_prompt: "woman early 30s, voluptuous hourglass soft curves, sultry dark almond eyes, full lips Mona Lisa half-smile, long voluminous dark brown wavy hair. Wears Victorian-inspired lace and velvet.",
     costume_variants: {
       "victorian_severe": "high-collared Victorian dark dress, intricate ruffles, Dark Academia intellectual authority",
       "sensual_confessional": "off-shoulder white blouse revealing neck curve, leather corset, layered necklaces bohemian"
     },
-    manara_features: "unsettlingly perfect beauty, heavy-lidded predatory analytical eyes, languid sensual softness TRAP"
+    manara_features: "unsettlingly perfect beauty, heavy-lidded predatory analytical eyes, languid sensual softness TRAP."
   },
   "FACULTY_ASTRA": {
     consistency_token: "astra_token_v33",
-    base_prompt: "woman late 30s, tired but elegant, dark circles under grey eyes, silver-streaked dark hair loose, compassionate but resigned expression",
+    base_prompt: "woman late 30s, tired but elegant, dark circles under grey eyes, silver-streaked dark hair loose, compassionate but resigned expression. Wears a simple structured grey dress.",
     costume_variants: {
       "clinical_grey": "simple grey structured dress, silver brooch, sensible heels, holding clipboard",
       "informal": "soft woolen wrap, reading glasses, weary posture"
     },
-    manara_features: "expressive eyebrows, soft mouth often frowned in concern, posture of exhaustion, gentle hands"
+    manara_features: "expressive eyebrows, soft mouth often frowned in concern, posture of exhaustion, gentle hands, trembling."
   },
 
-  // --- PREFECTS (Added) ---
+  // --- PREFECTS (Detailed) ---
   "PREFECT_LOYALIST": { // Elara
     consistency_token: "elara_token_z01",
-    base_prompt: "young woman 19yo, severe sharp features, pale skin, tight auburn bun, trembling hands often clasped, pristine uniform worn like armor",
+    base_prompt: "young woman 19yo, severe sharp features, pale skin, tight auburn bun, trembling hands often clasped, pristine uniform worn like armor. Eyes wide with terrified zealotry.",
     costume_variants: {
       "standard_uniform": "standard charcoal academy blazer perfectly pressed, knee-length pleated skirt, high collar, silver prefect badge shining",
       "ritual_garb": "white ceremonial robe over uniform, stained with ash, severe and restrictive"
     },
-    manara_features: "wide terrified eyes masking as zealotry, thin lips compressed, look of desperate fanaticism, brittle posture ready to snap"
+    manara_features: "wide terrified eyes masking as zealotry, thin lips compressed, look of desperate fanaticism, brittle posture ready to snap."
   },
   "PREFECT_OBSESSIVE": { // Kaelen
     consistency_token: "kaelen_token_y99",
-    base_prompt: "young woman 18yo, doll-like beauty, large dark eyes, straight black hime-cut hair, deceptively innocent, small stature",
+    base_prompt: "young woman 18yo, doll-like beauty, large dark eyes (sanpaku), straight black hime-cut hair, deceptively innocent, small stature. Wears red ribbon choker.",
     costume_variants: {
       "standard_uniform": "standard academy uniform but customized, shorter skirt, red ribbon choker, slightly disheveled",
       "stalking_attire": "dark hooded cloak over uniform, clutching a stolen token, shadows hiding face"
     },
-    manara_features: "unnerving unblinking stare (sanpaku eyes), flush of feverish obsession, pouty lips, juxtaposition of cute and lethal"
+    manara_features: "unnerving unblinking stare (sanpaku eyes), flush of feverish obsession, pouty lips, juxtaposition of cute and lethal."
   },
   "PREFECT_DISSIDENT": { // Rhea
     consistency_token: "rhea_token_x22",
-    base_prompt: "young woman 20yo, sharp angular face, messy fiery red hair, dark circles under eyes, cynical guarded expression, smoker",
+    base_prompt: "young woman 20yo, sharp angular face, messy fiery red hair, dark circles under eyes, cynical guarded expression, smoker. Uniform worn carelessly.",
     costume_variants: {
       "standard_uniform": "uniform worn carelessly, sleeves rolled up, top button undone, scuffed boots, tie loose",
       "shadow_ops": "dark turtleneck, form-fitting trousers, blending into shadows, utility belt"
     },
-    manara_features: "guarded suspicious gaze, tension in jaw, athletic wiry build, look of repressed anger, sneering lip"
+    manara_features: "guarded suspicious gaze, tension in jaw, athletic wiry build, look of repressed anger, sneering lip."
   },
   "PREFECT_NURSE": { // Anya
     consistency_token: "anya_token_w44",
-    base_prompt: "young woman 21yo, soft maternal curves, warm hazel eyes, messy strawberry blonde braid, deceptive warmth, taller than average",
+    base_prompt: "young woman 21yo, soft maternal curves, warm hazel eyes, messy strawberry blonde braid, deceptive warmth. Wears white medical coat open.",
     costume_variants: {
       "clinical_uniform": "white medical coat worn open over academy uniform, latex gloves, stethoscope, nurse cap askew",
       "casual_study": "loose cardigan, reading glasses, hair down, holding anatomy textbook"
     },
-    manara_features: "soft pillowy lips, half-lidded heavy gaze, flush of excitement, maternal figure with cruel undertone"
+    manara_features: "soft pillowy lips, half-lidded heavy gaze, flush of excitement, maternal figure with cruel undertone, holding a syringe."
   }
 };
 

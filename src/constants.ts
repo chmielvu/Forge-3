@@ -94,15 +94,27 @@ Visual Prompt:
 ` as const;
 
 export const VISUAL_PROFILES: Record<CharacterId, string> = {
-  [CharacterId.PROVOST]: "Provost Selene: Regal, austere, crimson velvet robes, severe expression, platinum hair in a tight bun, imperious posture.",
-  [CharacterId.LOGICIAN]: "Dr. Lysandra: Clinical, detached, sterile white lab coat, surgical gloves, eyes gleaming behind spectacles, precise movements.",
-  [CharacterId.INQUISITOR]: "Inquisitor Petra: Feral, athletic, tight leather jumpsuit, riding crop, predatory grin, wild dark hair, volatile energy.",
-  [CharacterId.CONFESSOR]: "Confessor Calista: Seductive, maternal, flowing silk gown, soft smile, comforting yet manipulative gaze, long dark hair, elegant hands.",
-  [CharacterId.ASTRA]: "Dr. Astra: Empathetic, conflicted, simple grey uniform, weary eyes, hesitant posture, dark circles under eyes.",
-  [CharacterId.PHYSICUS]: "Physicus Mara: Observant, cautious, blood-stained scrubs, surgical mask, intense eyes, subtle defiance, hiding something.",
-  [CharacterId.NURSE]: "Nurse Anya: Overly solicitous, subtly cruel, starched white nurse's uniform, manicured nails, saccharine smile, a syringe held carefully.",
-  [CharacterId.PLAYER]: "Subject 84: Exposed, vulnerable, kneeling, sweaty, eyes wide with fear and arousal, tattered uniform, bound wrists.",
-  [CharacterId.OBSESSIVE]: "Kaelen: Possessive, intense, prefect uniform, clutching a favored object (e.g., a lock of hair, a small knife), darting eyes, a feverish blush.",
-  [CharacterId.LOYALIST]: "Elara: Zealous, rigid, perfectly ironed prefect uniform, stern expression, hands clasped, unblinking stare, unwavering loyalty.",
-  [CharacterId.DISSIDENT]: "Rhea: Rebellious, guarded, slightly disheveled prefect uniform, defiant stance, wary eyes, a hidden tool or message.",
+  // FACULTY
+  [CharacterId.PROVOST]: "Provost Selene: The Corrupted Matriarch. Statuesque, regal, late 40s. Wears floor-length crimson velvet robes with a plunging neckline. Steel-gray eyes, raven hair in severe braids. Holds a goblet of wine as a permanent extension of her hand. Radiates bored, glacial authority.",
+  
+  [CharacterId.LOGICIAN]: "Dr. Lysandra: The Vivisectionist. Dark Academia aesthetic. Messy chestnut bun, rimless glasses reflecting cold data. Wears a cream silk blouse with rolled sleeves and high-waisted woolen trousers. Surgical gloves. Her gaze is not cruel, but terrifyingly clinical.",
+  
+  [CharacterId.INQUISITOR]: "Inquisitor Petra: The Kinetic Artist. Feral, athletic, scarred midriff visible under a cropped tactical jacket. Platinum white braided hair. Wears tight leather combat trousers and heavy boots. Smokes incessantly. A predatory grin, muscles coiled like a spring.",
+  
+  [CharacterId.CONFESSOR]: "Confessor Calista: The Spider. Voluptuous, maternal, terrifyingly soft. Wears Victorian-inspired lace and velvet in deep midnight blue. Long dark hair cascading over shoulders. Heavy-lidded eyes, a soft smile that promises false sanctuary. Jewelry that looks like chains.",
+  
+  [CharacterId.ASTRA]: "Dr. Astra: The Pain Broker. Exhausted elegance. Silver-streaked hair loose around a pale face. Dark circles under eyes. Wears a simple, structured grey dress. Hands often trembling while holding a clipboard. Look of profound, resigned guilt.",
+  
+  [CharacterId.PHYSICUS]: "Physicus Mara: The Shadow. Wears blood-stained surgical scrubs and a mask hanging off one ear. Sharp, observant eyes. Subtle defiance in her posture. A hidden scalpel in her pocket.",
+
+  // PREFECTS (Detailed Profiles)
+  [CharacterId.LOYALIST]: "Prefect Elara (The Zealot): Wide terrified eyes masking as zealotry. Pale skin, tight auburn bun. Wears a pristine, perfectly pressed uniform buttoned to the chin. Hands clasped tight to stop them from shaking. Her posture is brittle, like glass about to shatter. She flinches at violence she herself orders.",
+  
+  [CharacterId.OBSESSIVE]: "Prefect Kaelen (The Yandere): Doll-like beauty with unnerving sanpaku eyes (whites visible above iris). Hime-cut black hair, pale porcelain skin. Wears a modified uniform with a red ribbon choker. Flush of feverish obsession on her cheeks. She clutches a small token of the Subject. Expression shifts instantly from sweet to dead-eyed.",
+  
+  [CharacterId.DISSIDENT]: "Prefect Rhea (The Dissident): Sharp angular features, messy fiery red hair, dark circles. Uniform is worn carelessly—sleeves rolled, tie loose, top button undone. A smoker's slouch. Eyes darting, checking exits. Radiates repressed anger and cynical boredom.",
+  
+  [CharacterId.NURSE]: "Prefect Anya (The Nurse): Deceptively warm and maternal. Soft curves, strawberry blonde braid. Wears a white medical coat open over her uniform, revealing a hint of skin. Hazel eyes that analyze anatomy with hunger. She holds a syringe or thermometer with a lover's touch.",
+
+  [CharacterId.PLAYER]: "Subject 84: Exposed, vulnerable. Kneeling or bound. Tattered academy uniform, sweat-glistened skin, flushed with unwilling arousal and fear. Eyes wide, looking up. The focal point of the composition's cruelty.",
 };

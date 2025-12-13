@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -17,13 +18,19 @@ function GameInterface() {
     gameState, 
     isThinking, 
     processPlayerTurn,
-    choices 
+    choices,
+    startSession // Added startSession
   } = useGameStore();
 
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
+    // Initialize session to generate visuals for the first log
+    // Small timeout to ensure hydration
+    setTimeout(() => {
+        useGameStore.getState().startSession();
+    }, 100);
   }, []);
 
   if (!isMounted) return null;

@@ -509,4 +509,5 @@ export interface CombinedGameStoreState extends MultimodalSliceExports {
   saveSnapshot: () => void;
   loadSnapshot: () => void;
   updateLogMedia: (logId: string, media: { imageData?: string, audioData?: string, videoData?: string }) => void;
+  startSession: () => void;
 }
