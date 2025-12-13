@@ -78,7 +78,7 @@ export class PrefectAgent {
   constructor(dna: PrefectDNA) {
     this.dna = dna;
     // Vite-compliant API Key access
-    this.client = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY as string });
+    this.client = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY as string });
     this.history = [];
   }
 

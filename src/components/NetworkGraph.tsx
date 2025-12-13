@@ -1,15 +1,11 @@
 
 'use client';
 
-import React, { useRef, useEffect, useState, useMemo } from 'react';
-import dynamic from 'next/dynamic';
+import React, { useRef, useEffect, useState, useMemo, Suspense } from 'react';
 import { KnowledgeGraph } from '../lib/types/kgot';
 
-// Dynamic import to avoid SSR issues with canvas/window
-const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
-  ssr: false,
-  loading: () => <div className="flex items-center justify-center h-full text-xs text-stone-500 font-mono">INITIALIZING NEURO-SYMBOLIC MATRIX...</div>
-});
+// Use React.lazy for client-side only loading of the heavy graph library
+const ForceGraph2D = React.lazy(() => import('react-force-graph-2d'));
 
 interface Props {
   graphData: KnowledgeGraph;
@@ -70,24 +66,26 @@ const NetworkGraph: React.FC<Props> = ({ graphData, onNodeClick }) => {
   return (
     <div ref={containerRef} className="w-full h-full bg-[#020617] border border-[#1e293b] rounded-sm overflow-hidden relative">
       {dimensions.width > 0 && (
-        <ForceGraph2D
-          width={dimensions.width}
-          height={dimensions.height}
-          graphData={data}
-          nodeLabel="label"
-          nodeColor="color"
-          nodeRelSize={4}
-          linkColor="color"
-          linkWidth="width"
-          linkDirectionalArrowLength={3.5}
-          linkDirectionalArrowRelPos={1}
-          linkCurvature={0.2}
-          backgroundColor="#020617" // Matches Forge Black
-          d3VelocityDecay={0.4} // Adds "weight" to the physics
-          cooldownTicks={100}
-          onNodeClick={onNodeClick}
-          enableNodeDrag={false} // Lock nodes for stability or enable if preferred
-        />
+        <Suspense fallback={<div className="flex items-center justify-center h-full text-xs text-stone-500 font-mono">INITIALIZING NEURO-SYMBOLIC MATRIX...</div>}>
+          <ForceGraph2D
+            width={dimensions.width}
+            height={dimensions.height}
+            graphData={data}
+            nodeLabel="label"
+            nodeColor="color"
+            nodeRelSize={4}
+            linkColor="color"
+            linkWidth="width"
+            linkDirectionalArrowLength={3.5}
+            linkDirectionalArrowRelPos={1}
+            linkCurvature={0.2}
+            backgroundColor="#020617" // Matches Forge Black
+            d3VelocityDecay={0.4} // Adds "weight" to the physics
+            cooldownTicks={100}
+            onNodeClick={onNodeClick}
+            enableNodeDrag={false} // Lock nodes for stability or enable if preferred
+          />
+        </Suspense>
       )}
     </div>
   );

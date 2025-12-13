@@ -7,7 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 
 // Lazy init for Vite
-const getAI = () => new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY as string });
+const getAI = () => new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY as string });
 
 // ==================== SCHEMAS ====================
 

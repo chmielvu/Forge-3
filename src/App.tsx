@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import NetworkGraph from './components/NetworkGraph';
 import NarrativeLog from './components/NarrativeLog';
 import MediaPanel from './components/MediaPanel';
@@ -19,8 +19,14 @@ export default function App() {
     isThinking, 
     processPlayerTurn,
     choices,
-    prefects
+    prefects,
+    startSession
   } = useGameStore();
+
+  useEffect(() => {
+    // Direct initialization
+    startSession();
+  }, [startSession]);
 
   return (
     <div className="relative min-h-screen bg-[#0a0a0a] text-slate-200 overflow-hidden font-sans selection:bg-red-900 selection:text-white">

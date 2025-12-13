@@ -9,7 +9,7 @@ import { PrefectDecision } from "../types";
 // ==================== CONFIGURATION ====================
 
 // Client-side initialization using import.meta.env for Vite
-const getAI = () => new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY as string });
+const getAI = () => new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY as string });
 
 // ==================== SCHEMAS ====================
 

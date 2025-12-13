@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -13,9 +12,10 @@ interface State {
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
+  public state: State = { hasError: false };
+
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false };
   }
 
   static getDerivedStateFromError(error: Error) {

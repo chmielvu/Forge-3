@@ -3,7 +3,7 @@ import { YandereLedger, PrefectDNA, CharacterId, MultimodalTurn } from "../types
 import { BEHAVIOR_CONFIG } from "../config/behaviorTuning"; 
 import { visualCoherenceEngine } from './visualCoherenceEngine';
 import { CharacterId as CId } from '../types';
-import { generateImageAction, generateSpeechAction, generateVideoAction, distortImageAction } from '../app/media-actions';
+import { generateImageAction, generateSpeechAction, generateVideoAction, distortImageAction } from './geminiMediaService';
 
 // Voice Mapping for specific characters
 export const CHARACTER_VOICE_MAP: Record<string, string> = {
@@ -71,7 +71,7 @@ export const generateNarrativeImage = async (
   const finalCoherentPrompt = buildVisualPrompt(target, sceneContext, ledger, narrativeText, previousTurn);
 
   try {
-    // 2. Call Server Action (Server Side Execution)
+    // 2. Call Service (Client Side Execution)
     const imageData = await generateImageAction(finalCoherentPrompt);
     
     if (!imageData) {
@@ -118,7 +118,7 @@ export const generateSpeech = async (narrative: string, voiceIdOverride?: string
 
   try {
     const voiceName = voiceIdOverride || selectVoiceForNarrative(narrative);
-    // Call Server Action
+    // Call Service
     return await generateSpeechAction(narrative, voiceName);
   } catch (error) {
     console.error("⚠️ Audio generation failed:", error);
@@ -139,8 +139,8 @@ export const animateImageWithVeo = async (
   }
 
   try {
-    // Call Server Action
-    // Note: Motion prompt construction logic moved to Server Action to ensure visual mandate security
+    // Call Service
+    // Note: Motion prompt construction logic moved to Service to ensure visual mandate security
     return await generateVideoAction(imageB64, visualPrompt, aspectRatio);
   } catch (e) {
     console.error("Veo Animation Failed:", e);
