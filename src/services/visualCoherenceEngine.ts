@@ -5,7 +5,7 @@ import { VISUAL_MANDATE, LIGHTING_PRESETS } from '../config/visualMandate';
 import { FORGE_MOTIFS, ARCHETYPE_VISUAL_MAP } from '../data/motifs';
 
 /**
- * COHERENCE ENGINE V2.6 (Psych-Somatic Mapping)
+ * COHERENCE ENGINE V2.7 (Psych-Somatic & Relational Mapping)
  * Ensures visual continuity and maps internal psychological conflict to external visual tells.
  */
 class VisualCoherenceEngine {
@@ -40,6 +40,9 @@ class VisualCoherenceEngine {
     const continuityDirectives = this.generateContinuityDirectives(previousTurn);
     const styleConsistencyLock = this.getStyleConsistencyLock();
 
+    // Calculate Dynamic Camera Angle based on Psychological Dominance
+    const cameraDirectives = this.calculateCameraDynamics(target, ledger, narrativeText);
+
     const finalPromptObject = {
       header: VISUAL_MANDATE.ZERO_DRIFT_HEADER,
       style: VISUAL_MANDATE.STYLE,
@@ -48,6 +51,8 @@ class VisualCoherenceEngine {
       subject: basePromptParts.subject,
       environment: basePromptParts.environment,
       psychometrics: basePromptParts.psychometricVisualization,
+      
+      camera: cameraDirectives, // NEW: Dynamic camera control
       
       sceneContext: sceneContext.substring(0, 300),
       narrativeTone: this.inferEmotionalState(ledger, narrativeText),
@@ -58,6 +63,68 @@ class VisualCoherenceEngine {
     };
     
     return JSON.stringify(finalPromptObject, null, 2);
+  }
+
+  /**
+   * Calculates the camera angle based on the "Dominance Hierarchy" (PDF 2, Sec 3.2.3)
+   * High Dominance Difference -> Extreme Angles.
+   */
+  private calculateCameraDynamics(
+    target: PrefectDNA | CharacterId | string,
+    ledger: YandereLedger,
+    text: string
+  ): any {
+    // 1. Base Dominance from Ledger
+    // Compliance is the inverse of Player Dominance.
+    // If Compliance is 100, Player is 0 Dominance.
+    // Faculty is always 100 Dominance.
+    const playerDominance = (100 - ledger.complianceScore) / 100; // 0.0 - 1.0
+    const facultyDominance = 1.0; 
+    
+    let dominanceDelta = facultyDominance - playerDominance; // 0.0 (Equal) to 1.0 (Total Domination)
+
+    // 2. Adjust based on specific Character traits if available
+    if (typeof target !== 'string') {
+        const dna = target as PrefectDNA;
+        // Prefects have variable dominance based on 'Favor'
+        const prefectDominance = dna.favorScore / 100;
+        dominanceDelta = prefectDominance - playerDominance;
+    }
+
+    // 3. Narrative Overrides (The Somatic Cascade)
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes("kneel") || lowerText.includes("floor") || lowerText.includes("crawling")) {
+        dominanceDelta += 0.3;
+    }
+    if (lowerText.includes("looking down") || lowerText.includes("towering")) {
+        dominanceDelta += 0.2;
+    }
+
+    // 4. Determine Angle
+    let angle = "eye_level";
+    let framing = "medium_shot";
+
+    if (dominanceDelta > 0.7) {
+        angle = "extreme_low_angle_looking_up_at_subject"; // Viewer (Player) is on floor, looking up at Faculty
+        framing = "looming_close_up";
+    } else if (dominanceDelta > 0.4) {
+        angle = "low_angle";
+    } else if (dominanceDelta < -0.2) {
+        // Player is defiant/standing
+        angle = "slightly_high_angle_looking_down"; // Faculty perspective looking at player
+    }
+
+    // "Manara Gaze" logic: Focus on specific parts based on context
+    let focus = "face_and_eyes";
+    if (lowerText.includes("hand") || lowerText.includes("touch")) focus = "hands_interacting";
+    if (lowerText.includes("boots") || lowerText.includes("step")) focus = "legs_and_boots";
+
+    return {
+        angle: angle,
+        framing: framing,
+        focus: focus,
+        dominance_metric: dominanceDelta.toFixed(2)
+    };
   }
 
   private updateCharacterStates(
@@ -93,6 +160,14 @@ class VisualCoherenceEngine {
 
   private inferEmotionalState(ledger: YandereLedger, text: string): CharacterVisualState['emotionalState'] {
     const lower = text.toLowerCase();
+    const trauma = ledger.traumaLevel || 0;
+    const arousal = ledger.arousalLevel || 0;
+
+    // "Eroticized Distress" Logic (High Trauma + High Arousal)
+    if (trauma > 60 && arousal > 50) {
+        return 'desirous'; // Maps to "unwilling arousal", "flushed skin", "tear-stained"
+    }
+
     if (lower.match(/cry|weep|sob|tear|break/)) return 'broken';
     if (lower.match(/laugh|grin|smile|manic/)) return 'ecstatic';
     if (lower.match(/glare|frown|fury|rage/)) return 'agitated';
@@ -102,21 +177,26 @@ class VisualCoherenceEngine {
     if (lower.match(/hopeless|void|nothing|empty/)) return 'despairing';
     
     if (ledger.hopeLevel < 20) return 'despairing';
-    if (ledger.traumaLevel > 80) return 'terrified';
+    if (trauma > 80) return 'terrified';
     if (ledger.shamePainAbyssLevel > 80) return 'humiliated';
-    if (ledger.arousalLevel > 70) return 'desirous';
     if (ledger.complianceScore > 80) return 'composed';
-    if (ledger.traumaLevel > 50) return 'agitated';
+    if (trauma > 50) return 'agitated';
     return 'composed';
   }
 
   private inferInjuries(ledger: YandereLedger, text: string): string[] {
     const injuries: string[] = [];
     const lower = text.toLowerCase();
+    
+    // Somatic Cascade Specifics
+    if (lower.includes('void') || lower.includes('nausea')) injuries.push('clutching stomach');
+    if (lower.includes('shake') || lower.includes('tremble')) injuries.push('uncontrollable tremors');
+    
     if (lower.includes('bruise') || lower.includes('blow')) injuries.push('fresh bruising');
     if (lower.includes('cut') || lower.includes('slice') || lower.includes('bleed')) injuries.push('bleeding laceration');
     if (lower.includes('choke') || lower.includes('throat')) injuries.push('bruised neck');
     if (lower.includes('slap') || lower.includes('cheek')) injuries.push('red handprint on cheek');
+    
     if (ledger.physicalIntegrity < 80 && !injuries.some(i => i.includes('bruis'))) injuries.push('visible bruising on wrists and neck');
     if (ledger.traumaLevel > 60) injuries.push('trembling hands');
     return [...new Set(injuries)];
@@ -156,10 +236,22 @@ class VisualCoherenceEngine {
         lightingScheme = LIGHTING_PRESETS.Harsh;
     }
 
-    // Atmosphere Logic based on Ledger
-    if (ledger.traumaLevel > 70) atmosphericEffects = ["suffocating humidity", "red-tinted shadows", "vignette darkness"];
-    else if (ledger.complianceScore > 70) atmosphericEffects = ["ordered stillness", "cold clarity", "symmetrical shadows"];
-    else if (lower.includes("rain")) atmosphericEffects = ["heavy rain", "slick surfaces"];
+    // Atmosphere Logic based on Ledger (The Somatic Cascade environment reflection)
+    const trauma = ledger.traumaLevel || 0;
+    
+    if (trauma > 80) {
+        // "Systemic Shock" visualization
+        atmosphericEffects = ["suffocating humidity", "red-tinted vision", "vignette darkness", "tilting horizon"];
+        lightingScheme = LIGHTING_PRESETS.Harsh; // Clinical exposure
+    } else if (trauma > 50) {
+        atmosphericEffects = ["heavy steam", "slick condensation", "claustrophobic shadows"];
+    } else if (ledger.complianceScore > 70) {
+        // "Ordered" visualization for high compliance
+        atmosphericEffects = ["ordered stillness", "cold clarity", "symmetrical shadows"];
+        lightingScheme = LIGHTING_PRESETS.Clinical;
+    } else if (lower.includes("rain")) {
+        atmosphericEffects = ["heavy rain", "slick surfaces"];
+    }
 
     this.memory.environmentState = { location, lightingScheme, atmosphericEffects, dominantColors };
   }
@@ -187,8 +279,16 @@ class VisualCoherenceEngine {
         description: profile,
       };
       if (target === CharacterId.PLAYER) {
-        moodModifiers.push("vulnerable", "exposed");
-        aestheticInjects.push(FORGE_MOTIFS.BoundWrists, FORGE_MOTIFS.FlushedSkin);
+        moodModifiers.push("vulnerable", "exposed", "eroticized-distress");
+        aestheticInjects.push(FORGE_MOTIFS.BoundWrists);
+        
+        // Eroticized Distress logic for Player
+        if (ledger.arousalLevel > 40) {
+            aestheticInjects.push(FORGE_MOTIFS.FlushedSkin, "heavy lidded eyes");
+        }
+        if (ledger.traumaLevel > 60) {
+            aestheticInjects.push(FORGE_MOTIFS.TremblingHands, "sweat-beaded forehead");
+        }
       }
     } else { 
       // --- PREFECT PSYCHOLOGICAL PROFILING ---
@@ -278,7 +378,7 @@ class VisualCoherenceEngine {
     let base = desc.description || `${desc.name} (${desc.role})`;
     if (state?.clothingState === 'disheveled') base += ", disheveled";
     if (state?.clothingState === 'bloodstained') base += ", bloodstained";
-    if (ledger.arousalLevel > 60) base += ", flushed skin";
+    if (ledger.arousalLevel > 60) base += ", flushed skin, dilated pupils (Eroticized Distress)";
     if (state?.emotionalState) base += `, EXPRESSION: ${state.emotionalState.toUpperCase()}`;
     return base;
   }
@@ -291,8 +391,8 @@ class VisualCoherenceEngine {
 
   private getTraumaVisualization(ledger: any): string[] {
     const cues = [];
-    if (ledger.traumaLevel > 40) cues.push('sweat on forehead');
-    if (ledger.shamePainAbyssLevel > 60) cues.push('tear tracks');
+    if (ledger.traumaLevel > 40) cues.push('sweat on forehead', 'pale complexion');
+    if (ledger.shamePainAbyssLevel > 60) cues.push('tear tracks', 'averted gaze');
     return cues;
   }
 

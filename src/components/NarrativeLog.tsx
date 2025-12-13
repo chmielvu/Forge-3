@@ -20,7 +20,7 @@ interface Props {
   ledger: YandereLedger;
 }
 
-const Typewriter: React.FC<{ text: string; onTyping: () => void }> = ({ text, onTyping }) => {
+const Typewriter: React.FC<{ text: string; onTyping: () => void; isTrauma: boolean }> = ({ text, onTyping, isTrauma }) => {
   const [displayed, setDisplayed] = useState('');
   
   useEffect(() => {
@@ -30,11 +30,13 @@ const Typewriter: React.FC<{ text: string; onTyping: () => void }> = ({ text, on
       onTyping();
       idx++;
       if (idx > text.length) clearInterval(interval);
-    }, 5); // Slightly faster for responsiveness
+    }, isTrauma ? 15 : 5); // Trauma text types slower, more painfully
     return () => clearInterval(interval);
-  }, [text, onTyping]);
+  }, [text, onTyping, isTrauma]);
   
-  const safeHTML = displayed.replace(/\*(.*?)\*/g, '<em class="text-amber-400 not-italic font-semibold text-shadow-sm">$1</em>');
+  const safeHTML = displayed
+    .replace(/\*(.*?)\*/g, '<em class="text-amber-400 not-italic font-semibold text-shadow-sm">$1</em>')
+    .replace(/\n/g, '<br/>');
   
   return <span dangerouslySetInnerHTML={{ __html: safeHTML }} />;
 };
@@ -91,8 +93,16 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
               ? injectNarratorCommentary(log.content, narratorMode, { traumaLevel: ledger.traumaLevel })
               : log.content;
 
+            const isPsychosis = log.type === 'psychosis' || (log.type === 'narrative' && ledger.traumaLevel > 80);
+
             return (
-              <div key={log.id} className="prose prose-invert max-w-none animate-fade-in">
+              <div key={log.id} className={`prose prose-invert max-w-none animate-fade-in ${isPsychosis ? 'relative' : ''}`}>
+                
+                {/* Somatic Cascade Visual Distortion */}
+                {isPsychosis && log.type === 'narrative' && (
+                    <div className="absolute -inset-1 opacity-20 bg-red-900/10 blur-sm pointer-events-none animate-pulse"></div>
+                )}
+
                 {log.type === 'system' && (
                   <div className="font-mono text-[9px] text-stone-500 uppercase border-l border-stone-800 pl-3 py-1 tracking-wider opacity-70">
                     {log.content}
@@ -107,23 +117,23 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
                 )}
 
                 {log.type === 'psychosis' && (
-                  <div className="relative overflow-hidden py-3 px-4 border-l-2 border-red-900 bg-red-950/20 my-2">
+                  <div className="relative overflow-hidden py-3 px-4 border-l-2 border-red-900 bg-red-950/20 my-2 shadow-[0_0_10px_rgba(220,38,38,0.1)]">
                     <div className="flex items-center gap-2 text-red-400 font-mono text-[9px] tracking-widest mb-1 opacity-80">
                         <Zap size={10} className="animate-pulse" />
-                        <span>NEURAL_INTERFERENCE</span>
+                        <span>ABYSS_NARRATOR::INTERVENTION</span>
                     </div>
-                    <p className="text-sm text-red-200/90 italic font-serif leading-relaxed animate-pulse">
-                        {log.content}
+                    <p className="text-sm text-red-200/90 italic font-serif leading-relaxed animate-glitch-text" style={{ fontFamily: 'Cinzel, serif' }}>
+                        "{log.content}"
                     </p>
                   </div>
                 )}
                 
                 {log.type === 'narrative' && (
                   <p 
-                    className="text-lg md:text-xl leading-relaxed text-stone-200 drop-shadow-md" 
+                    className={`text-lg md:text-xl leading-relaxed drop-shadow-md ${isPsychosis ? 'text-stone-300' : 'text-stone-200'}`} 
                     style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
                   >
-                    <Typewriter text={enhancedContent} onTyping={scrollToBottom} />
+                    <Typewriter text={enhancedContent} onTyping={scrollToBottom} isTrauma={ledger.traumaLevel > 90} />
                   </p>
                 )}
               </div>

@@ -4,8 +4,10 @@ import { KnowledgeGraph } from "./types/kgot";
 import { KGotController } from "../controllers/KGotController";
 import { VISUAL_MANDATE } from "../config/visualMandate";
 import { selectNarratorMode, NARRATOR_VOICES } from "../services/narratorEngine";
-import { PrefectDecision } from "../types";
-import { SYSTEM_INSTRUCTION_ROOT } from "../config/loreInjection";
+import { PrefectDecision, YandereLedger } from "../types";
+import { SYSTEM_INSTRUCTION_ROOT, LORE_CONSTITUTION } from "../config/loreInjection";
+import { MagellanController } from "./magellan";
+import { INITIAL_LEDGER } from "../constants";
 
 // ==================== CONFIGURATION ====================
 
@@ -26,13 +28,23 @@ const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
 // ==================== SCHEMAS ====================
 
-// Strict output schema to force the LLM to be a "State Machine" not just a chatbot.
 const DirectorOutputSchema = {
   type: Type.OBJECT,
   properties: {
-    thought_signature: { type: Type.STRING, description: "Internal reasoning regarding themes and pacing." },
-    narrative_text: { type: Type.STRING, description: "The prose output, adhering to Manara-Noir aesthetic." },
-    visual_prompt: { type: Type.STRING, description: "JSON describing the scene for the image generator." },
+    thought_signature: { type: Type.STRING, description: "Deep Think: Reasoning path taken." },
+    
+    // STRUCTURED NARRATIVE: The Somatic Cascade
+    somatic_state: {
+      type: Type.OBJECT,
+      description: "The internal physiological experience of the subject (The Grammar of Suffering).",
+      properties: {
+        impact_sensation: { type: Type.STRING, description: "The 'Nova' or immediate physical sensation (burn, freeze, whiteout)." },
+        internal_collapse: { type: Type.STRING, description: "The 'Abdominal Void' or visceral reaction (nausea, organ drop, tremors, systemic shock)." }
+      }
+    },
+    narrative_text: { type: Type.STRING, description: "The external observable reality and dialogue. 'The Inquisitor steps forward...'" },
+    
+    visual_prompt: { type: Type.STRING, description: "JSON describing the scene for Nano Banana." },
     choices: { type: Type.ARRAY, items: { type: Type.STRING } },
     ledger_update: {
       type: Type.OBJECT,
@@ -66,7 +78,6 @@ const DirectorOutputSchema = {
                 description: { type: Type.STRING, nullable: true },
                 emotional_imprint: { type: Type.STRING, nullable: true },
                 involved_entities: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-                // Flatten common attributes to avoid nested object issues in strict mode
                 manara_gaze: { type: Type.STRING, nullable: true },
                 description_abyss: { type: Type.STRING, nullable: true }
             },
@@ -88,17 +99,13 @@ const DirectorOutputSchema = {
       },
       nullable: true
     },
-    psychosis_text: { type: Type.STRING, nullable: true }
+    psychosis_text: { type: Type.STRING, nullable: true, description: "The voice of the Abyss Narrator speaking directly to the subconscious." }
   },
-  required: ["thought_signature", "narrative_text", "visual_prompt", "choices"]
+  required: ["thought_signature", "narrative_text", "visual_prompt", "choices", "somatic_state"]
 };
 
 // ==================== CORE LOGIC ====================
 
-/**
- * Main Orchestration Function (Client-Side)
- * Executes the "Introspective MCTS" loop simulated via Gemini 3 Pro.
- */
 export async function executeDirectorTurn(
   playerInput: string, 
   history: string[], 
@@ -108,75 +115,86 @@ export async function executeDirectorTurn(
   try {
     console.log("⚡ [Director] Initiating Neuro-Symbolic Turn...");
 
-    // 1. Initialize Controller & Snapshot
+    // 1. Initialize Systems
     const controller = new KGotController(currentGraphData);
+    const magellan = new MagellanController(history);
     const graphSnapshot = controller.getGraph();
-    const ledger = graphSnapshot.nodes['Subject_84']?.attributes?.ledger || {};
+    const ledger: YandereLedger = graphSnapshot.nodes['Subject_84']?.attributes?.ledger || INITIAL_LEDGER;
 
-    // 2. Context Assembly (The World State)
-    const context = {
-      input: playerInput,
-      recent_history: history.slice(-3),
-      ledger_state: ledger,
-      global_turn: graphSnapshot.global_state.turn_count,
-      active_agents: ['FACULTY_SELENE', 'FACULTY_PETRA', 'PREFECT_ELARA'], // Dynamic in full version
-      prefect_interventions: prefectDecisions.map(d => ({
-        agent: d.prefectId,
-        intent: d.hiddenProposal,
-        action: d.actionDetail,
-        target: d.targetId
-      }))
-    };
+    // 2. Magellan Intervention Check
+    const magellanDirective = magellan.getInjectionDirective(graphSnapshot);
 
-    // 3. Determine Narrator Persona (The Voice)
-    const narratorMode = selectNarratorMode(ledger as any);
+    // 3. Narrator Selection
+    const narratorMode = selectNarratorMode(ledger);
     const narratorVoice = NARRATOR_VOICES[narratorMode];
 
     // 4. Construct the "Deep Think" Prompt
     const prompt = `
+    IDENTITY: You are THE DIRECTOR of "The Forge."
+    
     ${SYSTEM_INSTRUCTION_ROOT}
+    ${LORE_CONSTITUTION.FACULTY_DOSSIERS.SELENE}
+    ${LORE_CONSTITUTION.FACULTY_DOSSIERS.PETRA}
 
     *** CURRENT STATE MATRIX ***
-    ${JSON.stringify(context, null, 2)}
+    - Input: "${playerInput}"
+    - Turn: ${graphSnapshot.global_state.turn_count}
+    - Trauma: ${ledger.traumaLevel}/100
+    - Hope: ${ledger.hopeLevel}/100
+    - Compliance: ${ledger.complianceScore}/100
+    - Arousal (Eroticized Distress): ${ledger.arousalLevel}/100
+    
+    *** ACTIVE AGENTS & INTENTS ***
+    ${prefectDecisions.map(d => `- ${d.prefectId}: ${d.action} (${d.hiddenProposal})`).join('\n')}
 
-    *** NARRATOR MODE ACTIVE: ${narratorMode} ***
-    Tone Mandate: ${narratorVoice.tone}
+    *** NARRATOR MODE: ${narratorMode} ***
+    Tone: ${narratorVoice.tone}
+
+    ${magellanDirective || ""}
+
+    *** COGNITIVE PROTOCOL (THE SOMATIC CASCADE) ***
+    Adhere strictly to the "Grammar of Suffering":
+    1. **The Nova:** Immediate, blinding sensory overload (impact).
+    2. **The Void:** The visceral, sickening drop in the abdomen.
+    3. **The Reality:** The external world returning, cold and sharp.
+    
+    *** PEDAGOGICAL NECESSITY ***
+    If the subject resists, do not just hurt them. Gaslight them. Frame the pain as "correction" or "calibration."
+    If the subject submits, enforce "The Echo" - create a phantom sensation of pain to maintain control.
 
     *** INSTRUCTION ***
-    1. Analyze the Player's Input.
-    2. Review 'prefect_interventions'. If Prefects are fighting (e.g. Sabotage), describe the friction. If they align, describe the overwhelming force.
-    3. Determine the 'Somatic Cascade' (Physics of Pain) if violence occurred.
-    4. Update the Ledger (Psychometrics) based on the input.
-    5. Generate the Narrative. It must be immersive, sensory, and strictly adhere to the 'Baroque Brutalism' aesthetic.
-    
+    1. Analyze the Player's Input. 
+    2. Update the Ledger. If they show weakness + desire, spike 'arousalLevel' to model 'Eroticized Distress'.
+    3. Generate the Narrative Components.
+       - 'somatic_state': The internal biological collapse.
+       - 'narrative_text': The external observation.
+       - 'psychosis_text': If Trauma > 60, the Abyss Narrator whispers a dark truth.
+
     *** VISUAL DIRECTIVE ***
-    Construct a prompt for the visual engine that adheres to:
+    Construct a visual_prompt JSON strictly adhering to:
     ${VISUAL_MANDATE.ZERO_DRIFT_HEADER}
     `;
 
-    // 5. Execution (Gemini 3 Pro)
+    // 5. Execution (Gemini 2.5 Flash for speed, simulated System 2)
     const ai = getAI();
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', 
-      contents: [
-        { role: 'user', parts: [{ text: prompt }] }
-      ],
+      model: 'gemini-2.5-flash-preview-09-2025', 
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json",
         responseSchema: DirectorOutputSchema,
-        temperature: 1.0, // High temperature for creative prose
+        temperature: 1.0, 
       }
     });
 
     const outputText = response.text || "{}";
     const directorOutput = JSON.parse(outputText);
 
-    // 6. Apply Mutations (State Evolution)
+    // 6. Apply Mutations
     if (directorOutput.kgot_mutations) {
         // Map flattened schema params back to controller structure if necessary
         const mutations = directorOutput.kgot_mutations.map((m: any) => {
             if (m.operation === 'update_node' && m.params) {
-                // Reconstruct attributes object from flattened params
                 const attributes: any = {};
                 if (m.params.manara_gaze) attributes.manara_gaze = m.params.manara_gaze;
                 if (m.params.description_abyss) attributes.description_abyss = m.params.description_abyss;
@@ -193,26 +211,36 @@ export async function executeDirectorTurn(
         controller.updateLedger('Subject_84', directorOutput.ledger_update);
     }
 
-    // 7. Return Result to Store
+    // Combine Somatic + Narrative for the log
+    // We visually separate them in the UI, but for legacy log storage we combine or store structurally
+    const combinedNarrative = `
+    *${directorOutput.somatic_state?.impact_sensation || ""}*
+    
+    ${directorOutput.somatic_state?.internal_collapse || ""}
+    
+    ${directorOutput.narrative_text}
+    `;
+
+    // 7. Return Result
     return {
-      narrative: directorOutput.narrative_text,
+      narrative: combinedNarrative, 
       visualPrompt: directorOutput.visual_prompt || "Darkness.",
       updatedGraph: controller.getGraph(),
-      choices: directorOutput.choices || ["Endure", "Observe", "Submit"],
-      thoughtProcess: `PERSONA: ${narratorMode}\nSIG: ${directorOutput.thought_signature}`,
+      choices: directorOutput.choices || ["Endure", "Observe"],
+      thoughtProcess: `MAG: ${magellanDirective ? 'ACTIVE' : 'IDLE'} | SIG: ${directorOutput.thought_signature}`,
       state_updates: directorOutput.ledger_update,
       audioCues: directorOutput.audio_cues,
-      psychosisText: directorOutput.psychosis_text // Optional hallucination layer
+      psychosisText: directorOutput.psychosis_text
     };
 
   } catch (error) {
     console.error("Director Execution Failed:", error);
     return {
-      narrative: "The Loom shudders. A connection has been severed. The Faculty pauses, frozen in time. (AI Generation Error - Check API Key or Quota)",
-      visualPrompt: "Static and noise, glitch art.",
+      narrative: "The Loom shudders. The simulation has de-synced. (AI Error)",
+      visualPrompt: "Static.",
       updatedGraph: currentGraphData,
-      choices: ["Retry Connection"],
-      thoughtProcess: "Error in execution block.",
+      choices: ["Retry"],
+      thoughtProcess: "Error",
       state_updates: {},
       audioCues: [],
       psychosisText: "..."

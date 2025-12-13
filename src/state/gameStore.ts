@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { KnowledgeGraph } from '../lib/types/kgot';
@@ -11,8 +10,12 @@ import { KGotController } from '../controllers/KGotController';
 import { enqueueTurnForMedia } from './mediaController';
 import { prefectManager } from '../services/prefectManager';
 
-// Initialize the Controller to get the canonical graph
-const controller = new KGotController({ nodes: {}, edges: [], global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' } });
+// Initialize the Controller to get the canonical graph structure
+const controller = new KGotController({ 
+    nodes: {}, 
+    edges: [], 
+    global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' } 
+});
 const INITIAL_GRAPH: KnowledgeGraph = controller.getGraph();
 
 const INITIAL_GAME_STATE: GameState = {
@@ -24,7 +27,6 @@ const INITIAL_GAME_STATE: GameState = {
     seed: Date.now() 
 };
 
-// Initial Logs - The "Cold Open"
 const INITIAL_LOGS: LogEntry[] = [
   {
     id: 'system-init',
@@ -145,38 +147,10 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           });
       },
 
-      applyDirectorUpdates: (response) => set((state) => {
-        // Legacy fallback
+      applyDirectorUpdates: (response) => {
+        // Legacy compat
         console.warn("Using legacy applyDirectorUpdates - migrate to applyServerState");
-        const nextLedger = response.state_updates 
-          ? updateLedgerHelper(state.gameState.ledger, response.state_updates) 
-          : state.gameState.ledger;
-
-        const controller = new KGotController(state.kgot);
-        
-        if (state.kgot.nodes['Subject_84']) {
-            controller.updateLedger('Subject_84', nextLedger);
-        }
-        
-        if (response.graph_updates) {
-          controller.applyDelta(response.graph_updates);
-        }
-
-        const nextKgot = controller.getGraph();
-        nextKgot.global_state.turn_count = (state.kgot.global_state.turn_count || 0) + 1;
-
-        return {
-          gameState: {
-            ...state.gameState,
-            ledger: nextLedger,
-            turn: state.gameState.turn + 1
-          },
-          kgot: nextKgot,
-          executedCode: response.executed_code,
-          lastSimulationLog: response.simulationLog,
-          lastDirectorDebug: response.debugTrace || response.thought_process
-        };
-      }),
+      },
 
       processPlayerTurn: async (input: string) => {
         const state = get();
@@ -287,11 +261,10 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       },
       
       saveSnapshot: () => {
-         // Persist handled by middleware
          console.log("Snapshot saved via middleware");
       },
       loadSnapshot: () => {
-         window.location.reload(); // Simple reload triggers rehydration
+         window.location.reload(); 
       }
     }),
     {
@@ -301,8 +274,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         gameState: state.gameState,
         kgot: state.kgot,
         prefects: state.prefects,
-        // Exclude logs and multimodalTimeline (heavy media) to avoid quota issues
-        // We persist prefects to keep the UI consistent immediately on load
       }),
     }
   )
