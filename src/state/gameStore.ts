@@ -24,6 +24,7 @@ const INITIAL_GAME_STATE: GameState = {
     seed: Date.now() 
 };
 
+// Initial Logs - The "Cold Open"
 const INITIAL_LOGS: LogEntry[] = [
   {
     id: 'system-init',
@@ -31,9 +32,9 @@ const INITIAL_LOGS: LogEntry[] = [
     content: 'NEURO-SYMBOLIC ENGINE INITIALIZED. CONNECTING TO THE LOOM...'
   },
   {
-    id: 'narrative-start',
-    type: 'narrative',
-    content: 'The air is thick with humidity, smelling of volcanic ash and old fear. You stand at the precipice of The Forge. The silence is not empty; it is waiting.'
+    id: 'system-auth',
+    type: 'system',
+    content: 'SUBJECT_84 DETECTED. BIOMETRICS: ELEVATED CORTISOL.'
   }
 ];
 
@@ -80,6 +81,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       })),
 
       applyServerState: (result: any) => {
+          // 1. Register Multimodal Turn
           let newTurnId: string | null = null;
           if (result.narrative) {
               const newTurn = get().registerTurn(result.narrative, result.visualPrompt, {
@@ -88,6 +90,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
               });
               newTurnId = newTurn.id;
               
+              // Trigger media generation pipeline
               enqueueTurnForMedia(
                 newTurn, 
                 'Subject_84', 
@@ -143,6 +146,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       },
 
       applyDirectorUpdates: (response) => set((state) => {
+        // Legacy fallback
+        console.warn("Using legacy applyDirectorUpdates - migrate to applyServerState");
         const nextLedger = response.state_updates 
           ? updateLedgerHelper(state.gameState.ledger, response.state_updates) 
           : state.gameState.ledger;
@@ -249,57 +254,40 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           lastDirectorDebug: undefined,
         });
         
-        prefectManager.initialize(newSeed); // Explicitly re-init manager with new seed
-        get().startSession();
+        // Restart session logic
+        setTimeout(() => get().startSession(), 500);
       },
 
-      startSession: () => {
+      startSession: async () => {
         const state = get();
         
-        // Rehydrate or Initialize Prefect Manager using persisted seed
-        if (state.prefects.length === 0) {
-            // New Session
+        // Initialize Prefects
+        if (prefectManager.getPrefects().length === 0) {
             prefectManager.initialize(state.gameState.seed);
             set({ prefects: prefectManager.getPrefects() });
-        } else {
-            // Rehydration
-            if (prefectManager.getPrefects().length === 0) {
-                prefectManager.initialize(state.gameState.seed);
-                // Note: In a full implementation, we'd deep merge state.prefects into the manager
-            }
         }
 
-        // Attempt to register first turn if timeline is empty
+        // Bootstrapping: Generate the opening scene via the Director if timeline is empty
         if (state.multimodalTimeline.length === 0) {
-           const firstNarrative = state.logs.find(l => l.type === 'narrative');
+           console.log("[GameStore] Bootstrapping opening scene...");
+           set({ isThinking: true });
            
-           if (firstNarrative) {
-              const turn = state.registerTurn(
-                 firstNarrative.content, 
-                 "The Arrival Dock, volcanic ash, oppressed atmosphere.", 
-                 {
-                   location: "The Arrival Dock",
-                   tags: ['intro'],
-                   ledgerSnapshot: state.gameState.ledger
-                 }
-              );
-              enqueueTurnForMedia(turn, CharacterId.PLAYER, state.gameState.ledger, undefined, true);
-           } else {
-               // Fallback
-               console.warn("[GameStore] No narrative logs found for startSession. Forcing init.");
-               const fallbackContent = 'The air is thick with humidity... (Recovery Mode)';
-               const turn = state.registerTurn(
-                   fallbackContent,
-                   "The Arrival Dock (Recovery)",
-                   { location: "The Arrival Dock" }
+           try {
+               const result = await executeDirectorTurn(
+                   "INITIALIZE_SIMULATION", 
+                   [], 
+                   state.kgot
                );
-               enqueueTurnForMedia(turn, CharacterId.PLAYER, state.gameState.ledger, undefined, true);
+               get().applyServerState(result);
+           } catch (e) {
+               console.error("Failed to bootstrap session:", e);
+               set({ isThinking: false });
            }
         }
       },
       
       saveSnapshot: () => {
-         // Persist handled by middleware, but we can trigger logs/toast here
+         // Persist handled by middleware
          console.log("Snapshot saved via middleware");
       },
       loadSnapshot: () => {

@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { PrefectDNA, FilteredSceneContext, PrefectThought, PrefectArchetype, TraitVector } from '../../types';
 
 type ConversationHistory = { role: 'user' | 'model'; content: string }[];
@@ -33,6 +33,22 @@ const buildPrefectPrompt = (prefect: PrefectDNA, scene: FilteredSceneContext): s
     })
     .join('\n');
 
+  // Active Rivalry / Alliance Context
+  const activeDynamics = scene.otherPrefects.map(p => {
+     // Check if this specific prefect is a known rival
+     const relKey = Object.keys(prefect.relationships).find(k => k.includes(p.name.toUpperCase()));
+     const score = relKey ? prefect.relationships[relKey] : 0;
+     let status = "Neutral";
+     if (score < -0.2) status = "RIVAL (Sabotage them if possible)";
+     if (score > 0.2) status = "ALLY (Support them)";
+     return `- ${p.name} is present. Status: ${status}. Threat: ${p.perceivedThreat.toFixed(1)}. Action: "${p.recentActions}"`;
+  }).join('\n');
+
+  // Ledger Strategy
+  let ledgerStrategy = "";
+  if (scene.playerTrauma > 0.8) ledgerStrategy = "Subject is BROKEN. High vulnerability. Archetypes like Nurse/Sadist should exploit. Zealots should claim victory.";
+  else if (scene.playerTrauma < 0.2) ledgerStrategy = "Subject is RESISTANT. Needs breaking. Escalate force.";
+
   // Format Emotional State
   const emotionalContext = prefect.currentEmotionalState 
     ? `
@@ -62,26 +78,29 @@ ${emotionalContext}
 === YOUR RELATIONSHIPS ===
 ${relationshipContext || "None active."}
 
+=== INTER-AGENT DYNAMICS (ACTIVE) ===
+${activeDynamics || "No other prefects active."}
+
 === IMMEDIATE CAUSALITY (MANDATORY) ===
 The Player (Subject 84) just attempted this action: "${scene.yourRecentActions[0] || 'Stood silently.'}".
-You MUST react directly to this specific action.
-- If they complied: Do you reward them, ignore them, or find a flaw?
-- If they defied: Do you punish them, laugh, or feel threatened?
-- If they observed: Do you catch their gaze?
+Strategy Hint: ${ledgerStrategy}
+
+You MUST react directly to this specific action AND the presence of other Prefects.
+- If a RIVAL is present, try to make them look incompetent or steal their credit.
+- If an ALLY is present, signal them or coordinate.
 
 === CURRENT SCENE ===
 Location: ${scene.location}
 Scene Description: ${scene.description}
 Faculty Mood: ${scene.facultyMood}
 Faculty Present: ${scene.facultyPresent.join(', ')}
-Subject 84 Trauma Level: ${scene.playerTrauma.toFixed(2)}/1.0
 
 === ARCHETYPE BEHAVIOR ===
 ${getArchetypeBehavior(prefect.archetype, prefect.traitVector)}
 
 === RESPONSE FORMAT (JSON) ===
 {
-  "publicAction": "What you do/say openly. MUST DIRECTLY ADDRESS THE PLAYER'S ACTION.",
+  "publicAction": "What you do/say openly. MUST DIRECTLY ADDRESS THE PLAYER'S ACTION and OTHER PREFECTS.",
   "hiddenMotivation": "Your TRUE internal reasoning for this action",
   "internalMonologue": "Your private stream of consciousness",
   "sabotageAttempt": { 
@@ -136,38 +155,38 @@ export class PrefectAgent {
           temperature: 0.95, // High variance for dynamic social interactions
           responseMimeType: 'application/json',
           responseSchema: {
-            type: 'OBJECT',
+            type: Type.OBJECT,
             properties: {
-              publicAction: { type: 'STRING' },
-              hiddenMotivation: { type: 'STRING' },
-              internalMonologue: { type: 'STRING' },
+              publicAction: { type: Type.STRING },
+              hiddenMotivation: { type: Type.STRING },
+              internalMonologue: { type: Type.STRING },
               sabotageAttempt: {
-                type: 'OBJECT',
+                type: Type.OBJECT,
                 properties: {
-                  target: { type: 'STRING' },
-                  method: { type: 'STRING' },
-                  deniability: { type: 'NUMBER' }
+                  target: { type: Type.STRING },
+                  method: { type: Type.STRING },
+                  deniability: { type: Type.NUMBER }
                 },
                 nullable: true
               },
               allianceSignal: {
-                type: 'OBJECT',
+                type: Type.OBJECT,
                 properties: {
-                  target: { type: 'STRING' },
-                  message: { type: 'STRING' }
+                  target: { type: Type.STRING },
+                  message: { type: Type.STRING }
                 },
                 nullable: true
               },
               emotionalState: {
-                type: 'OBJECT',
+                type: Type.OBJECT,
                 properties: {
-                  paranoia: { type: 'NUMBER' },
-                  desperation: { type: 'NUMBER' },
-                  confidence: { type: 'NUMBER' }
+                  paranoia: { type: Type.NUMBER },
+                  desperation: { type: Type.NUMBER },
+                  confidence: { type: Type.NUMBER }
                 }
               },
-              secretsUncovered: { type: 'ARRAY', items: { type: 'STRING' } },
-              favorScoreDelta: { type: 'NUMBER' }
+              secretsUncovered: { type: Type.ARRAY, items: { type: Type.STRING } },
+              favorScoreDelta: { type: Type.NUMBER }
             },
             required: ['publicAction', 'hiddenMotivation', 'internalMonologue']
           }
