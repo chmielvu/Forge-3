@@ -2,7 +2,7 @@
 import { YandereLedger } from '../../types';
 
 // Knowledge Graph of Thoughts (KGoT) Schema
-// Version: SOTA 3.5
+// Version: SOTA 3.6 - Deep Agent Integration
 
 export type NodeType = 'ENTITY' | 'LOCATION' | 'EVENT' | 'CONCEPT' | 'FACULTY' | 'PREFECT' | 'SUBJECT';
 
@@ -14,24 +14,48 @@ export interface Memory {
   involved_entities: string[];
 }
 
+export interface AgentState {
+  // Generic
+  archetype: string;
+  current_mood: string;
+  dominance_level: number; // 0.0 - 1.0
+  voice_id: string;
+  
+  // Faculty Specific
+  boredom_level?: number; // Selene/Petra
+  kinetic_arousal?: number; // Petra
+  scientific_curiosity?: number; // Lysandra
+  maternal_facade_strength?: number; // Calista
+  guilt_level?: number; // Astra
+  
+  // Prefect Specific
+  loyalty_score?: number; // Elara
+  anxiety_level?: number; // Elara/Rhea
+  obsession_level?: number; // Kaelen
+  jealousy_meter?: number; // Kaelen
+  dere_yan_state?: 'dere' | 'yan'; // Kaelen
+  cover_integrity?: number; // Rhea
+  revolutionary_fervor?: number; // Rhea
+  ambition_score?: number; // Anya
+  
+  // Tracking
+  target_of_interest?: string | null;
+  active_schemes?: string[];
+}
+
 export interface KGotNode {
   id: string;
-  type: NodeType | string; // String allow for 'faculty', 'prefect' etc from python script
+  type: NodeType | string;
   label: string;
   attributes: {
-    ledger?: YandereLedger; // Embedded state for subjects
-    archetype?: string;
-    dominance?: number;
+    // Subject State
+    ledger?: YandereLedger; 
+    
+    // Agent State (Flattened for easier graph queries, or structured)
+    agent_state?: AgentState;
+
+    // Visuals
     manara_gaze?: string;
-    voice_id?: string;
-    ocean?: { O: number; C: number; E: number; A: number; N: number };
-    current_mood?: string;
-    kinetic_state?: string;
-    manipulation_mode?: string;
-    loyalty_score?: number;
-    doubt_level?: number;
-    obsession_target?: string | null;
-    dere_yan_state?: 'dere' | 'yan';
     noir_lighting_state?: string;
     surface_reflectivity?: number;
     architectural_oppression?: number;
@@ -42,6 +66,7 @@ export interface KGotNode {
     grudges?: Record<string, number>; // targetId -> intensity (0-100)
     secrets?: string[];
     
+    // Legacy/Flexibility
     [key: string]: any;
   };
   provenance?: {
@@ -50,7 +75,7 @@ export interface KGotNode {
   };
 }
 
-export type EdgeType = 'RELATIONSHIP' | 'SPATIAL' | 'TEMPORAL' | 'KNOWLEDGE' | 'TRAUMA_BOND' | 'SECRET_ALLIANCE' | 'GRUDGE';
+export type EdgeType = 'RELATIONSHIP' | 'SPATIAL' | 'TEMPORAL' | 'KNOWLEDGE' | 'TRAUMA_BOND' | 'SECRET_ALLIANCE' | 'GRUDGE' | 'OBSESSION';
 
 export interface KGotEdge {
   source: string;

@@ -1,5 +1,5 @@
 
-import { KnowledgeGraph, KGotNode, KGotEdge, NodeType, Memory } from '../lib/types/kgot';
+import { KnowledgeGraph, KGotNode, KGotEdge, NodeType, Memory, AgentState } from '../lib/types/kgot';
 import { YandereLedger } from '../types';
 
 /**
@@ -23,130 +23,210 @@ export class KGotController {
     return this.graph;
   }
 
-  // --- Canonical Initialization (Ported from Python) ---
+  // --- Canonical Initialization (Deep State Integration) ---
 
   public initializeCanonicalNodes(): void {
-    // Faculty
+    // --- FACULTY ---
+
+    // Provost Selene: The Corrupted Matriarch
     this.addNode({
-      id: "FACULTY_PROVOST",
-      type: "faculty",
+      id: "FACULTY_SELENE",
+      type: "FACULTY",
       label: "Provost Selene",
       attributes: {
-        archetype: "The Corrupted Matriarch",
         manara_gaze: "Bored_God_Complex",
-        dominance: 1.0,
-        current_mood: "analytical",
-        voice_id: "selene_contralto",
+        description_abyss: "A figure of crimson velvet and glacial indifference.",
+        agent_state: {
+          archetype: "The Corrupted Matriarch",
+          current_mood: "analytical",
+          dominance_level: 1.0,
+          boredom_level: 0.8, // Starts high, needs disruption
+          voice_id: "selene_contralto"
+        },
         memories: [],
-        grudges: {}
+        grudges: {}, // Tracks who has bored her
+        active_schemes: ["Transmutation of Virility"]
       }
     });
 
+    // Dr. Lysandra: The Vivisectionist
     this.addNode({
       id: "FACULTY_LOGICIAN",
-      type: "faculty",
+      type: "FACULTY",
       label: "Dr. Lysandra",
       attributes: {
-        archetype: "The Vivisectionist",
         manara_gaze: "Clinical_Observer",
-        dominance: 0.85,
-        voice_id: "lysandra_monotone",
+        description_abyss: "Spectacles reflecting a world reduced to variables.",
+        agent_state: {
+          archetype: "The Vivisectionist",
+          current_mood: "curious",
+          dominance_level: 0.85,
+          scientific_curiosity: 0.9,
+          voice_id: "lysandra_monotone"
+        },
         memories: [],
-        grudges: {}
+        grudges: {}, // Tracks who contaminated data
+        active_schemes: ["Neural Mapping of Submission"]
       }
     });
 
+    // Inquisitor Petra: The Kinetic Artist
     this.addNode({
-      id: "FACULTY_INQUISITOR",
-      type: "faculty",
+      id: "FACULTY_PETRA",
+      type: "FACULTY",
       label: "Inquisitor Petra",
       attributes: {
-        archetype: "The Kinetic Artist",
         manara_gaze: "Predatory_Manic",
-        dominance: 0.9,
-        kinetic_state: "playful",
-        voice_id: "petra_soprano_giggle",
+        description_abyss: "A coiled spring of violence and leather.",
+        agent_state: {
+          archetype: "The Kinetic Artist",
+          current_mood: "playful", // "Just joking"
+          dominance_level: 0.95,
+          kinetic_arousal: 0.7,
+          boredom_level: 0.5,
+          voice_id: "petra_soprano_giggle"
+        },
         memories: [],
-        grudges: {}
+        grudges: {}, // Tracks who didn't break interestingly
+        active_schemes: ["The Perfect Break"]
       }
     });
 
+    // Confessor Calista: The Spider
     this.addNode({
       id: "FACULTY_CONFESSOR",
-      type: "faculty",
+      type: "FACULTY",
       label: "Confessor Calista",
       attributes: {
-        archetype: "The Spider",
         manara_gaze: "Sultry_Predator",
-        dominance: 0.88,
-        manipulation_mode: "hurt_comfort",
-        voice_id: "calista_breathy_alto",
+        description_abyss: "Softness weaponized into a trap.",
+        agent_state: {
+          archetype: "The Spider",
+          current_mood: "maternal_predatory",
+          dominance_level: 0.88,
+          maternal_facade_strength: 0.95,
+          voice_id: "calista_breathy_alto"
+        },
+        memories: [],
+        grudges: {},
+        active_schemes: ["Emotional Harvesting"]
+      }
+    });
+
+    // Dr. Astra: The Pain Broker (Conflicted)
+    this.addNode({
+      id: "FACULTY_ASTRA",
+      type: "FACULTY",
+      label: "Dr. Astra",
+      attributes: {
+        manara_gaze: "Weary_Guilt",
+        description_abyss: "Trembling hands holding a clipboard of horrors.",
+        agent_state: {
+          archetype: "The Pain Broker",
+          current_mood: "conflicted",
+          dominance_level: 0.6,
+          guilt_level: 0.8, // Defining trait
+          voice_id: "astra_tired_mezzo"
+        },
         memories: [],
         grudges: {}
       }
     });
 
-    // Prefects
+    // --- PREFECTS ---
+
+    // Elara: The Loyalist
     this.addNode({
       id: "PREFECT_LOYALIST",
-      type: "prefect",
+      type: "PREFECT",
       label: "Elara",
       attributes: {
-        archetype: "The Flinching Zealot",
-        loyalty_score: 0.95,
-        doubt_level: 0.6,
-        ocean: { O: 0.3, C: 0.9, E: 0.4, A: 0.5, N: 0.7 },
+        manara_gaze: "Wide_Eyed_Fanatic",
+        agent_state: {
+          archetype: "The Flinching Zealot",
+          current_mood: "anxious",
+          dominance_level: 0.4,
+          loyalty_score: 0.95,
+          anxiety_level: 0.7,
+          voice_id: "elara_sharp"
+        },
         memories: [],
         grudges: {}
       }
     });
 
+    // Kaelen: The Obsessive
     this.addNode({
       id: "PREFECT_OBSESSIVE",
-      type: "prefect",
+      type: "PREFECT",
       label: "Kaelen",
       attributes: {
-        archetype: "The Yandere",
-        obsession_target: null,
-        dere_yan_state: "dere",
-        ocean: { O: 0.4, C: 0.6, E: 0.3, A: 0.2, N: 0.9 },
+        manara_gaze: "Yandere_Blank_Stare",
+        agent_state: {
+          archetype: "The Yandere",
+          current_mood: "dere", // Starts sweet
+          dominance_level: 0.5,
+          obsession_level: 0.9,
+          jealousy_meter: 0.0,
+          dere_yan_state: "dere",
+          target_of_interest: "Subject_84",
+          voice_id: "kaelen_variable"
+        },
         memories: [],
-        grudges: {}
+        grudges: {},
+        active_schemes: ["Purification Ritual"]
       }
     });
+    
+    // Explicit edge for Kaelen's obsession
+    this.addEdge("PREFECT_OBSESSIVE", "Subject_84", "OBSESSION", 1.0, { trope: "Yandere Focus" });
 
+    // Rhea: The Dissident
     this.addNode({
       id: "PREFECT_DISSIDENT",
-      type: "prefect",
+      type: "PREFECT",
       label: "Rhea",
       attributes: {
-        archetype: "The Double Agent",
-        cover_integrity: 0.8,
-        true_loyalty: "revolution",
-        ocean: { O: 0.8, C: 0.7, E: 0.5, A: 0.7, N: 0.6 },
+        manara_gaze: "Cynical_Guarded",
+        agent_state: {
+          archetype: "The Double Agent",
+          current_mood: "cynical",
+          dominance_level: 0.3,
+          cover_integrity: 0.9, // High cover
+          revolutionary_fervor: 0.8,
+          voice_id: "rhea_low"
+        },
         memories: [],
-        grudges: {}
+        grudges: { "FACULTY_SELENE": 90 }, // Deep hatred
+        active_schemes: ["The Signal"]
       }
     });
 
+    // Anya: The Nurse
     this.addNode({
       id: "PREFECT_NURSE",
-      type: "prefect",
+      type: "PREFECT",
       label: "Anya",
       attributes: {
-        archetype: "The False Healer",
-        intelligence_value: 0.7,
-        trust_facade: 0.9,
-        ocean: { O: 0.7, C: 0.8, E: 0.6, A: 0.4, N: 0.3 },
+        manara_gaze: "Calculating_Warmth",
+        agent_state: {
+          archetype: "The False Healer",
+          current_mood: "solicitous",
+          dominance_level: 0.5,
+          ambition_score: 0.8,
+          voice_id: "anya_soothing"
+        },
         memories: [],
-        grudges: {}
+        grudges: {},
+        active_schemes: ["Information Brokerage"]
       }
     });
 
-    // Locations
+    // --- LOCATIONS ---
+
     this.addNode({
       id: "loc_calibration",
-      type: "location",
+      type: "LOCATION",
       label: "The Calibration Chamber",
       attributes: {
         noir_lighting_state: "Clinical_Spotlight",
@@ -158,7 +238,7 @@ export class KGotController {
 
     this.addNode({
       id: "loc_confessional",
-      type: "location",
+      type: "LOCATION",
       label: "The Velvet Confessional",
       attributes: {
         noir_lighting_state: "Venetian_Blind_Amber",
@@ -170,7 +250,7 @@ export class KGotController {
 
     this.addNode({
       id: "loc_infirmary",
-      type: "location",
+      type: "LOCATION",
       label: "Infirmary",
       attributes: {
         noir_lighting_state: "Clinical_Cold_White",
@@ -232,7 +312,7 @@ export class KGotController {
   public addSubject(subjectId: string, initialState: any): void {
     this.addNode({
       id: subjectId,
-      type: "subject",
+      type: "SUBJECT",
       label: initialState.name || "Subject",
       attributes: {
         ledger: {
@@ -260,7 +340,7 @@ export class KGotController {
   }
 
   public addTraumaBond(source: string, target: string, bondType: string, intensity: number): void {
-    this.addEdge(source, target, 'trauma_bond', intensity, {
+    this.addEdge(source, target, 'TRAUMA_BOND', intensity, {
       type: "trauma_bond",
       bond_type: bondType,
       intensity,

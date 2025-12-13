@@ -57,6 +57,32 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
     logs: state.logs.map(log => log.id === logId ? { ...log, ...media } : log)
   })),
 
+  // NEW: Handle Server Action Result directly
+  applyServerState: (result: any) => set((state) => {
+      const newLogs = [...state.logs];
+      if (result.thoughtProcess) {
+          newLogs.push({ id: `thought-${Date.now()}`, type: 'thought', content: result.thoughtProcess });
+      }
+      if (result.narrative) {
+          newLogs.push({ id: `narrative-${Date.now()}`, type: 'narrative', content: result.narrative, visualContext: result.visualPrompt });
+      }
+      
+      // Update KGoT if provided
+      let nextKgot = state.kgot;
+      if (result.updatedGraph) {
+          // Could invoke KGotController here if reconciliation needed, 
+          // but if server sends full graph, we can replace.
+          nextKgot = result.updatedGraph;
+      }
+
+      return {
+          kgot: nextKgot,
+          choices: result.choices || [],
+          logs: newLogs,
+          isThinking: false
+      };
+  }),
+
   applyDirectorUpdates: (response) => set((state) => {
     // 1. Update Ledger (Standard Game State)
     const nextLedger = response.state_updates 
@@ -120,8 +146,6 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
             isThinking: false
         }));
 
-        // Normally we would update KGoT here based on result.updatedGraph, but submitTurn returns the full graph in this mock
-        // In a real delta scenario, we'd merge.
         if (result.updatedGraph) {
            set({ kgot: result.updatedGraph });
         }

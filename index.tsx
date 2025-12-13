@@ -1,16 +1,3 @@
 
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './src/App';
-
-const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
-}
-
-const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// DEPRECATED: This file is no longer used in the Next.js architecture.
+// Please refer to src/app/page.tsx for the application entry point.

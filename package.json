@@ -1,34 +1,35 @@
+
 {
   "name": "copy-of-the-forge's-loom",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
-    "react-dom": "^19.2.0",
-    "@google/genai": "^1.30.0",
-    "react": "^19.2.0",
-    "lucide-react": "^0.554.0",
-    "recharts": "^3.4.1",
-    "d3": "^7.9.0",
-    "framer-motion": "^10.16.0",
-    "three": "^0.160.0",
-    "@react-three/fiber": "^8.15.0",
-    "@react-three/drei": "^9.92.0",
-    "vite": "^7.2.4",
-    "@vitejs/plugin-react": "^5.1.1",
-    "zustand": "^5.0.9",
-    "zod": "3.22.4",
-    "next": "^16.0.10"
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.22.4",
+    "zustand": "^5.0.3",
+    "lucide-react": "^0.344.0",
+    "framer-motion": "^11.0.8",
+    "@google/genai": "^0.1.1",
+    "d3": "^7.8.5",
+    "recharts": "^2.12.2"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "@types/node": "^20.11.24",
+    "@types/react": "^18.2.61",
+    "@types/react-dom": "^18.2.19",
+    "@types/d3": "^7.4.3",
+    "typescript": "^5.3.3",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "autoprefixer": "^10.4.18"
   }
 }
