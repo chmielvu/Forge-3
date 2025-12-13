@@ -1,18 +1,22 @@
-
 'use client';
 
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { submitTurn } from './actions';
-import { useGameStore } from '@/state/gameStore';
-import NarrativeLog from '@/components/NarrativeLog';
-import NetworkGraph from '@/components/NetworkGraph';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { useGameStore } from '../state/gameStore';
+import NarrativeLog from '../components/NarrativeLog';
+import NetworkGraph from '../components/NetworkGraph';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const INITIAL_STATE = { narrative: "The Iron Sandbox Initialized.", updatedGraph: null, choices: [], thoughtProcess: "" };
 
 function GameInterface() {
   const [state, formAction, isPending] = useActionState(submitTurn, INITIAL_STATE);
   const { applyServerState, setThinking, kgot, logs } = useGameStore();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (state.updatedGraph) {
@@ -39,6 +43,15 @@ function GameInterface() {
         submitBtn.click();
     }
   };
+
+  // Prevent hydration mismatch or empty render flicker
+  if (!isMounted) {
+    return (
+      <div className="h-screen w-full bg-[#050505] flex items-center justify-center text-[#facc15] font-mono animate-pulse">
+        INITIALIZING NEURO-SYMBOLIC ENGINE...
+      </div>
+    );
+  }
 
   return (
     <main className="grid grid-cols-1 md:grid-cols-12 h-screen bg-[#050505] text-[#f5f5f4] font-serif overflow-hidden">

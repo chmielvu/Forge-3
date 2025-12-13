@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from "zod";
-import { executeDirectorTurn } from "@/lib/director";
+import { executeDirectorTurn } from "../lib/director";
 
 // Validation Schema for the incoming form data
 // We use z.any() for the graph to avoid complex recursive validation at the gateway,
