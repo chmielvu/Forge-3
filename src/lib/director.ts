@@ -63,6 +63,15 @@ You must persist narrative state by emitting mutations.
 *   **update_grudge**: Track long-term resentment. Params: { source: "char_id", target: "char_id", delta: 15 }
 *   **add_edge**: Create relationships or bonds. Params: { source: "A", target: "B", relation: "hates", weight: 0.8 }
 
+**MEMORY & EVENT LINKING PROTOCOL:**
+When a significant narrative event occurs (especially involving Trauma, Intimacy, or Conflict):
+1.  **Record the Memory**: Emit an \`add_memory\` mutation for the primary character (usually "Subject_84") containing the description and involved entities.
+2.  **Create Graph Links**: You MUST emit \`add_edge\` mutations to link the involved characters.
+    *   **Relation**: Use "SHARED_MEMORY", "TRAUMA_BOND", or "CONFLICT".
+    *   **Weight**: 0.5 to 1.0 based on emotional intensity.
+    *   **Meta**: Include the memory summary in the edge metadata if possible.
+    *   *Example*: If Petra strikes Subject 84, create a "TRAUMA_BOND" edge from Subject_84 to FACULTY_PETRA.
+
 COGNITIVE PROTOCOL (DEEP THINK):
 1. EXPAND: Identify 3 branches (Trauma, Subversion, Novelty)
 2. SIMULATE: Query KGoT. Does this align with narrative physics? Check existing grudges and memories.
@@ -187,7 +196,8 @@ export async function executeDirectorTurn(
       updatedGraph: controller.getGraph(),
       choices: directorOutput.choices || ["Continue"],
       thoughtProcess: `BRANCH: ${selectedBranch.type}\nBID: ${winningBid?.agent_id || 'None'}\nTHOUGHT: ${directorOutput.thought_signature}`,
-      state_updates: directorOutput.ledger_update
+      state_updates: directorOutput.ledger_update,
+      audioCues: directorOutput.audio_cues
     };
 
   } catch (error) {
