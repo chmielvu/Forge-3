@@ -74,56 +74,107 @@ class VisualCoherenceEngine {
     ledger: YandereLedger,
     text: string
   ): any {
-    // 1. Base Dominance from Ledger
-    // Compliance is the inverse of Player Dominance.
-    // If Compliance is 100, Player is 0 Dominance.
-    // Faculty is always 100 Dominance.
-    const playerDominance = (100 - ledger.complianceScore) / 100; // 0.0 - 1.0
-    const facultyDominance = 1.0; 
-    
-    let dominanceDelta = facultyDominance - playerDominance; // 0.0 (Equal) to 1.0 (Total Domination)
+    // 1. Calculate Player Dominance (Inverse of Compliance & Trauma)
+    // 0.0 = Totally Broken/Compliant, 1.0 = Defiant/Strong
+    const complianceFactor = ledger.complianceScore / 100;
+    const traumaFactor = ledger.traumaLevel / 100;
+    const playerDominance = Math.max(0, 1.0 - (complianceFactor * 0.6 + traumaFactor * 0.4));
 
-    // 2. Adjust based on specific Character traits if available
+    // 2. Calculate Target (Agent) Dominance
+    let agentDominance = 1.0; // Faculty default to max
+    let agentAmbition = 0.5;
+
     if (typeof target !== 'string') {
         const dna = target as PrefectDNA;
-        // Prefects have variable dominance based on 'Favor'
-        const prefectDominance = dna.favorScore / 100;
-        dominanceDelta = prefectDominance - playerDominance;
+        // Prefect dominance relies on Favor (Status) and Ambition (Posture)
+        // High favor = 1.0, Low favor = 0.2
+        const favorFactor = dna.favorScore / 100;
+        agentAmbition = dna.traitVector.ambition;
+        
+        // Base dominance mix
+        agentDominance = (favorFactor * 0.5) + (agentAmbition * 0.5);
+        
+        // Elara (Loyalist) specific: High submission lowers her visual dominance despite status
+        if (dna.archetype === 'The Zealot') {
+            agentDominance -= 0.2; 
+        }
+        // Petra/Sadist specific: Cruelty increases visual imposingness
+        if (dna.traitVector.cruelty > 0.7) {
+            agentDominance += 0.2;
+        }
     }
 
     // 3. Narrative Overrides (The Somatic Cascade)
+    // The text describes the immediate physical reality, which overrides stats.
     const lowerText = text.toLowerCase();
-    if (lowerText.includes("kneel") || lowerText.includes("floor") || lowerText.includes("crawling")) {
-        dominanceDelta += 0.3;
+    
+    if (lowerText.includes("kneel") || lowerText.includes("floor") || lowerText.includes("crawling") || lowerText.includes("bow")) {
+        agentDominance += 0.4; // Player is physically lower
     }
-    if (lowerText.includes("looking down") || lowerText.includes("towering")) {
-        dominanceDelta += 0.2;
+    if (lowerText.includes("looking down") || lowerText.includes("towering") || lowerText.includes("looms")) {
+        agentDominance += 0.3;
+    }
+    if (lowerText.includes("stand") || lowerText.includes("rise") || lowerText.includes("spit")) {
+        agentDominance -= 0.2; // Player defiance
+    }
+    if (lowerText.includes("seated") || lowerText.includes("chair") || lowerText.includes("desk")) {
+        // Seated faculty implies confidence/dominance without height difference
+        agentDominance += 0.1; 
     }
 
-    // 4. Determine Angle
-    let angle = "eye_level";
+    // 4. Calculate Delta and Map to Camera Logic
+    // Positive Delta = Agent dominates Player (Low Angle / Looking Up)
+    // Negative Delta = Player dominates Agent (High Angle / Looking Down)
+    const dominanceDelta = agentDominance - playerDominance;
+
+    let angle = "eye_level_confrontational";
     let framing = "medium_shot";
+    let movement = "static_tension";
 
-    if (dominanceDelta > 0.7) {
-        angle = "extreme_low_angle_looking_up_at_subject"; // Viewer (Player) is on floor, looking up at Faculty
+    // ANGLE LOGIC
+    if (dominanceDelta > 0.6) {
+        // Overwhelming Dominance
+        angle = "extreme_low_angle_worm_eye_view"; // Viewer feels small, Agent looks like a giant
         framing = "looming_close_up";
-    } else if (dominanceDelta > 0.4) {
-        angle = "low_angle";
+    } else if (dominanceDelta > 0.3) {
+        // Assertive Dominance
+        angle = "low_angle_heroic_power"; 
+        framing = "cowboy_shot"; // Knees up, powerful stance
     } else if (dominanceDelta < -0.2) {
-        // Player is defiant/standing
-        angle = "slightly_high_angle_looking_down"; // Faculty perspective looking at player
+        // Player Defiance / Agent Vulnerability
+        angle = "high_angle_looking_down"; // Agent looks smaller
+        framing = "medium_full_shot"; // Isolate them in space
+    } else {
+        // Near Equal / Tension
+        // High Trauma + Equal Dominance = Disorientation
+        if (ledger.traumaLevel > 70) {
+            angle = "dutch_angle_tilted"; // Unsettling
+        } else {
+            angle = "eye_level_intimate"; // Direct confrontation
+        }
     }
 
-    // "Manara Gaze" logic: Focus on specific parts based on context
+    // "Manara Gaze" Focus Logic (Fetishistic Detail)
     let focus = "face_and_eyes";
-    if (lowerText.includes("hand") || lowerText.includes("touch")) focus = "hands_interacting";
-    if (lowerText.includes("boots") || lowerText.includes("step")) focus = "legs_and_boots";
+    if (lowerText.includes("hand") || lowerText.includes("touch") || lowerText.includes("finger")) focus = "hands_interacting_with_skin";
+    if (lowerText.includes("boots") || lowerText.includes("step") || lowerText.includes("heel")) focus = "boots_and_legs_low_angle";
+    if (lowerText.includes("smile") || lowerText.includes("lips") || lowerText.includes("whisper")) focus = "lips_extreme_close_up";
+    if (lowerText.includes("eye") || lowerText.includes("stare") || lowerText.includes("gaze")) focus = "eyes_reflecting_fear";
+    if (lowerText.includes("neck") || lowerText.includes("choke") || lowerText.includes("throat")) focus = "neck_and_hands";
+
+    // Framing Adjustments for Intimacy
+    if (ledger.arousalLevel > 60 || lowerText.includes("close") || lowerText.includes("breath")) {
+        framing = "extreme_close_up_macro";
+        angle = "intimate_eye_level";
+    }
 
     return {
         angle: angle,
         framing: framing,
         focus: focus,
-        dominance_metric: dominanceDelta.toFixed(2)
+        movement_implication: movement,
+        dominance_metric: dominanceDelta.toFixed(2),
+        description: `Camera positioned ${angle.replace(/_/g, " ")} to emphasize ${dominanceDelta > 0 ? 'subject vulnerability' : 'agent vulnerability'}. Focus on ${focus.replace(/_/g, " ")}.`
     };
   }
 
@@ -204,7 +255,8 @@ class VisualCoherenceEngine {
 
   private inferDominancePosture(characterId: string, ledger: YandereLedger, text: string): number {
     const lower = text.toLowerCase();
-    if (characterId === CharacterId.PLAYER) {
+    // Male Subjects logic
+    if (characterId === CharacterId.PLAYER || characterId === CharacterId.NICO || characterId === CharacterId.DARIUS || characterId === CharacterId.SILAS || characterId === CharacterId.THEO) {
       if (lower.match(/kneel|bow|beg|crawl/)) return 0.1;
       if (lower.match(/stand|glare|spit|resist/)) return 0.6;
       return Math.max(0, Math.min(1, (100 - ledger.complianceScore + ledger.hopeLevel) / 200));
@@ -278,16 +330,40 @@ class VisualCoherenceEngine {
         role: "Main Character",
         description: profile,
       };
-      if (target === CharacterId.PLAYER) {
+
+      // Player and Male Subject Specific Logic
+      const isMaleSubject = 
+        target === CharacterId.PLAYER || 
+        target === CharacterId.NICO || 
+        target === CharacterId.DARIUS || 
+        target === CharacterId.SILAS || 
+        target === CharacterId.THEO;
+
+      if (isMaleSubject) {
         moodModifiers.push("vulnerable", "exposed", "eroticized-distress");
         aestheticInjects.push(FORGE_MOTIFS.BoundWrists);
         
-        // Eroticized Distress logic for Player
+        // Eroticized Distress logic for Player/Subjects
         if (ledger.arousalLevel > 40) {
             aestheticInjects.push(FORGE_MOTIFS.FlushedSkin, "heavy lidded eyes");
         }
         if (ledger.traumaLevel > 60) {
             aestheticInjects.push(FORGE_MOTIFS.TremblingHands, "sweat-beaded forehead");
+        }
+
+        // Specific Subject Visuals
+        if (target === CharacterId.NICO) {
+            moodModifiers.push("defiant", "intense");
+            aestheticInjects.push("fresh bruising", "burning glare");
+        } else if (target === CharacterId.DARIUS) {
+            moodModifiers.push("broken-protector", "exhausted");
+            aestheticInjects.push("slumped shoulders", "gentle eyes");
+        } else if (target === CharacterId.THEO) {
+            moodModifiers.push("fragile", "terrified");
+            aestheticInjects.push("pale skin", "tear tracks", "oversized uniform");
+        } else if (target === CharacterId.SILAS) {
+            moodModifiers.push("blank", "robotic");
+            aestheticInjects.push("unblinking stare", "perfect posture");
         }
       }
     } else { 

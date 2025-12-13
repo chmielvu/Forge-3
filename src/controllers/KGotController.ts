@@ -309,6 +309,38 @@ export class KGotController {
 
   // --- Specialized Updates (Python Port) ---
 
+  /**
+   * Safely updates a specific attribute within a node's 'attributes' object.
+   * Supports dot notation for nested keys (e.g. 'agent_state.current_mood').
+   */
+  public updateNodeAttribute(nodeId: string, attributeName: string, value: any): void {
+    const node = this.graph.nodes[nodeId];
+    if (!node) {
+      console.warn(`[KGotController] Node ${nodeId} not found.`);
+      return;
+    }
+
+    if (!node.attributes) {
+      // @ts-ignore
+      node.attributes = {};
+    }
+
+    const parts = attributeName.split('.');
+    let current: any = node.attributes;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+        const key = parts[i];
+        // Create object if it doesn't exist or isn't an object
+        if (!current[key] || typeof current[key] !== 'object') {
+            current[key] = {};
+        }
+        current = current[key];
+    }
+
+    const lastKey = parts[parts.length - 1];
+    current[lastKey] = value;
+  }
+
   public addSubject(subjectId: string, initialState: any): void {
     this.addNode({
       id: subjectId,

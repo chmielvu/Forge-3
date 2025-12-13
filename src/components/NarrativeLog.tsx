@@ -6,7 +6,7 @@ import { Activity, Square, Brain, MessageCircle, Zap } from 'lucide-react';
 import { LogEntry, YandereLedger } from '../types';
 import { 
   selectNarratorMode, 
-  generateChoiceAnnotation, 
+  detectCodeSwitchMode,
   injectNarratorCommentary,
   NARRATOR_VOICES,
   NarratorMode 
@@ -36,6 +36,8 @@ const Typewriter: React.FC<{ text: string; onTyping: () => void; isTrauma: boole
   
   const safeHTML = displayed
     .replace(/\*(.*?)\*/g, '<em class="text-amber-400 not-italic font-semibold text-shadow-sm">$1</em>')
+    // Narrator Injection Syntax: [[COLOR|TEXT]]
+    .replace(/\[\[(.*?)\|(.*?)\]\]/g, '<span style="color: $1; font-family: monospace; font-size: 0.85em; display: block; margin-top: 0.75rem; opacity: 0.9; letter-spacing: 0.05em; border-left: 2px solid $1; padding-left: 0.5rem;">$2</span>')
     .replace(/\n/g, '<br/>');
   
   return <span dangerouslySetInnerHTML={{ __html: safeHTML }} />;
@@ -54,15 +56,29 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
     scrollToBottom();
   }, [logs, thinking]);
 
+  // Code-Switching Logic
   useEffect(() => {
-    const newMode = selectNarratorMode(ledger);
-    if (newMode !== narratorMode) {
-      setNarratorMode(newMode);
+    const latestLog = logs[logs.length - 1];
+    
+    // 1. Start with the baseline mode derived from the ledger
+    let nextMode = selectNarratorMode(ledger);
+
+    // 2. Check for contextual code-switching triggers in the latest narrative
+    if (latestLog?.type === 'narrative') {
+       const detectedMode = detectCodeSwitchMode(latestLog.content);
+       if (detectedMode) {
+         nextMode = detectedMode;
+       }
+    }
+
+    // 3. Update state if changed
+    if (nextMode !== narratorMode) {
+      setNarratorMode(nextMode);
       setShowNarratorIndicator(true);
       const timer = setTimeout(() => setShowNarratorIndicator(false), 4000);
       return () => clearTimeout(timer);
     }
-  }, [ledger.phase, ledger.traumaLevel, ledger.complianceScore, narratorMode]);
+  }, [logs, ledger.traumaLevel, ledger.complianceScore, ledger.hopeLevel, ledger.arousalLevel, narratorMode]);
 
   const narratorVoice = NARRATOR_VOICES[narratorMode];
 
@@ -71,7 +87,7 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
       {/* Narrator Indicator */}
       {showNarratorIndicator && (
         <div 
-          className="absolute top-0 right-0 z-50 px-3 py-2 rounded-sm border animate-fade-in shadow-2xl backdrop-blur-md"
+          className="absolute top-0 right-0 z-50 px-3 py-2 rounded-sm border animate-fade-in shadow-2xl backdrop-blur-md transition-all duration-500"
           style={{
             backgroundColor: 'rgba(5, 5, 5, 0.95)',
             borderColor: narratorVoice.borderColor,
@@ -89,6 +105,7 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
       <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 relative scroll-smooth">
         <div className="space-y-6 pb-2 min-h-full flex flex-col justify-end">
           {logs.map((log) => {
+            // Apply commentary only if it's a narrative log
             const enhancedContent = log.type === 'narrative' 
               ? injectNarratorCommentary(log.content, narratorMode, { traumaLevel: ledger.traumaLevel })
               : log.content;

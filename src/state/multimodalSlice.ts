@@ -279,6 +279,7 @@ export const createMultimodalSlice: StateCreator<
     await audioService.play(
       turn.audioUrl,
       get().audioPlayback.volume,
+      get().audioPlayback.playbackRate,
       () => {
         // onEnded callback
         const { audioPlayback: ap, multimodalTimeline: currentTimeline } = get();
@@ -331,10 +332,10 @@ export const createMultimodalSlice: StateCreator<
   },
 
   setPlaybackRate: (rate) => {
+    audioService.setPlaybackRate(rate);
     set((state) => ({
       audioPlayback: { ...state.audioPlayback, playbackRate: rate },
     }));
-    console.warn("[MultimodalSlice] Playback rate control not fully implemented in AudioService.");
   },
 
   toggleAutoAdvance: () => {

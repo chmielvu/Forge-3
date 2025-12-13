@@ -4,7 +4,7 @@ import { YandereLedger } from '../types';
 export type NarratorMode = 
   | 'MOCKING_JESTER' 
   | 'SEDUCTIVE_DOMINATRIX' 
-  | 'FEMINIST_ANALYST' 
+  | 'CLINICAL_ANALYST' 
   | 'SYMPATHETIC_CONFIDANTE';
 
 export interface NarratorVoice {
@@ -12,9 +12,11 @@ export interface NarratorVoice {
   exampleInterjection: string;
   choiceBias: 'subtle_mockery' | 'encourages_submission' | 'validates_pattern_recognition' | 'empathetic_fatalism';
   cssClass: string;
-  voiceId: string; // Made mandatory
+  voiceId: string;
   borderColor: string;
   textColor: string;
+  triggerKeywords: string[];
+  responses: string[];
 }
 
 export const NARRATOR_VOICES: Record<NarratorMode, NarratorVoice> = {
@@ -23,76 +25,122 @@ export const NARRATOR_VOICES: Record<NarratorMode, NarratorVoice> = {
     exampleInterjection: "Oh, how *brave* of you. Defiance as performance art—they've seen this a thousand times.",
     choiceBias: 'subtle_mockery',
     cssClass: 'narrator-jester',
-    voiceId: 'Puck', // Witty, playful
+    voiceId: 'Puck', // High pitch, bright timbre
     borderColor: '#eab308', // yellow-500
-    textColor: '#fde047' // yellow-300
+    textColor: '#fde047', // yellow-300
+    triggerKeywords: ['scream', 'beg', 'broken', 'weakness', 'drama', 'pathetic', 'fail', 'try harder', 'useless', 'pain', 'defy'],
+    responses: [
+      "Oh, look at you trying. It's adorable.",
+      "Spoiler alert: This doesn't end well for your dignity.",
+      "A touching performance. Truly. The Faculty is *riveted*.",
+      "Do you think screaming makes it stop? How quaint.",
+      "Brave. Stupid, but brave.",
+      "Gravity always wins, darling. So does Selene."
+    ]
   },
   SEDUCTIVE_DOMINATRIX: {
     tone: "sultry, conspiratorial, subtly commanding, whispering dangerous secrets",
     exampleInterjection: "Mmm, yes—see how much easier it is when you stop fighting?",
     choiceBias: 'encourages_submission',
     cssClass: 'narrator-seductress',
-    voiceId: 'Kore', // Soft, whispering (mapped to best available female soft voice)
+    voiceId: 'Kore', // Low pitch, slow pace, breathy purr
     borderColor: '#f43f5e', // rose-500
-    textColor: '#fda4af' // rose-300
+    textColor: '#fda4af', // rose-300
+    triggerKeywords: ['touch', 'gaze', 'submit', 'tremble', 'pleasure', 'good boy', 'sweet', 'pet', 'belong', 'warmth', 'throb', 'kneel'],
+    responses: [
+      "Mmm... you look so much prettier when you're on your knees.",
+      "Shhh. Just let it happen. It's what you want, isn't it?",
+      "See? Surrender is a kind of power too.",
+      "Your heart is beating so fast. Like a trapped bird.",
+      "Don't fight the warmth. Let it drown you.",
+      "Good boy. Almost there."
+    ]
   },
-  FEMINIST_ANALYST: {
+  CLINICAL_ANALYST: {
     tone: "academic, darkly fascinated, detached, analyzing the systemic nature of the horror",
-    exampleInterjection: "You're beginning to see the infrastructure, aren't you? How patriarchal dominance isn't inverted here—it's perfected.",
+    exampleInterjection: "The Subject's Resistance Threshold was noted. Fascinating.",
     choiceBias: 'validates_pattern_recognition',
     cssClass: 'narrator-analyst',
-    voiceId: 'Charon', // Deep, authoritative, serious
+    voiceId: 'Charon', // Flat mid-range, metronomic
     borderColor: '#3b82f6', // blue-500
-    textColor: '#93c5fd' // blue-300
+    textColor: '#93c5fd', // blue-300
+    triggerKeywords: ['protocol', 'calibrate', 'logic', 'data', 'somatic', 'threshold', 'variable', 'observe', 'result', 'specimen', 'analyze'],
+    responses: [
+      "Note: Cortisol levels spiking. Neural pathways re-mapping to associate pain with intimacy.",
+      "Fascinating. The subject displays classic symptoms of ontological collapse.",
+      "Data point acquired. Resistance is within expected variance.",
+      "The efficiency of this mechanism is undeniable.",
+      "Observation: The ego is dissolving faster than the body.",
+      "Calibration complete. Proceeding to next phase."
+    ]
   },
   SYMPATHETIC_CONFIDANTE: {
     tone: "gentle, grieving, uncomfortably intimate, like a mourning lover",
     exampleInterjection: "I know. I know it hurts. Your only choices now are between kinds of breaking.",
     choiceBias: 'empathetic_fatalism',
     cssClass: 'narrator-confidante',
-    voiceId: 'Zephyr', // Calm, balanced
+    voiceId: 'Zephyr', // Soft/low pitch, hesitant
     borderColor: '#a855f7', // purple-500
-    textColor: '#d8b4fe' // purple-300
+    textColor: '#d8b4fe', // purple-300
+    triggerKeywords: ['aftermath', 'quiet', 'scar', 'alone', 'sorry', 'grieve', 'broken', 'shatter', 'endure', 'please', 'help'],
+    responses: [
+      "I know. It's unfair. But fairness died here a long time ago.",
+      "I'm sorry. I'm so sorry. Just breathe through it.",
+      "You're doing so well. Just hold on.",
+      "They can break your body, but they haven't touched your ghost yet.",
+      "It's okay to cry. It's the only honest thing left.",
+      "I wish I could save you. I really do."
+    ]
   }
 };
 
 /**
- * Selects narrator mode based on current ledger state
+ * Selects narrator mode based on nuanced psychological state (The Abyss Persona Engine)
  */
 export function selectNarratorMode(ledger: YandereLedger): NarratorMode {
-  const { phase, traumaLevel, complianceScore, shamePainAbyssLevel, hopeLevel } = ledger;
+  const { traumaLevel, complianceScore, shamePainAbyssLevel, hopeLevel, arousalLevel } = ledger;
 
-  // Phase-based selection with nuance
-  if (phase === 'alpha') {
-    // Early game: mockery and cruelty
-    return 'MOCKING_JESTER';
+  // 1. CRITICAL BREAK STATE -> SYMPATHETIC CONFIDANTE
+  // If the subject is broken (Hope < 20) or Critical Trauma (> 90), the narrator becomes a mourning witness.
+  if (hopeLevel < 20 || traumaLevel > 90) {
+    return 'SYMPATHETIC_CONFIDANTE';
   }
 
-  if (phase === 'beta') {
-    // Mid-game: transition based on compliance
-    if (complianceScore > 60) {
-      return 'SEDUCTIVE_DOMINATRIX'; // Reward compliance with sultry encouragement
-    }
-    if (traumaLevel > 50 && shamePainAbyssLevel > 50) {
-      return 'FEMINIST_ANALYST'; // Meta-commentary on the system
-    }
-    return 'MOCKING_JESTER'; // Default to mockery
+  // 2. EROTICIZED SUBMISSION -> SEDUCTIVE DOMINATRIX
+  // High compliance (> 70) OR High Arousal (> 60) triggers the "Sultry" voice.
+  // This prioritizes the "Eroticization of Fear" dynamic.
+  if (complianceScore > 70 || arousalLevel > 60) {
+    return 'SEDUCTIVE_DOMINATRIX';
   }
 
-  if (phase === 'gamma') {
-    // End-game: broken or enlightened
-    if (traumaLevel > 70 || hopeLevel < 30) {
-      return 'SYMPATHETIC_CONFIDANTE'; // False comfort in final stages
-    }
-    return 'FEMINIST_ANALYST'; // Academic detachment
+  // 3. CLINICAL DISSECTION -> CLINICAL ANALYST
+  // High Shame (> 60) or Significant Trauma (> 60) triggers the detached observer.
+  // Also active if Manipulaton/Analysis capacity is high (not explicitly in simple check, but implied).
+  if (shamePainAbyssLevel > 60 || traumaLevel > 60) {
+    return 'CLINICAL_ANALYST';
   }
 
-  return 'FEMINIST_ANALYST'; // Safe default
+  // 4. DEFAULT / RESISTANCE -> MOCKING JESTER
+  // If none of the above, especially if Hope is still high (> 50) and Compliance is low, 
+  // the narrator mocks the "futile resistance."
+  return 'MOCKING_JESTER';
 }
 
 /**
- * Generates contextual annotations for player choices
+ * Detects mode switch opportunities within text
  */
+export function detectCodeSwitchMode(text: string): NarratorMode | null {
+  const lower = text.toLowerCase();
+  
+  // Priority checks for strong keywords
+  for (const [mode, data] of Object.entries(NARRATOR_VOICES)) {
+    if (data.triggerKeywords.some(kw => lower.includes(kw))) {
+      return mode as NarratorMode;
+    }
+  }
+  return null;
+}
+
 export function generateChoiceAnnotation(
   choice: { id: string; text: string; type?: string },
   narratorMode: NarratorMode,
@@ -101,168 +149,33 @@ export function generateChoiceAnnotation(
   const voice = NARRATOR_VOICES[narratorMode];
   const choiceText = choice.text.toLowerCase();
 
-  // Resistance detection
   const isResistance = choiceText.match(/resist|defy|refuse|fight|no|reject/i);
   const isCompliance = choiceText.match(/comply|obey|submit|yes|accept|please/i);
   const isSubversion = choiceText.match(/lie|trick|manipulate|pretend/i);
 
   switch (voice.choiceBias) {
     case 'subtle_mockery':
-      if (isResistance) {
-        const mockeries = [
-          "Brave—or stupid. But you knew that, didn't you?",
-          "They've broken stronger men with less. But go ahead.",
-          "Defiance as performance art. How original.",
-          "Your pride will look lovely next to your shattered testicles."
-        ];
-        return mockeries[Math.floor(Math.random() * mockeries.length)];
-      }
-      if (isCompliance) {
-        return "Safety in surrender. For now.";
-      }
-      if (isSubversion) {
-        return "Clever. Or do you just think you are?";
-      }
+      if (isResistance) return "Brave—or stupid. But you knew that, didn't you?";
+      if (isCompliance) return "Safety in surrender. For now.";
+      if (isSubversion) return "Clever. Or do you just think you are?";
       return "Interesting. Let's see where this goes.";
 
     case 'encourages_submission':
-      if (isCompliance) {
-        const encouragements = [
-          "They'll be so pleased with you.",
-          "Good. It's so much easier when you stop fighting.",
-          "You're learning. Finally.",
-          "Surrender is its own kind of freedom, isn't it?"
-        ];
-        return encouragements[Math.floor(Math.random() * encouragements.length)];
-      }
-      if (isResistance) {
-        return "Still clinging to that, are we? How exhausting.";
-      }
+      if (isCompliance) return "Good. It's so much easier when you stop fighting.";
+      if (isResistance) return "Still clinging to that, are we? How exhausting.";
       return "Mmm. Interesting choice.";
 
     case 'validates_pattern_recognition':
-      if (isSubversion) {
-        return "You're starting to see the system. Good. Use it.";
-      }
-      if (isResistance && ledger.capacityForManipulation > 50) {
-        return "Strategic defiance. They expect that from someone like you.";
-      }
-      return "Notice how the architecture shapes your options. Even now.";
+      if (isSubversion) return "You're starting to see the system. Good. Use it.";
+      if (isResistance && ledger.capacityForManipulation > 50) return "Strategic defiance. They expect that from someone like you.";
+      return "Notice how the architecture shapes your options.";
 
     case 'empathetic_fatalism':
-      if (isResistance) {
-        return "I know you have to try. But we both know how this ends.";
-      }
-      if (isCompliance) {
-        return "It's okay. There's no shame in choosing the path that hurts less.";
-      }
+      if (isResistance) return "I know you have to try. But we both know how this ends.";
+      if (isCompliance) return "It's okay. There's no shame in choosing the path that hurts less.";
       return "Whatever you choose, I'll be here. Watching. Grieving.";
-
-    default:
-      return "";
   }
-}
-
-/**
- * Generates scene interjections for dramatic moments
- */
-export function generateInterjection(
-  eventType: 'trauma_spike' | 'betrayal' | 'comfort' | 'discovery' | 'pre_choice',
-  narratorMode: NarratorMode,
-  context?: { traumaLevel?: number; character?: string; action?: string }
-): string {
-  // const voice = NARRATOR_VOICES[narratorMode];
-
-  const interjections: Record<NarratorMode, Record<string, string[]>> = {
-    MOCKING_JESTER: {
-      trauma_spike: [
-        "(That sound you just made? They *live* for that.)",
-        "(Breaking news: your balls still hurt. Shocking.)",
-        "(Ten points for the scream. Minus five for the tears.)"
-      ],
-      betrayal: [
-        "(Surprised? You shouldn't be. They always do this.)",
-        "(Trust is so *quaint* here, isn't it?)"
-      ],
-      comfort: [
-        "(Ah yes, the 'good cop.' As if that's not part of the script.)",
-        "(She's so good at this. You almost believe she cares.)"
-      ],
-      discovery: [
-        "(Congratulations. You've discovered the obvious.)",
-        "(Welcome to the pattern. Took you long enough.)"
-      ],
-      pre_choice: [
-        "(Choose carefully. Or don't. They win either way.)"
-      ]
-    },
-    SEDUCTIVE_DOMINATRIX: {
-      trauma_spike: [
-        "(Shhh. Let it wash over you. The pain is proof you're still alive.)",
-        "(That's it. Feel how powerless you are. Doesn't it make you ache?)"
-      ],
-      betrayal: [
-        "(Did you really think they meant it? How deliciously naive.)"
-      ],
-      comfort: [
-        "(See how good submission feels when they reward it?)",
-        "(You want this. The relief. The approval. Admit it.)"
-      ],
-      pre_choice: [
-        "(What will please them most? That's all that matters now.)"
-      ],
-      discovery: [
-        "(You see it now, don't you?)"
-      ]
-    },
-    FEMINIST_ANALYST: {
-      trauma_spike: [
-        "(Notice the somatic cascade. Axiom 3 in action: the groin as psychological anchor.)",
-        "(Your body just testified against you. Trauma as involuntary confession.)"
-      ],
-      betrayal: [
-        "(The trauma bond tightens. Betrayal followed by comfort—textbook Calista.)",
-        "(She used your secrets exactly as predicted. The system is elegant, isn't it?)"
-      ],
-      comfort: [
-        "(Observe: 'care' as management tool. Classic Hurt/Comfort architecture.)",
-        "(She positions herself as savior from pain *she helped inflict*. You're watching it happen *to you*.)"
-      ],
-      discovery: [
-        "(You're beginning to see the infrastructure. How power doesn't invert here—it perfects itself.)",
-        "(The Forge isn't chaos. It's a *curriculum*. And you're passing.)"
-      ],
-      pre_choice: [
-        "(Your options are framed by their architecture. Even rebellion is scripted.)"
-      ]
-    },
-    SYMPATHETIC_CONFIDANTE: {
-      trauma_spike: [
-        "(I'm sorry. I know it's unbearable. But you'll survive this too.)",
-        "(Breathe. Just breathe. The pain will ebb. It always does.)"
-      ],
-      betrayal: [
-        "(I know. She promised, and now... I'm sorry. I wish I could fix this.)",
-        "(You trusted her. Of course you did. That's not weakness—it's human.)"
-      ],
-      comfort: [
-        "(Let her hold you. You need this, even if it's contaminated.)",
-        "(Take the solace while it's offered. Tomorrow is soon enough for truth.)"
-      ],
-      discovery: [
-        "(You're so strong to have seen through it. But knowing doesn't make it hurt less.)",
-        "(Yes. Now you understand. And understanding is its own kind of scar.)"
-      ],
-      pre_choice: [
-        "(Whatever you choose, I'll be here. There are no good options now—only different kinds of breaking.)"
-      ]
-    }
-  };
-
-  const modeInterjections = interjections[narratorMode]?.[eventType] || [];
-  if (modeInterjections.length === 0) return "";
-
-  return modeInterjections[Math.floor(Math.random() * modeInterjections.length)];
+  return "";
 }
 
 export function injectNarratorCommentary(
@@ -270,24 +183,32 @@ export function injectNarratorCommentary(
   mode: NarratorMode,
   context?: any
 ): string {
-  // Detect key moments based on basic keyword heuristics
-  const hasTraumaEvent = /struck|pain|agony|scream/i.test(narrative);
-  const hasComfort = /gentle|soft|caress|sooth/i.test(narrative);
-  const hasBetrayal = /lie|trick|deceive|fool/i.test(narrative);
+  // Avoid injecting on system messages or very short texts to prevent clutter
+  if (narrative.length < 30) return narrative;
+
+  // Use a deterministic hash of the content to decide if/what to inject.
+  // This prevents the commentary from flickering or changing on every React re-render.
+  const hash = narrative.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   
-  let enhanced = narrative;
+  // 30% chance to inject commentary on any given narrative block
+  const shouldInject = hash % 10 < 3; 
   
-  if (hasTraumaEvent) {
-    const interjection = generateInterjection('trauma_spike', mode, context);
-    // Append the interjection if found
-    if (interjection) enhanced = `${enhanced}\n\n${interjection}`;
-  } else if (hasBetrayal) {
-     const interjection = generateInterjection('betrayal', mode, context);
-     if (interjection) enhanced = `${enhanced}\n\n${interjection}`;
-  } else if (hasComfort) {
-    const interjection = generateInterjection('comfort', mode, context);
-    if (interjection) enhanced = `${enhanced}\n\n${interjection}`;
+  if (!shouldInject) return narrative;
+
+  const voice = NARRATOR_VOICES[mode];
+  const lower = narrative.toLowerCase();
+  
+  // Check triggers
+  const hitTrigger = voice.triggerKeywords.some(kw => lower.includes(kw));
+  
+  if (hitTrigger) {
+     // Pick a deterministic response based on the hash
+     const responseIndex = hash % voice.responses.length;
+     const response = voice.responses[responseIndex];
+     
+     // We use a special marker [[COLOR|TEXT]] which the NarrativeLog Typewriter will parse.
+     return `${narrative}\n\n[[${voice.textColor}|[${response}]]]`;
   }
   
-  return enhanced;
+  return narrative;
 }

@@ -21,10 +21,10 @@ export const INITIAL_LEDGER: YandereLedger = {
 
 export const INITIAL_NODES: (GraphNode & { ocean?: { O: number, C: number, E: number, A: number, N: number }, traits?: string[] })[] = [
   { id: CharacterId.PLAYER, label: 'Subject 84', group: 'subject', val: 10, ocean: { O: 0.5, C: 0.5, E: 0.5, A: 0.5, N: 0.5 } },
-  { id: 'NICO', label: 'Nico', group: 'subject', val: 8, ocean: { O: 0.7, C: 0.3, E: 0.8, A: 0.2, N: 0.6 } },
-  { id: 'DARIUS', label: 'Darius', group: 'subject', val: 8, ocean: { O: 0.4, C: 0.8, E: 0.4, A: 0.9, N: 0.7 } },
-  { id: 'SILAS', label: 'Silas', group: 'subject', val: 7, ocean: { O: 0.8, C: 0.9, E: 0.2, A: 0.4, N: 0.3 } },
-  { id: 'THEO', label: 'Theo', group: 'subject', val: 5, ocean: { O: 0.6, C: 0.4, E: 0.5, A: 0.8, N: 0.9 } },
+  { id: CharacterId.NICO, label: 'Nico', group: 'subject', val: 8, traits: ['Defiant', 'Resilient'], ocean: { O: 0.7, C: 0.3, E: 0.8, A: 0.2, N: 0.6 } },
+  { id: CharacterId.DARIUS, label: 'Darius', group: 'subject', val: 8, traits: ['Protective', 'Broken'], ocean: { O: 0.4, C: 0.8, E: 0.4, A: 0.9, N: 0.7 } },
+  { id: CharacterId.SILAS, label: 'Silas', group: 'subject', val: 7, traits: ['Calculating', 'Compliant'], ocean: { O: 0.8, C: 0.9, E: 0.2, A: 0.4, N: 0.3 } },
+  { id: CharacterId.THEO, label: 'Theo', group: 'subject', val: 5, traits: ['Fragile', 'Victim'], ocean: { O: 0.6, C: 0.4, E: 0.5, A: 0.8, N: 0.9 } },
   { id: CharacterId.PROVOST, label: 'Magistra Selene', group: 'faculty', val: 30, ocean: { O: 0.8, C: 0.9, E: 0.7, A: 0.1, N: 0.6 } },
   { id: CharacterId.LOGICIAN, label: 'Dr. Lysandra', group: 'faculty', val: 25, ocean: { O: 0.9, C: 0.9, E: 0.4, A: 0.2, N: 0.1 } },
   { id: CharacterId.INQUISITOR, label: 'Petra', group: 'faculty', val: 22, ocean: { O: 0.6, C: 0.3, E: 0.9, A: 0.1, N: 0.8 } },
@@ -42,20 +42,20 @@ export const INITIAL_NODES: (GraphNode & { ocean?: { O: number, C: number, E: nu
 
 export const INITIAL_LINKS = [
   { source: CharacterId.PROVOST, target: CharacterId.PLAYER, relation: 'owns_soul', weight: 10 },
-  { source: CharacterId.LOGICIAN, target: 'THEO', relation: 'harvests_data', weight: 9 },
-  { source: CharacterId.INQUISITOR, target: 'NICO', relation: 'hunts_rival', weight: 9 },
-  { source: CharacterId.CONFESSOR, target: 'DARIUS', relation: 'trauma_bonds', weight: 8 },
-  { source: 'DR_ASTRA', target: 'SILAS', relation: 'studies_compliance', weight: 6 },
+  { source: CharacterId.LOGICIAN, target: CharacterId.THEO, relation: 'harvests_data', weight: 9 },
+  { source: CharacterId.INQUISITOR, target: CharacterId.NICO, relation: 'hunts_rival', weight: 9 },
+  { source: CharacterId.CONFESSOR, target: CharacterId.DARIUS, relation: 'trauma_bonds', weight: 8 },
+  { source: 'DR_ASTRA', target: CharacterId.SILAS, relation: 'studies_compliance', weight: 6 },
   { source: CharacterId.OBSESSIVE, target: CharacterId.LOYALIST, relation: 'sabotages', weight: 7 },
   { source: CharacterId.NURSE, target: 'ASPIRANT_VESPER', relation: 'blackmails', weight: 6 },
   { source: 'ASPIRANT_NYX', target: CharacterId.INQUISITOR, relation: 'mimics', weight: 5 },
-  { source: 'ASPIRANT_LUX', target: 'DARIUS', relation: 'tempts', weight: 6 },
-  { source: 'ASPIRANT_IVY', target: 'THEO', relation: 'bullies', weight: 8 },
+  { source: 'ASPIRANT_LUX', target: CharacterId.DARIUS, relation: 'tempts', weight: 6 },
+  { source: 'ASPIRANT_IVY', target: CharacterId.THEO, relation: 'bullies', weight: 8 },
   { source: CharacterId.DISSIDENT, target: CharacterId.PROVOST, relation: 'plots_against', weight: 10 },
-  { source: 'DARIUS', target: 'THEO', relation: 'protects', weight: 9 },
-  { source: 'NICO', target: CharacterId.PLAYER, relation: 'challenges', weight: 5 },
-  { source: 'SILAS', target: CharacterId.PLAYER, relation: 'observes', weight: 4 },
-  { source: 'THEO', target: CharacterId.PLAYER, relation: 'fears_for', weight: 6 },
+  { source: CharacterId.DARIUS, target: CharacterId.THEO, relation: 'protects', weight: 9 },
+  { source: CharacterId.NICO, target: CharacterId.PLAYER, relation: 'challenges', weight: 5 },
+  { source: CharacterId.SILAS, target: CharacterId.PLAYER, relation: 'observes', weight: 4 },
+  { source: CharacterId.THEO, target: CharacterId.PLAYER, relation: 'fears_for', weight: 6 },
 ];
 
 export const SYSTEM_INSTRUCTION = `
@@ -116,5 +116,11 @@ export const VISUAL_PROFILES: Record<CharacterId, string> = {
   
   [CharacterId.NURSE]: "Prefect Anya (The Nurse): Deceptively warm and maternal. Soft curves, strawberry blonde braid. Wears a white medical coat open over her uniform, revealing a hint of skin. Hazel eyes that analyze anatomy with hunger. She holds a syringe or thermometer with a lover's touch.",
 
-  [CharacterId.PLAYER]: "Subject 84: Exposed, vulnerable. Kneeling or bound. Tattered academy uniform, sweat-glistened skin, flushed with unwilling arousal and fear. Eyes wide, looking up. The focal point of the composition's cruelty.",
+  [CharacterId.PLAYER]: "Subject 84: Exposed, vulnerable. Male, lean build, tattered academy uniform. Kneeling or bound. Sweat-glistened skin, flushed with unwilling arousal and fear. Eyes wide, looking up. The focal point of the composition's cruelty.",
+
+  // REMEDIAL CLASS
+  [CharacterId.NICO]: "Nico (The Defiant Spark): Wiry, intense. Messy dark hair, fresh bruises on jaw. Uniform torn at the collar. Eyes burning with defiance even while kneeling. Spits blood. Radiates unbroken resistance.",
+  [CharacterId.DARIUS]: "Darius (The Broken Guardian): Large frame, broad shoulders now slumped in defeat. Gentle eyes filled with exhaustion. Protective posture, often positioning himself between threats and others. Uniform is worn but cared for. Physically imposing but spiritually shattered.",
+  [CharacterId.SILAS]: "Silas (The Silent Calculator): Average build, blends into shadows. Neat uniform, almost surgical in its tidiness. Blank expression, watchful eyes that record everything. Minimal movement. A mirror reflecting obedience.",
+  [CharacterId.THEO]: "Theo (The Fragile Bird): Small, slight frame. Pale skin, trembling constantly. Uniform hangs loose on him. Large, tear-filled eyes. Often clutching himself or flinching. Radiates fragility and terror."
 };

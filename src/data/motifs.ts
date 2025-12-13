@@ -1,3 +1,4 @@
+
 /**
  * @file src/data/motifs.ts
  * @description Extendable library of visual motifs (Manara-esque and Narrative-specific).

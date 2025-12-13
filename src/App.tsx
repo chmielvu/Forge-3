@@ -9,6 +9,7 @@ import DistortionLayer from './components/DistortionLayer';
 import LedgerDisplay from './components/LedgerDisplay';
 import ActionWheel from './components/ActionWheel';
 import PrefectLeaderboard from './components/PrefectLeaderboard';
+import SubjectPanel from './components/SubjectPanel';
 import { Loader2, Monitor, Eye, Brain, LayoutTemplate, Film, Activity } from 'lucide-react';
 
 type ViewMode = 'CINEMATIC' | 'ANALYTICAL';
@@ -205,18 +206,13 @@ export default function App() {
 
                      {/* Right Column: Prefects & Stats */}
                      <div className="w-1/3 flex flex-col gap-4 h-full">
-                        <div className="flex-1 bg-black/80 backdrop-blur-xl border border-amber-900/20 rounded-sm overflow-hidden flex flex-col shadow-2xl">
+                        <div className="flex-[0.6] bg-black/80 backdrop-blur-xl border border-amber-900/20 rounded-sm overflow-hidden flex flex-col shadow-2xl">
                            <PrefectLeaderboard prefects={prefects} />
                         </div>
-                        <div className="h-1/3 bg-black/80 backdrop-blur-xl border border-red-900/20 rounded-sm p-4">
-                            <h3 className="font-mono text-[10px] text-red-500/60 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                <Activity size={12} /> Threat Assessment
-                            </h3>
-                            <div className="text-xs text-zinc-400 font-serif leading-relaxed">
-                                {gameState.ledger.traumaLevel > 70 
-                                    ? "CRITICAL: Subject psyche fragmenting. Compliance enforcement mandatory."
-                                    : "STATUS: Subject resistant but stable. Continued calibration required."}
-                            </div>
+                        
+                        {/* New Subject Status Panel */}
+                        <div className="flex-[0.4] bg-black/80 backdrop-blur-xl border border-zinc-900/20 rounded-sm overflow-hidden">
+                           <SubjectPanel />
                         </div>
                      </div>
                  </div>

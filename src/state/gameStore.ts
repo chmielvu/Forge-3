@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { KnowledgeGraph } from '../lib/types/kgot';
@@ -5,6 +6,7 @@ import { executeDirectorTurn } from '../lib/director';
 import { INITIAL_LEDGER } from '../constants';
 import { updateLedgerHelper } from './stateHelpers';
 import { createMultimodalSlice } from './multimodalSlice';
+import { createSubjectSlice } from './subjectSlice';
 import { LogEntry, CombinedGameStoreState, CharacterId, PrefectDNA, PrefectDecision, GameState } from '../types';
 import { KGotController } from '../controllers/KGotController';
 import { enqueueTurnForMedia } from './mediaController';
@@ -64,6 +66,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       lastDirectorDebug: undefined,
 
       ...createMultimodalSlice(set, get, api),
+      ...createSubjectSlice(set, get, api),
 
       addLog: (log) => set((state) => ({ logs: [...state.logs, log] })),
       setLogs: (logs) => set({ logs }),
@@ -156,41 +159,86 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         const state = get();
         set({ isThinking: true });
         
+        // 1. Trigger Subject Reactions (Sync Logic)
+        // Detect action type from input string
+        let actionType: 'COMPLY' | 'DEFY' | 'OBSERVE' | 'SPEAK' = 'OBSERVE';
+        const lower = input.toLowerCase();
+        if (lower.includes('submit') || lower.includes('yes') || lower.includes('bow')) actionType = 'COMPLY';
+        else if (lower.includes('resist') || lower.includes('no') || lower.includes('spit')) actionType = 'DEFY';
+        else if (lower.includes('speak') || lower.includes('ask')) actionType = 'SPEAK';
+        
+        get().triggerSubjectReaction(actionType, input);
+
         try {
             const history = state.logs.filter(l => l.type === 'narrative').map(l => l.content);
             
-            // Re-sync prefect manager with current state if needed
-            if (prefectManager.getPrefects().length === 0 && state.prefects.length > 0) {
-                 prefectManager.initialize(state.gameState.seed);
+            // 2. Initialize or Hydrate Prefect Manager
+            // If the manager is empty but we have persisted state, load it to preserve relationships/emotions.
+            // If both are empty, initialize fresh from seed.
+            if (prefectManager.getPrefects().length === 0) {
+                 if (state.prefects.length > 0) {
+                     prefectManager.loadState(state.prefects);
+                 } else {
+                     prefectManager.initialize(state.gameState.seed);
+                 }
             }
 
+            // 3. Simulate Prefect Turn
             const { thoughts, updatedDNA } = await prefectManager.simulateTurn(
                 state.gameState, 
                 history, 
-                input
+                input,
+                state.kgot
             );
             
+            // Update store with new DNA (persisting emotional shifts)
             get().updatePrefects(updatedDNA);
 
-            const prefectDecisions: PrefectDecision[] = thoughts.map(t => ({
-                prefectId: t.agentId,
-                action: 'act', 
-                actionDetail: t.publicAction,
-                publicUtterance: null,
-                hiddenProposal: t.hiddenMotivation,
-                targetId: null,
-                stateDelta: {},
-                confidence: t.emotionalState.confidence
-            }));
+            // 4. Map Thoughts to Decisions for Director
+            const prefectDecisions: PrefectDecision[] = thoughts.map(t => {
+                // Enrich action detail with hidden context for the Director to weave into narrative
+                let detailedAction = t.publicAction;
+                if (t.sabotageAttempt) {
+                    detailedAction += ` [INTERNAL SUBROUTINE: SABOTAGE Attempt against ${t.sabotageAttempt.target} via ${t.sabotageAttempt.method}]`;
+                }
+                if (t.allianceSignal) {
+                    detailedAction += ` [INTERNAL SUBROUTINE: ALLIANCE Signal to ${t.allianceSignal.target}: "${t.allianceSignal.message}"]`;
+                }
 
+                return {
+                    prefectId: t.agentId,
+                    action: 'act', 
+                    actionDetail: detailedAction,
+                    publicUtterance: null,
+                    hiddenProposal: t.hiddenMotivation,
+                    targetId: t.sabotageAttempt?.target || t.allianceSignal?.target || null,
+                    stateDelta: {},
+                    confidence: t.emotionalState.confidence
+                };
+            });
+
+            // 5. System Log for Debugging/Transparency
             if (thoughts.length > 0) {
+                const agentLog = thoughts.map(t => {
+                    const name = t.agentId.split('_').pop() || 'AGENT';
+                    let status = "";
+                    if (t.sabotageAttempt) status = `[⚠️ SABOTAGE: ${t.sabotageAttempt.target}]`;
+                    else if (t.allianceSignal) status = `[🤝 ALLIANCE: ${t.allianceSignal.target}]`;
+                    
+                    return `${name}: "${t.hiddenMotivation.substring(0, 40)}..." ${status}`;
+                }).join(' | ');
+
                 get().addLog({
                     id: `prefect-sim-${Date.now()}`,
                     type: 'system',
-                    content: `PREFECT SIMULATION: ${thoughts.map(t => `${t.agentId} plans: ${t.hiddenMotivation}`).join(' | ')}`
+                    content: `PREFECT SIMULATION :: ${agentLog}`
                 });
+                
+                // Store log for Dev Overlay
+                set({ lastSimulationLog: `PREFECT SIMULATION :: ${agentLog}` });
             }
 
+            // 6. Execute Director Turn
             const result = await executeDirectorTurn(
                 input, 
                 history, 
@@ -237,8 +285,18 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         
         // Initialize Prefects
         if (prefectManager.getPrefects().length === 0) {
-            prefectManager.initialize(state.gameState.seed);
-            set({ prefects: prefectManager.getPrefects() });
+            // Correctly hydrate from store if available, else init fresh
+            if (state.prefects.length > 0) {
+                prefectManager.loadState(state.prefects);
+            } else {
+                prefectManager.initialize(state.gameState.seed);
+                set({ prefects: prefectManager.getPrefects() });
+            }
+        }
+
+        // Initialize Remedial Class
+        if (Object.keys(state.subjects).length === 0) {
+            state.initializeSubjects();
         }
 
         // Bootstrapping: Generate the opening scene via the Director if timeline is empty
@@ -274,6 +332,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         gameState: state.gameState,
         kgot: state.kgot,
         prefects: state.prefects,
+        subjects: state.subjects, // Persist Subjects
       }),
     }
   )

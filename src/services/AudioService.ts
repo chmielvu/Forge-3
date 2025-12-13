@@ -36,13 +36,16 @@ export class AudioService {
     return buffer;
   }
 
-  public async play(base64Data: string, volume: number, onEnded: () => void) {
+  public async play(base64Data: string, volume: number, playbackRate: number, onEnded: () => void) {
     this.stop(); // Ensure clean slate
     const ctx = this.getContext();
     const buffer = this.decodePCM(base64Data);
 
     this.source = ctx.createBufferSource();
     this.source.buffer = buffer;
+    
+    // Apply playback rate
+    this.source.playbackRate.value = playbackRate;
     
     // Ensure gain node exists and is connected
     if (!this.gainNode) {
@@ -87,6 +90,12 @@ export class AudioService {
 
   public setVolume(val: number) {
     if (this.gainNode) this.gainNode.gain.value = val;
+  }
+
+  public setPlaybackRate(val: number) {
+    if (this.source) {
+        this.source.playbackRate.value = val;
+    }
   }
 
   // Returns precise current time for UI animation

@@ -1,5 +1,5 @@
 
-import { YandereLedger, GameState } from '../types';
+import { YandereLedger, GameState, PrefectDNA } from '../types';
 
 export interface QualityMetrics {
   wordCount: number;
@@ -52,6 +52,21 @@ const THEMATIC_KEYWORDS = {
   academic: ['study', 'lesson', 'grade', 'fail', 'thesis', 'curriculum']
 };
 
+const ARCHETYPE_THEMES: Record<string, string[]> = {
+  'The Yandere': ['possession', 'purification', 'cleanse', 'mine', 'forever', 'doll', 'keep', 'safe', 'love', 'jealous'],
+  'The Zealot': ['rule', 'order', 'law', 'necessity', 'transgression', 'punish', 'correct', 'yala', 'scripture', 'flinch'],
+  'The Dissident': ['burn', 'lie', 'fake', 'signal', 'secret', 'act', 'stage', 'mask', 'shadow', 'freedom'],
+  'The Nurse': ['cure', 'heal', 'fix', 'broken', 'study', 'anatomy', 'incision', 'sedate', 'exam', 'medicine'],
+  'The Sadist': ['break', 'snap', 'scream', 'limit', 'flesh', 'tear', 'beg', 'cry', 'kinetic', 'sport'],
+  'The Defector': ['escape', 'report', 'evidence', 'hidden', 'run', 'outside', 'mainland'],
+  'The Voyeur': ['watch', 'record', 'see', 'archive', 'note', 'observe', 'witness'],
+  'The Parasite': ['leech', 'copy', 'mimic', 'take', 'feed', 'attach', 'host'],
+  'The Perfectionist': ['flawless', 'perfect', 'exact', 'measure', 'align', 'mistake', 'error'],
+  'The Martyr': ['suffer', 'sacrifice', 'bleed', 'give', 'endure', 'holy', 'altar'],
+  'The Wildcard': ['chaos', 'random', 'chance', 'luck', 'spin', 'twist', 'game'],
+  'The Mimic': ['mirror', 'reflect', 'same', 'duplicate', 'echo', 'image']
+};
+
 export class NarrativeQualityEngine {
   private minWordCount = 300;
   private maxWordCount = 600;
@@ -60,19 +75,19 @@ export class NarrativeQualityEngine {
   /**
    * Analyzes narrative quality and identifies issues
    */
-  analyzeNarrative(narrative: string, ledger: YandereLedger): {
+  analyzeNarrative(narrative: string, ledger: YandereLedger, activePrefect?: PrefectDNA): {
     metrics: QualityMetrics;
     issues: NarrativeIssue[];
     passesQuality: boolean;
   } {
-    const metrics = this.calculateMetrics(narrative, ledger);
+    const metrics = this.calculateMetrics(narrative, ledger, activePrefect);
     const issues = this.identifyIssues(narrative, metrics, ledger);
     const passesQuality = this.evaluateQuality(metrics, issues);
     
     return { metrics, issues, passesQuality };
   }
 
-  private calculateMetrics(narrative: string, ledger: YandereLedger): QualityMetrics {
+  private calculateMetrics(narrative: string, ledger: YandereLedger, activePrefect?: PrefectDNA): QualityMetrics {
     const wordCount = narrative.split(/\s+/).length;
     
     // Core Elements
@@ -84,7 +99,7 @@ export class NarrativeQualityEngine {
     // Advanced Metrics
     const dialogueRatio = this.calculateDialogueRatio(narrative);
     const pacingScore = this.calculatePacingScore(narrative);
-    const thematicResonance = this.calculateThematicResonance(narrative);
+    const thematicResonance = this.calculateThematicResonance(narrative, activePrefect);
     const voiceConsistency = this.calculateVoiceConsistency(narrative);
     const tensionLevel = this.calculateTension(narrative, ledger);
     const coherenceScore = this.calculateCoherence(narrative);
@@ -125,17 +140,44 @@ export class NarrativeQualityEngine {
     return Math.min(1, stdDev / 15);
   }
 
-  private calculateThematicResonance(text: string): number {
+  private calculateThematicResonance(text: string, activePrefect?: PrefectDNA): number {
     const lower = text.toLowerCase();
     let hits = 0;
-    // Iterate manually to avoid .flat() inference issues and compatibility problems
+    
+    // Base Thematic Resonance
     Object.values(THEMATIC_KEYWORDS).forEach(list => {
       list.forEach(word => {
         if (lower.includes(word)) hits++;
       });
     });
-    // Cap at 1.0 (approx 5 thematic words per text is "full resonance")
-    return Math.min(1, hits / 5);
+
+    // Prefect-Specific Resonance
+    let prefectBonus = 0;
+    if (activePrefect) {
+      const archetypeKeywords = ARCHETYPE_THEMES[activePrefect.archetype] || [];
+      
+      // Extract keywords from drive string (simple heuristic: words > 4 chars)
+      const driveKeywords = activePrefect.drive
+        .toLowerCase()
+        .replace(/[^\w\s]/g, '')
+        .split(/\s+/)
+        .filter(w => w.length > 4 && !['become', 'their', 'which', 'that', 'with'].includes(w));
+      
+      const specificThemes = new Set([...archetypeKeywords, ...driveKeywords]);
+      
+      let specificHits = 0;
+      specificThemes.forEach(word => {
+        if (lower.includes(word)) specificHits++;
+      });
+
+      // Weight archetype matches heavily as they represent character-specific narrative integrity
+      if (specificHits > 0) {
+        prefectBonus = specificHits * 0.4;
+      }
+    }
+
+    // Cap at 1.0 (approx 5 thematic words per text is "full resonance", plus potential prefect bonus)
+    return Math.min(1, (hits / 5) + prefectBonus);
   }
 
   private calculateVoiceConsistency(text: string): number {
