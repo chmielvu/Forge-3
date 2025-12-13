@@ -1,13 +1,14 @@
 
 import { create } from 'zustand';
 import { KnowledgeGraph } from '../lib/types/kgot';
-import { submitTurn } from '../app/actions';
+import { executeDirectorTurn } from '../lib/director';
 import { INITIAL_LEDGER } from '../constants';
 import { updateLedgerHelper } from './stateHelpers';
 import { createMultimodalSlice } from './multimodalSlice';
-import { LogEntry, CombinedGameStoreState, CharacterId } from '../types';
+import { LogEntry, CombinedGameStoreState, CharacterId, PrefectDNA, PrefectDecision } from '../types';
 import { KGotController } from '../controllers/KGotController';
 import { enqueueTurnForMedia } from './mediaController';
+import { prefectManager } from '../services/prefectManager';
 
 // Initialize the Controller to get the canonical graph
 const controller = new KGotController({ nodes: {}, edges: [], global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' } });
@@ -35,13 +36,19 @@ const INITIAL_LOGS: LogEntry[] = [
   }
 ];
 
-export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
+export interface GameStoreWithPrefects extends CombinedGameStoreState {
+    prefects: PrefectDNA[];
+    updatePrefects: (prefects: PrefectDNA[]) => void;
+}
+
+export const useGameStore = create<GameStoreWithPrefects>((set, get, api) => ({
   gameState: INITIAL_GAME_STATE,
   // New KGoT State
   kgot: INITIAL_GRAPH,
   
   logs: INITIAL_LOGS,
   choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
+  prefects: [], // Initialize empty, populated by startSession
   
   isThinking: false,
   isMenuOpen: false,
@@ -62,6 +69,7 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
   setMenuOpen: (isMenuOpen) => set({ isMenuOpen }),
   setGrimoireOpen: (isGrimoireOpen) => set({ isGrimoireOpen }),
   setDevOverlayOpen: (isDevOverlayOpen) => set({ isDevOverlayOpen }),
+  updatePrefects: (prefects) => set({ prefects }),
 
   updateGameState: (updates) => set((state) => ({
     gameState: { ...state.gameState, ...updates }
@@ -72,7 +80,7 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
     logs: state.logs.map(log => log.id === logId ? { ...log, ...media } : log)
   })),
 
-  // Handle Server Action Result directly
+  // Handle Logic Result
   applyServerState: (result: any) => {
       // 1. Register Multimodal Turn if valid narrative exists
       let newTurnId: string | null = null;
@@ -179,35 +187,65 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
     };
   }),
 
-  // Updated Action Processor using submitTurn
+  // Updated Action Processor using client-side Director AND Prefect System
   processPlayerTurn: async (input: string) => {
     const state = get();
     set({ isThinking: true });
     
     try {
-        const result = await submitTurn(
-            {}, 
-            (() => {
-                const fd = new FormData();
-                fd.append('input', input);
-                fd.append('history', JSON.stringify(state.logs.filter(l => l.type === 'narrative').map(l => l.content)));
-                fd.append('currentGraph', JSON.stringify(state.kgot));
-                return fd;
-            })()
+        const history = state.logs.filter(l => l.type === 'narrative').map(l => l.content);
+        
+        // 1. Run Prefect Simulation
+        const { thoughts, updatedDNA } = await prefectManager.simulateTurn(
+            state.gameState, 
+            history, 
+            input
         );
+        
+        // Update Prefect State in Store
+        get().updatePrefects(updatedDNA);
 
-        if ((result as any).error) {
-            console.error((result as any).error);
-            set({ isThinking: false });
-            return;
+        // Map Thoughts to Decisions for Director Consumption
+        const prefectDecisions: PrefectDecision[] = thoughts.map(t => ({
+            prefectId: t.agentId,
+            action: 'act', // simplified for mapping
+            actionDetail: t.publicAction,
+            publicUtterance: null,
+            hiddenProposal: t.hiddenMotivation,
+            targetId: null,
+            stateDelta: {},
+            confidence: t.emotionalState.confidence
+        }));
+
+        // Log Prefect Thoughts for Debug
+        if (thoughts.length > 0) {
+            get().addLog({
+                id: `prefect-sim-${Date.now()}`,
+                type: 'system',
+                content: `PREFECT SIMULATION: ${thoughts.map(t => `${t.agentId} plans: ${t.hiddenMotivation}`).join(' | ')}`
+            });
         }
 
-        // Apply state updates
+        // 2. Execute Director Logic (with Prefect Context)
+        const result = await executeDirectorTurn(
+            input, 
+            history, 
+            state.kgot,
+            prefectDecisions // Pass prefect context
+        );
+
+        // 3. Apply state updates
         get().applyServerState(result);
         
     } catch (e) {
-        console.error(e);
+        console.error("Critical Client Director Error:", e);
         set({ isThinking: false });
+        // Fallback or error log
+        get().addLog({
+            id: `error-${Date.now()}`,
+            type: 'system',
+            content: 'CRITICAL: NEURO-SYMBOLIC DISCONNECT. RETRYING CONNECTION...'
+        });
     }
   },
 
@@ -221,6 +259,7 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
       kgot: freshController.getGraph(),
       logs: INITIAL_LOGS,
       choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
+      prefects: [],
       isThinking: false,
       executedCode: undefined,
       lastSimulationLog: undefined,
@@ -237,9 +276,14 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
       // ... existing logic ...
   },
 
-  // NEW: Bootstraps the first turn from INITIAL_LOGS to generate visuals
+  // Bootstraps the first turn from INITIAL_LOGS to generate visuals
   startSession: () => {
     const state = get();
+    
+    // Initialize Prefect Manager
+    prefectManager.initialize(Date.now());
+    set({ prefects: prefectManager.getPrefects() });
+
     // Only start if timeline is empty and we have logs
     if (state.multimodalTimeline.length === 0 && state.logs.length > 0) {
        const firstNarrative = state.logs.find(l => l.type === 'narrative');

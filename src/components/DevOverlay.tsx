@@ -5,7 +5,6 @@ import { X, Activity, Terminal, Database, FileText, Layout, Clock, Play, Refresh
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
 import { CoherenceReport, MediaStatus } from '../types';
 import { regenerateMediaForTurn } from '../state/mediaController';
-import { turnService } from '../state/turnService'; // For restartGame
 
 interface MediaStatusIndicatorProps {
   status: MediaStatus;
@@ -70,6 +69,7 @@ const DevOverlay: React.FC = () => {
     saveSnapshot,
     loadSnapshot,
     resetGame,
+    processPlayerTurn // Direct access to action processor
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<'state' | 'sim' | 'logs' | 'multimodal'>('state');
@@ -91,7 +91,7 @@ const DevOverlay: React.FC = () => {
         e.preventDefault();
         if (confirm("Are you sure you want to reset the game?")) {
           resetGame();
-          turnService.initGame(); // Reinitialize after reset
+          // GameStore's resetGame handles session start automatically
         }
       }
       // Quick choices: 1-9
@@ -99,13 +99,13 @@ const DevOverlay: React.FC = () => {
         const choiceIndex = parseInt(e.key) - 1;
         const choices = useGameStore.getState().choices;
         if (choiceIndex < choices.length) {
-          turnService.handleAction(choices[choiceIndex]);
+          processPlayerTurn(choices[choiceIndex]);
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [saveSnapshot, loadSnapshot, resetGame]);
+  }, [saveSnapshot, loadSnapshot, resetGame, processPlayerTurn]);
 
   if (!isOpen) return null;
 

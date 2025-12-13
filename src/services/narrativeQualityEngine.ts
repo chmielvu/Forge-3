@@ -3,22 +3,54 @@ import { YandereLedger, GameState } from '../types';
 
 export interface QualityMetrics {
   wordCount: number;
-  hasDialogue: boolean;
+  dialogueRatio: number; // 0-1
+  pacingScore: number; // 0-1 (variation in sentence length)
+  thematicResonance: number; // 0-1
+  voiceConsistency: number; // 0-1
   hasAction: boolean;
   hasEnvironmentalDetail: boolean;
   hasSomaticDetail: boolean;
   hasEmotionalDepth: boolean;
-  tensionLevel: number; // 0-1
-  pacing: 'rushed' | 'balanced' | 'languid';
-  coherenceScore: number; // 0-1
+  tensionLevel: number;
+  coherenceScore: number;
 }
 
 export interface NarrativeIssue {
   severity: 'critical' | 'warning' | 'suggestion';
-  category: 'length' | 'pacing' | 'coherence' | 'detail' | 'tone';
+  category: 'length' | 'pacing' | 'coherence' | 'detail' | 'tone' | 'voice' | 'theme';
   message: string;
   autoFixable: boolean;
 }
+
+const VOICE_SIGNATURES: Record<string, { keywords: string[], forbidden: string[], style: string }> = {
+  'Selene': { 
+    keywords: ['inevitable', 'boring', 'tedious', 'architect', 'entropy', 'child', 'wine'], 
+    forbidden: ['oops', 'sorry', 'maybe', 'scared'], 
+    style: 'regal_boredom' 
+  },
+  'Petra': { 
+    keywords: ['snap', 'break', 'fun', 'joke', 'toy', 'pop', 'giggle'], 
+    forbidden: ['data', 'hypothesis', 'gentle', 'theory'], 
+    style: 'manic_predatory' 
+  },
+  'Lysandra': { 
+    keywords: ['data', 'variable', 'response', 'fascinating', 'cortex', 'synapse'], 
+    forbidden: ['hate', 'love', 'evil', 'good', 'soul'], 
+    style: 'clinical_detached' 
+  },
+  'Calista': { 
+    keywords: ['sweetling', 'pet', 'hush', 'love', 'safe', 'mother'], 
+    forbidden: ['maggot', 'trash', 'die'], 
+    style: 'corrupted_nurture' 
+  }
+};
+
+const THEMATIC_KEYWORDS = {
+  somatic: ['pulse', 'throb', 'sweat', 'tremble', 'ache', 'nerve', 'bile'],
+  industrial: ['forge', 'hammer', 'grind', 'steam', 'iron', 'rust', 'gear'],
+  religious: ['sacred', 'ritual', 'confess', 'sin', 'altar', 'god', 'prayer'],
+  academic: ['study', 'lesson', 'grade', 'fail', 'thesis', 'curriculum']
+};
 
 export class NarrativeQualityEngine {
   private minWordCount = 300;
@@ -43,158 +75,116 @@ export class NarrativeQualityEngine {
   private calculateMetrics(narrative: string, ledger: YandereLedger): QualityMetrics {
     const wordCount = narrative.split(/\s+/).length;
     
-    // Check for key narrative elements
-    const hasDialogue = /"[^"]+"|'[^']+'/.test(narrative) || 
-                        /says|whispers|commands|murmurs|growls/i.test(narrative);
+    // Core Elements
+    const hasAction = /reaches|grabs|walks|kneels|strikes|touches|moves|pulls|drags/i.test(narrative);
+    const hasEnvironmentalDetail = /stone|light|shadow|smell|sound|temperature|walls|ceiling|floor|ash|steam/i.test(narrative);
+    const hasSomaticDetail = /skin|sweat|pulse|breathing|tremb|shiv|ache|pain|warmth|cold|nausea/i.test(narrative);
+    const hasEmotionalDepth = /fear|shame|desire|hope|despair|terror|anticipation|humiliation|guilt/i.test(narrative);
     
-    const hasAction = /reaches|grabs|walks|kneels|strikes|touches|moves/i.test(narrative);
-    
-    const hasEnvironmentalDetail = 
-      /stone|light|shadow|smell|sound|temperature|walls|ceiling|floor/i.test(narrative);
-    
-    const hasSomaticDetail = 
-      /skin|sweat|pulse|breathing|tremb|shiv|ache|pain|warmth|cold/i.test(narrative);
-    
-    const hasEmotionalDepth = 
-      /fear|shame|desire|hope|despair|terror|anticipation|humiliation/i.test(narrative);
-    
-    // Calculate tension based on content and ledger
+    // Advanced Metrics
+    const dialogueRatio = this.calculateDialogueRatio(narrative);
+    const pacingScore = this.calculatePacingScore(narrative);
+    const thematicResonance = this.calculateThematicResonance(narrative);
+    const voiceConsistency = this.calculateVoiceConsistency(narrative);
     const tensionLevel = this.calculateTension(narrative, ledger);
-    
-    // Determine pacing
-    const avgSentenceLength = this.getAverageSentenceLength(narrative);
-    const pacing = avgSentenceLength < 15 ? 'rushed' : 
-                   avgSentenceLength > 25 ? 'languid' : 'balanced';
-    
-    // Check coherence with previous narratives
     const coherenceScore = this.calculateCoherence(narrative);
     
     return {
       wordCount,
-      hasDialogue,
+      dialogueRatio,
+      pacingScore,
+      thematicResonance,
+      voiceConsistency,
       hasAction,
       hasEnvironmentalDetail,
       hasSomaticDetail,
       hasEmotionalDepth,
       tensionLevel,
-      pacing,
       coherenceScore
     };
   }
 
+  private calculateDialogueRatio(text: string): number {
+    const dialogueMatches = text.match(/"[^"]+"|'[^']+'/g);
+    if (!dialogueMatches) return 0;
+    const dialogueLength = dialogueMatches.reduce((acc, str) => acc + str.length, 0);
+    return dialogueLength / text.length;
+  }
+
+  private calculatePacingScore(text: string): number {
+    // Ideally, sentence lengths should vary. High variance = good pacing.
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    if (sentences.length < 2) return 0;
+    
+    const lengths = sentences.map(s => s.split(/\s+/).length);
+    const mean = lengths.reduce((a, b) => a + b, 0) / lengths.length;
+    const variance = lengths.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / lengths.length;
+    const stdDev = Math.sqrt(variance);
+    
+    // Normalize: standard deviation around 10-15 is good.
+    return Math.min(1, stdDev / 15);
+  }
+
+  private calculateThematicResonance(text: string): number {
+    const lower = text.toLowerCase();
+    let hits = 0;
+    // Iterate manually to avoid .flat() inference issues and compatibility problems
+    Object.values(THEMATIC_KEYWORDS).forEach(list => {
+      list.forEach(word => {
+        if (lower.includes(word)) hits++;
+      });
+    });
+    // Cap at 1.0 (approx 5 thematic words per text is "full resonance")
+    return Math.min(1, hits / 5);
+  }
+
+  private calculateVoiceConsistency(text: string): number {
+    // Detect active speakers
+    let consistent = 1.0;
+    const lower = text.toLowerCase();
+    
+    Object.entries(VOICE_SIGNATURES).forEach(([name, sig]) => {
+        if (lower.includes(name.toLowerCase())) {
+            // Check for forbidden words if character is present
+            const hasForbidden = sig.forbidden.some(word => lower.includes(word));
+            if (hasForbidden) consistent -= 0.2;
+            
+            // Boost if keywords present
+            const hasKeywords = sig.keywords.some(word => lower.includes(word));
+            if (!hasKeywords) consistent -= 0.1;
+        }
+    });
+    
+    return Math.max(0, consistent);
+  }
+
   private calculateTension(narrative: string, ledger: YandereLedger): number {
     let tension = 0;
-    
-    // Base tension from ledger
     tension += ledger.traumaLevel / 200;
     tension += ledger.shamePainAbyssLevel / 200;
     tension += (100 - ledger.hopeLevel) / 200;
     
-    // Tension markers in text
-    const tensionWords = [
-      'suddenly', 'abruptly', 'violently', 'sharply', 'harsh', 'cold',
-      'silence', 'scream', 'cry', 'breaking', 'shattering', 'crushing'
-    ];
-    
-    tensionWords.forEach(word => {
-      if (new RegExp(word, 'i').test(narrative)) {
-        tension += 0.05;
-      }
-    });
+    const tensionWords = ['suddenly', 'violently', 'sharply', 'silence', 'scream', 'breaking', 'shattering'];
+    tensionWords.forEach(word => { if (new RegExp(word, 'i').test(narrative)) tension += 0.05; });
     
     return Math.min(1, tension);
   }
 
-  private getAverageSentenceLength(narrative: string): number {
-    const sentences = narrative.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    if (sentences.length === 0) return 0;
-    
-    const totalWords = sentences.reduce((sum, sentence) => {
-      return sum + sentence.split(/\s+/).length;
-    }, 0);
-    
-    return totalWords / sentences.length;
-  }
-
   private calculateCoherence(narrative: string): number {
     if (this.previousNarratives.length === 0) return 1;
+    const last = this.previousNarratives[this.previousNarratives.length - 1].toLowerCase();
+    const current = narrative.toLowerCase();
     
-    // Check for contradictions or sudden shifts
-    const lastNarrative = this.previousNarratives[this.previousNarratives.length - 1];
+    // Very basic continuity check: Location names overlap?
+    const locations = ['dock', 'office', 'infirmary', 'cell', 'hallway'];
+    const lastLoc = locations.find(l => last.includes(l));
+    const curLoc = locations.find(l => current.includes(l));
     
-    // Extract key elements (locations, characters, tone)
-    const currentElements = this.extractNarrativeElements(narrative);
-    const previousElements = this.extractNarrativeElements(lastNarrative);
-    
-    // Calculate overlap and logical progression
-    let coherenceScore = 0.5; // baseline
-    
-    // Location continuity
-    if (currentElements.location === previousElements.location) {
-      coherenceScore += 0.2;
-    } else if (currentElements.location && previousElements.location) {
-      // Check if transition was mentioned
-      if (/walk|move|lead|enter|leave|arrive/i.test(narrative)) {
-        coherenceScore += 0.1; // Explained transition
-      }
+    if (lastLoc && curLoc && lastLoc !== curLoc) {
+        // Only coherent if movement verb present
+        if (!/walk|led|drag|enter|leave/.test(current)) return 0.4;
     }
-    
-    // Character continuity
-    const characterOverlap = currentElements.characters.filter(c => 
-      previousElements.characters.includes(c)
-    ).length;
-    coherenceScore += (characterOverlap / Math.max(1, previousElements.characters.length)) * 0.2;
-    
-    // Tone progression (should be gradual, not sudden)
-    const toneDifference = Math.abs(currentElements.toneIntensity - previousElements.toneIntensity);
-    if (toneDifference < 0.3) {
-      coherenceScore += 0.1;
-    }
-    
-    return Math.min(1, coherenceScore);
-  }
-
-  private extractNarrativeElements(narrative: string): {
-    location: string | null;
-    characters: string[];
-    toneIntensity: number;
-  } {
-    const lower = narrative.toLowerCase();
-    
-    // Extract location
-    let location: string | null = null;
-    const locationMatches = lower.match(/(?:in|at|inside|within) (?:the )?([a-z ]+?)(?:,|\.|you|she|he)/i);
-    if (locationMatches) {
-      location = locationMatches[1].trim();
-    }
-    
-    // Extract characters
-    const characters: string[] = [];
-    const characterNames = [
-      'selene', 'lysandra', 'petra', 'calista', 'mara', 'anya',
-      'kaelen', 'elara', 'rhea', 'provost', 'doctor', 'inquisitor'
-    ];
-    characterNames.forEach(name => {
-      if (lower.includes(name)) characters.push(name);
-    });
-    
-    // Calculate tone intensity
-    const intensityWords = ['screams', 'violently', 'crushing', 'breaking', 'shattering'];
-    const gentleWords = ['softly', 'gently', 'whispers', 'caresses', 'soothes'];
-    
-    let toneIntensity = 0.5;
-    intensityWords.forEach(word => {
-      if (lower.includes(word)) toneIntensity += 0.1;
-    });
-    gentleWords.forEach(word => {
-      if (lower.includes(word)) toneIntensity -= 0.1;
-    });
-    
-    return {
-      location,
-      characters,
-      toneIntensity: Math.max(0, Math.min(1, toneIntensity))
-    };
+    return 1.0;
   }
 
   private identifyIssues(
@@ -204,204 +194,68 @@ export class NarrativeQualityEngine {
   ): NarrativeIssue[] {
     const issues: NarrativeIssue[] = [];
     
-    // CRITICAL: Length requirements
+    // CRITICAL
     if (metrics.wordCount < this.minWordCount) {
-      issues.push({
-        severity: 'critical',
-        category: 'length',
-        message: `Narrative too short (${metrics.wordCount} words, minimum ${this.minWordCount})`,
-        autoFixable: true
-      });
+      issues.push({ severity: 'critical', category: 'length', message: `Narrative too short (${metrics.wordCount} words). Expand sensory details.`, autoFixable: true });
+    }
+    if (metrics.thematicResonance < 0.2) {
+      issues.push({ severity: 'warning', category: 'theme', message: 'Low thematic resonance. Inject more industrial/somatic metaphors.', autoFixable: false });
     }
     
-    if (metrics.wordCount > this.maxWordCount) {
-      issues.push({
-        severity: 'warning',
-        category: 'length',
-        message: `Narrative too long (${metrics.wordCount} words, maximum ${this.maxWordCount})`,
-        autoFixable: true
-      });
+    // PACING
+    if (metrics.dialogueRatio > 0.6) {
+        issues.push({ severity: 'suggestion', category: 'pacing', message: '"Talking Heads" detected. Reduce dialogue, increase environmental action.', autoFixable: false });
+    }
+    if (metrics.pacingScore < 0.3) {
+        issues.push({ severity: 'suggestion', category: 'pacing', message: 'Monotone pacing. Vary sentence structure length.', autoFixable: false });
     }
     
-    // WARNING: Missing key elements
-    if (!metrics.hasEnvironmentalDetail) {
-      issues.push({
-        severity: 'warning',
-        category: 'detail',
-        message: 'Missing environmental detail (lighting, atmosphere, setting)',
-        autoFixable: false
-      });
-    }
+    // DETAIL
+    if (!metrics.hasEnvironmentalDetail) issues.push({ severity: 'warning', category: 'detail', message: 'Missing environmental grounding.', autoFixable: false });
+    if (!metrics.hasSomaticDetail && ledger.traumaLevel > 40) issues.push({ severity: 'warning', category: 'detail', message: 'High trauma requires somatic focus (pulse, sweat, pain).', autoFixable: false });
     
-    if (!metrics.hasSomaticDetail && ledger.traumaLevel > 50) {
-      issues.push({
-        severity: 'warning',
-        category: 'detail',
-        message: 'High trauma but missing somatic/physical detail',
-        autoFixable: false
-      });
+    // VOICE
+    if (metrics.voiceConsistency < 0.7) {
+        issues.push({ severity: 'warning', category: 'voice', message: 'Character voice drift detected. Check forbidden vocabulary.', autoFixable: false });
     }
-    
-    if (!metrics.hasEmotionalDepth) {
-      issues.push({
-        severity: 'warning',
-        category: 'detail',
-        message: 'Narrative lacks emotional depth',
-        autoFixable: false
-      });
-    }
-    
-    // SUGGESTION: Pacing issues
-    if (metrics.pacing === 'rushed') {
-      issues.push({
-        severity: 'suggestion',
-        category: 'pacing',
-        message: 'Pacing feels rushed; consider longer, more descriptive sentences',
-        autoFixable: false
-      });
-    }
-    
-    // WARNING: Coherence issues
-    if (metrics.coherenceScore < 0.5) {
-      issues.push({
-        severity: 'warning',
-        category: 'coherence',
-        message: 'Narrative may lack continuity with previous turn',
-        autoFixable: false
-      });
-    }
-    
+
     return issues;
   }
 
   private evaluateQuality(metrics: QualityMetrics, issues: NarrativeIssue[]): boolean {
-    // Fail if any critical issues
-    if (issues.some(i => i.severity === 'critical')) {
-      return false;
-    }
-    
-    // Fail if too many warnings
-    const warningCount = issues.filter(i => i.severity === 'warning').length;
-    if (warningCount > 3) {
-      return false;
-    }
-    
-    // Pass if minimum requirements met
-    return metrics.wordCount >= this.minWordCount &&
-           metrics.coherenceScore >= 0.4;
+    if (issues.some(i => i.severity === 'critical')) return false;
+    if (issues.filter(i => i.severity === 'warning').length > 3) return false;
+    return true;
   }
 
   /**
    * Attempts to automatically fix issues
    */
-  autoFixNarrative(
-    narrative: string,
-    issues: NarrativeIssue[],
-    context: GameState
-  ): string {
-    let fixedNarrative = narrative;
-    
-    for (const issue of issues) {
-      if (!issue.autoFixable) continue;
-      
-      if (issue.category === 'length' && issue.message.includes('too short')) {
-        // Add environmental expansion
-        fixedNarrative = this.expandNarrative(fixedNarrative, context);
-      }
-      
-      if (issue.category === 'length' && issue.message.includes('too long')) {
-        // Trim verbose sections
-        fixedNarrative = this.trimNarrative(fixedNarrative);
-      }
+  autoFixNarrative(narrative: string, issues: NarrativeIssue[], context: GameState): string {
+    let fixed = narrative;
+    // Simple expansion logic for length issues
+    if (issues.some(i => i.category === 'length' && i.message.includes('short'))) {
+        const expansion = "The air grows heavy with the metallic scent of anticipation. Shadows lengthen across the floor, pooling like spilled ink.";
+        fixed = fixed.replace(/([.!?])\s/, `$1 ${expansion} `);
     }
-    
-    return fixedNarrative;
+    return fixed;
   }
 
-  private expandNarrative(narrative: string, context: GameState): string {
-    // Add atmospheric details based on location and ledger
-    const ledger = context.ledger;
-    
-    const atmosphericDetails = [
-      'The air is thick with humidity, each breath tasting of copper and ash.',
-      'Shadows pool in the corners, shifting with the flickering torchlight.',
-      'The stone walls weep condensation, cold and slick to the touch.',
-      'A distant rhythmic pounding echoes through the corridors—the magma hammers, never ceasing.',
-      'Your pulse throbs in your temples, a counterpoint to the oppressive silence.'
-    ];
-    
-    // Select appropriate detail based on trauma level
-    const detail = atmosphericDetails[Math.min(atmosphericDetails.length - 1, Math.floor(ledger.traumaLevel / 20))];
-    
-    // Insert after first sentence
-    const sentences = narrative.split(/(?<=[.!?])\s+/);
-    if (sentences.length > 0) {
-      sentences.splice(1, 0, detail);
-    }
-    
-    return sentences.join(' ');
-  }
-
-  private trimNarrative(narrative: string): string {
-    // Remove redundant modifiers and tighten prose
-    let trimmed = narrative;
-    
-    // Remove excessive adjectives (more than 2 in a row)
-    trimmed = trimmed.replace(/(\w+ly\s+){3,}/g, (match) => {
-      const words = match.trim().split(/\s+/);
-      return words.slice(0, 2).join(' ') + ' ';
-    });
-    
-    // Remove filler phrases
-    const fillerPhrases = [
-      'it seems that', 'it appears that', 'one might say', 
-      'in a manner of speaking', 'so to speak'
-    ];
-    fillerPhrases.forEach(phrase => {
-      trimmed = trimmed.replace(new RegExp(phrase, 'gi'), '');
-    });
-    
-    return trimmed.trim();
-  }
-
-  /**
-   * Record narrative for coherence tracking
-   */
   recordNarrative(narrative: string): void {
     this.previousNarratives.push(narrative);
-    
-    // Keep only last 5 for memory efficiency
-    if (this.previousNarratives.length > 5) {
-      this.previousNarratives = this.previousNarratives.slice(-5);
-    }
+    if (this.previousNarratives.length > 5) this.previousNarratives.shift();
   }
 
-  /**
-   * Generate improvement suggestions for Director
-   */
   generateImprovementPrompt(issues: NarrativeIssue[]): string {
     if (issues.length === 0) return '';
+    const critical = issues.filter(i => i.severity === 'critical').map(i => i.message);
+    const warnings = issues.filter(i => i.severity === 'warning').map(i => i.message);
     
-    const criticalIssues = issues.filter(i => i.severity === 'critical');
-    const warningIssues = issues.filter(i => i.severity === 'warning');
-    
-    let prompt = '\n\nNARRATIVE QUALITY FEEDBACK:\n';
-    
-    if (criticalIssues.length > 0) {
-      prompt += 'CRITICAL ISSUES:\n';
-      criticalIssues.forEach(issue => {
-        prompt += `- ${issue.message}\n`;
-      });
-    }
-    
-    if (warningIssues.length > 0) {
-      prompt += '\nIMPROVEMENT SUGGESTIONS:\n';
-      warningIssues.forEach(issue => {
-        prompt += `- ${issue.message}\n`;
-      });
-    }
-    
-    return prompt;
+    return `
+    NARRATIVE QUALITY AUDIT:
+    ${critical.length > 0 ? `CRITICAL FIXES REQUIRED:\n- ${critical.join('\n- ')}` : ''}
+    ${warnings.length > 0 ? `STYLISTIC ADJUSTMENTS:\n- ${warnings.join('\n- ')}` : ''}
+    `.trim();
   }
 
   reset(): void {

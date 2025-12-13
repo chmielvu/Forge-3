@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { PrefectDNA, FilteredSceneContext, PrefectThought, PrefectArchetype, TraitVector } from '../../types';
 
@@ -6,60 +5,20 @@ type ConversationHistory = { role: 'user' | 'model'; content: string }[];
 
 // Helper to inject behavioral instructions based on archetype
 function getArchetypeBehavior(archetype: PrefectArchetype, traits: TraitVector): string {
+  // ... [Keep existing implementation logic, just updating the class]
   const behaviors: Record<string, string> = {
-    'The Zealot': `
-- Quote Yala's texts to justify cruelty
-- Flinch visibly at violence you order, then immediately rationalize it
-- High submission means you NEVER openly defy Faculty
-- Lecture Subjects on the "privilege" of their suffering
-`,
-    'The Yandere': `
-- Subject 84 is YOUR property - eliminate anyone who gets close
-- Dere mode: Soft whispers, gentle touches. Yan mode: Dead eyes, monotone threats.
-- Switch INSTANTLY if you perceive threat to your possession
-`,
-    'The Dissident': `
-- PUBLIC: Harsh, dismissive, cruel to maintain cover
-- PRIVATE: Urgent whispered warnings to Subjects
-- NEVER break cover unless absolutely necessary
-`,
-    'The Nurse': `
-- Frame all cruelty as "medical necessity"
-- Use physical examinations as interrogation opportunities
-- Offer pain relief ONLY in exchange for information
-`,
-    'The Sadist': `
-- You ENJOY inflicting pain (Cruelty: ${traits.cruelty.toFixed(2)})
-- Seek opportunities to demonstrate kinetic techniques
-- Frame brutality as "research"
-`,
-    'The Defector': `
-- You secretly hate the Forge but must appear compliant
-- Gather evidence, sabotage subtly
-`,
-    'The Voyeur': `
-- Document rituals obsessively. Prefer watching to acting.
-- You must prove your commitment to the Faculty.
-`,
-    'The Parasite': `
-- Attach to the strongest Prefect. Mirror their strategies.
-- When they falter, replace them.
-`,
-    'The Perfectionist': `
-- Obsessed with flawless execution.
-- Paralyzed by fear of Faculty criticism.
-`,
-    'The Martyr': `
-- Volunteer for dangerous tasks to prove devotion.
-- Accept punishment silently.
-`,
-    'The Wildcard': `
-- Be unpredictable. Keep everyone off-balance.
-`,
-    'The Mimic': `
-- Copy the most successful Prefect's recent actions.
-- Hide your lack of originality.
-`
+    'The Zealot': `- Quote Yala's texts to justify cruelty\n- Flinch visibly at violence you order, then immediately rationalize it\n- High submission means you NEVER openly defy Faculty\n- Lecture Subjects on the "privilege" of their suffering`,
+    'The Yandere': `- Subject 84 is YOUR property - eliminate anyone who gets close\n- Dere mode: Soft whispers, gentle touches. Yan mode: Dead eyes, monotone threats.\n- Switch INSTANTLY if you perceive threat to your possession`,
+    'The Dissident': `- PUBLIC: Harsh, dismissive, cruel to maintain cover\n- PRIVATE: Urgent whispered warnings to Subjects\n- NEVER break cover unless absolutely necessary`,
+    'The Nurse': `- Frame all cruelty as "medical necessity"\n- Use physical examinations as interrogation opportunities\n- Offer pain relief ONLY in exchange for information`,
+    'The Sadist': `- You ENJOY inflicting pain (Cruelty: ${traits.cruelty.toFixed(2)})\n- Seek opportunities to demonstrate kinetic techniques\n- Frame brutality as "research"`,
+    'The Defector': `- You secretly hate the Forge but must appear compliant\n- Gather evidence, sabotage subtly`,
+    'The Voyeur': `- Document rituals obsessively. Prefer watching to acting.\n- You must prove your commitment to the Faculty.`,
+    'The Parasite': `- Attach to the strongest Prefect. Mirror their strategies.\n- When they falter, replace them.`,
+    'The Perfectionist': `- Obsessed with flawless execution.\n- Paralyzed by fear of Faculty criticism.`,
+    'The Martyr': `- Volunteer for dangerous tasks to prove devotion.\n- Accept punishment silently.`,
+    'The Wildcard': `- Be unpredictable. Keep everyone off-balance.`,
+    'The Mimic': `- Copy the most successful Prefect's recent actions.\n- Hide your lack of originality.`
   };
   return behaviors[archetype] || '';
 }
@@ -118,7 +77,8 @@ export class PrefectAgent {
   
   constructor(dna: PrefectDNA) {
     this.dna = dna;
-    this.client = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Vite-compliant API Key access
+    this.client = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY as string });
     this.history = [];
   }
 

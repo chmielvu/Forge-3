@@ -1,11 +1,8 @@
-
-'use server';
-
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { VISUAL_MANDATE, VIDEO_MANDATE } from '../config/visualMandate';
 
-// Lazy initialization to respect server-side environment variables
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Client-side initialization for Vite
+const getAI = () => new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY as string });
 
 const MAX_RETRIES = 3;
 const BASE_DELAY = 1000;
@@ -20,7 +17,7 @@ async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES):
       const isRetryable = error.status === 503 || error.status === 429 || error.message?.includes('fetch failed');
       if (isRetryable || retries > 1) { 
          const delay = BASE_DELAY * (MAX_RETRIES - retries + 1);
-         console.warn(`[ServerAction] Operation failed, retrying in ${delay}ms... (Attempts left: ${retries})`);
+         console.warn(`[MediaAction] Operation failed, retrying in ${delay}ms... (Attempts left: ${retries})`);
          await new Promise(resolve => setTimeout(resolve, delay));
          return withRetry(operation, retries - 1);
       }
@@ -30,7 +27,7 @@ async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES):
 }
 
 /**
- * Server Action: Generate Image
+ * Generate Image
  * Uses Gemini 2.5 Flash Image (Nano Banana) for high-speed, coherent visual generation.
  */
 export async function generateImageAction(prompt: string): Promise<string | undefined> {
@@ -61,14 +58,14 @@ export async function generateImageAction(prompt: string): Promise<string | unde
       if (!data) throw new Error("No image data returned from Gemini.");
       return data;
     } catch (error) {
-      console.error("[ServerAction] Image Generation Failed:", error);
+      console.error("[MediaAction] Image Generation Failed:", error);
       throw error;
     }
   });
 }
 
 /**
- * Server Action: Generate Speech
+ * Generate Speech
  * Uses Gemini 2.5 Flash TTS for character-specific voice synthesis.
  */
 export async function generateSpeechAction(text: string, voiceName: string): Promise<{ audioData: string; duration: number } | undefined> {
@@ -102,16 +99,15 @@ export async function generateSpeechAction(text: string, voiceName: string): Pro
       return { audioData, duration };
 
     } catch (error) {
-      console.error("[ServerAction] Audio Generation Failed:", error);
+      console.error("[MediaAction] Audio Generation Failed:", error);
       throw error;
     }
   });
 }
 
 /**
- * Server Action: Generate Video (Veo)
+ * Generate Video (Veo)
  * Uses Veo 3.1 Fast Preview for atmospheric video loops.
- * Handles async polling and secure asset fetching.
  */
 export async function generateVideoAction(
   imageB64: string, 
@@ -146,7 +142,6 @@ export async function generateVideoAction(
     });
 
     // 2. Polling Loop
-    // Veo generation can take time, so we poll with a limit.
     let attempts = 0;
     const MAX_POLL_ATTEMPTS = 40; 
     
@@ -155,7 +150,7 @@ export async function generateVideoAction(
       try {
         operation = await ai.operations.getVideosOperation({ operation: operation });
       } catch (pollError) {
-        console.warn(`[ServerAction] Polling transient error:`, pollError);
+        console.warn(`[MediaAction] Polling transient error:`, pollError);
       }
       attempts++;
     }
@@ -167,9 +162,8 @@ export async function generateVideoAction(
     const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (videoUri) {
       // 3. Fetch Result
-      // The URI requires the API key appended for access
       return await withRetry(async () => {
-        const response = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+        const response = await fetch(`${videoUri}&key=${import.meta.env.VITE_GEMINI_API_KEY as string}`);
         if (!response.ok) throw new Error(`Failed to fetch video asset: ${response.status}`);
         
         const blob = await response.blob();
@@ -180,14 +174,14 @@ export async function generateVideoAction(
     }
     return undefined;
   } catch (e) {
-    console.error("[ServerAction] Veo Generation Failed:", e);
+    console.error("[MediaAction] Veo Generation Failed:", e);
     // Return undefined so the client handles it gracefully (e.g., falls back to image)
     return undefined; 
   }
 }
 
 /**
- * Server Action: Distort Image
+ * Distort Image
  * Uses Gemini Image to apply psychological distortion effects.
  */
 export async function distortImageAction(imageB64: string, instruction: string): Promise<string | undefined> {
@@ -219,7 +213,7 @@ export async function distortImageAction(imageB64: string, instruction: string):
       if (!data) throw new Error("No distortion data returned.");
       return data;
     } catch (e) {
-      console.error("[ServerAction] Image Distortion Failed:", e);
+      console.error("[MediaAction] Image Distortion Failed:", e);
       throw e;
     }
   });
