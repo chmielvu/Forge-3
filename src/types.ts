@@ -155,18 +155,20 @@ export type PrefectArchetype =
   | 'The Parasite' | 'The Wildcard' | 'The Defector' | 'The Mimic'
   | 'The Brat Princess' | 'The Siren' | 'The Psychologist' | 'The Contender';
 
+export interface TraitVector {
+  cruelty: number;
+  charisma: number;
+  cunning: number;
+  submission_to_authority: number;
+  ambition: number;
+}
+
 export interface PrefectDNA {
   id: string; 
   displayName: string;
   archetype: PrefectArchetype;
   isCanon: boolean;
-  traitVector: {
-    cruelty: number;
-    charisma: number;
-    cunning: number;
-    submission_to_authority: number;
-    ambition: number;
-  };
+  traitVector: TraitVector;
   drive: string;
   secretWeakness: string;
   favorScore: number;
@@ -204,11 +206,11 @@ export interface PrefectThought {
     target: string;
     method: string;
     deniability: number;
-  };
+  } | null;
   allianceSignal?: {
     target: string;
     message: string;
-  };
+  } | null;
   emotionalState: {
     paranoia: number;
     desperation: number;
@@ -224,13 +226,7 @@ export interface MaraDNA {
   id: string;
   displayName: string;
   archetype: string;
-  traitVector: {
-    cruelty: number;
-    charisma: number;
-    cunning: number;
-    submission_to_authority: number;
-    ambition: number;
-  };
+  traitVector: TraitVector;
   drive: string;
   secretWeakness: string;
   favorScore: number;

@@ -1,137 +1,94 @@
 
 'use client';
 
-import React, { useEffect, useRef, useMemo } from 'react';
-import * as d3 from 'd3';
-import { KnowledgeGraph, KGotEdge } from '../lib/types/kgot';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
+import { KnowledgeGraph } from '../lib/types/kgot';
+
+// Dynamic import to avoid SSR issues with canvas/window
+const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-full text-xs text-stone-500 font-mono">INITIALIZING NEURO-SYMBOLIC MATRIX...</div>
+});
 
 interface Props {
   graphData: KnowledgeGraph;
-}
-
-interface SimulationNode extends d3.SimulationNodeDatum {
-  id: string;
-  label: string;
-  group: string;
-  val: number;
+  onNodeClick?: (node: any) => void;
 }
 
 const NODE_COLORS = {
-  ENTITY: '#ef4444', 
-  LOCATION: '#3b82f6',
-  EVENT: '#eab308',
-  CONCEPT: '#a855f7',
+  SUBJECT: '#f59e0b', // Amber-500 (Player/Victims)
+  FACULTY: '#881337', // Rose-900 (The Oppressors)
+  PREFECT: '#10b981', // Emerald-500 (The Enforcers)
+  LOCATION: '#3b82f6', // Blue-500
+  EVENT: '#eab308',   // Yellow-500
+  CONCEPT: '#a855f7', // Purple-500
+  ENTITY: '#ef4444',  // Red-500 (Fallback)
 };
 
-const NetworkGraph: React.FC<Props> = ({ graphData }) => {
-  const svgRef = useRef<SVGSVGElement>(null);
+const NetworkGraph: React.FC<Props> = ({ graphData, onNodeClick }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
-  const simulationNodes = useMemo(() => {
-    if (!graphData || !graphData.nodes) return [];
-    return Object.values(graphData.nodes).map((n: any) => ({
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setDimensions({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height
+        });
+      }
+    });
+    resizeObserver.observe(containerRef.current);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  const data = useMemo(() => {
+    // Safety check for empty graph
+    if (!graphData || !graphData.nodes) return { nodes: [], links: [] };
+
+    const nodes = Object.values(graphData.nodes).map((n: any) => ({
       id: n.id,
       label: n.label,
       group: n.type,
-      val: n.type === 'ENTITY' ? 20 : 10
-    })) as SimulationNode[];
-  }, [graphData]);
+      val: n.type === 'FACULTY' ? 30 : n.type === 'SUBJECT' ? 20 : 10, // Size hierarchy
+      color: NODE_COLORS[n.type as keyof typeof NODE_COLORS] || '#78716c'
+    }));
 
-  const simulationLinks = useMemo(() => {
-    if (!graphData || !graphData.edges) return [];
-    return graphData.edges.map((e: KGotEdge) => ({
+    const links = graphData.edges.map((e: any) => ({
       source: e.source,
       target: e.target,
-      label: e.label,
-      value: e.weight
-    })) as d3.SimulationLinkDatum<SimulationNode>[];
+      name: e.label,
+      color: e.weight > 0.7 ? '#ef4444' : '#475569', // Red for high tension/weight
+      width: e.weight * 2
+    }));
+
+    return { nodes, links };
   }, [graphData]);
 
-  useEffect(() => {
-    if (!svgRef.current || simulationNodes.length === 0) return;
-
-    const width = svgRef.current.clientWidth;
-    const height = svgRef.current.clientHeight;
-
-    d3.select(svgRef.current).selectAll("*").remove();
-
-    const svg = d3.select(svgRef.current)
-      .attr("viewBox", [0, 0, width, height]);
-
-    const simulation = d3.forceSimulation<SimulationNode>(simulationNodes)
-      .force("link", d3.forceLink(simulationLinks).id(d => d.id).distance(100))
-      .force("charge", d3.forceManyBody().strength(-300))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collide", d3.forceCollide().radius(30));
-
-    const link = svg.append("g")
-      .selectAll("line")
-      .data(simulationLinks)
-      .join("line")
-      .attr("stroke", "#475569")
-      .attr("stroke-opacity", 0.6)
-      .attr("stroke-width", 1.5);
-
-    const node = svg.append("g")
-      .selectAll("circle")
-      .data(simulationNodes)
-      .join("circle")
-      .attr("r", d => d.val)
-      .attr("fill", d => NODE_COLORS[d.group as keyof typeof NODE_COLORS] || '#ffffff')
-      .attr("stroke", "#000")
-      .attr("stroke-width", 1.5)
-      .call(drag(simulation) as any);
-
-    const labels = svg.append("g")
-      .selectAll("text")
-      .data(simulationNodes)
-      .join("text")
-      .text(d => d.label)
-      .attr("font-size", "10px")
-      .attr("fill", "#a8a29e")
-      .attr("dx", 15)
-      .attr("dy", 4)
-      .style("pointer-events", "none");
-
-    simulation.on("tick", () => {
-      link
-        .attr("x1", (d: any) => d.source.x)
-        .attr("y1", (d: any) => d.source.y)
-        .attr("x2", (d: any) => d.target.x)
-        .attr("y2", (d: any) => d.target.y);
-
-      node
-        .attr("cx", (d: any) => d.x)
-        .attr("cy", (d: any) => d.y);
-
-      labels
-        .attr("x", (d: any) => d.x)
-        .attr("y", (d: any) => d.y);
-    });
-
-    function drag(simulation: any) {
-      function dragstarted(event: any) {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        event.subject.fx = event.subject.x;
-        event.subject.fy = event.subject.y;
-      }
-      function dragged(event: any) {
-        event.subject.fx = event.x;
-        event.subject.fy = event.y;
-      }
-      function dragended(event: any) {
-        if (!event.active) simulation.alphaTarget(0);
-        event.subject.fx = null;
-        event.subject.fy = null;
-      }
-      return d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended);
-    }
-
-    return () => simulation.stop();
-  }, [simulationNodes, simulationLinks]);
-
   return (
-    <div className="w-full h-full bg-slate-950 border border-slate-800 rounded-lg overflow-hidden relative">
-      <svg ref={svgRef} className="w-full h-full" />
+    <div ref={containerRef} className="w-full h-full bg-[#020617] border border-[#1e293b] rounded-sm overflow-hidden relative">
+      {dimensions.width > 0 && (
+        <ForceGraph2D
+          width={dimensions.width}
+          height={dimensions.height}
+          graphData={data}
+          nodeLabel="label"
+          nodeColor="color"
+          nodeRelSize={4}
+          linkColor="color"
+          linkWidth="width"
+          linkDirectionalArrowLength={3.5}
+          linkDirectionalArrowRelPos={1}
+          linkCurvature={0.2}
+          backgroundColor="#020617" // Matches Forge Black
+          d3VelocityDecay={0.4} // Adds "weight" to the physics
+          cooldownTicks={100}
+          onNodeClick={onNodeClick}
+          enableNodeDrag={false} // Lock nodes for stability or enable if preferred
+        />
+      )}
     </div>
   );
 };

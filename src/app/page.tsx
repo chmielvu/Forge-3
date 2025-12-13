@@ -1,104 +1,119 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
-import { submitTurn } from './actions';
+import React, { useEffect, useState } from 'react';
 import { useGameStore } from '../state/gameStore';
 import NarrativeLog from '../components/NarrativeLog';
 import NetworkGraph from '../components/NetworkGraph';
+import MediaPanel from '../components/MediaPanel';
+import LedgerDisplay from '../components/LedgerDisplay';
+import ActionWheel from '../components/ActionWheel';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-
-const INITIAL_STATE = { narrative: "The Iron Sandbox Initialized.", updatedGraph: null, choices: [], thoughtProcess: "" };
+import { Loader2 } from 'lucide-react';
 
 function GameInterface() {
-  const [state, formAction, isPending] = useActionState(submitTurn, INITIAL_STATE);
-  const { applyServerState, setThinking, kgot, logs } = useGameStore();
+  const { 
+    logs, 
+    kgot, 
+    gameState, 
+    isThinking, 
+    processPlayerTurn,
+    choices 
+  } = useGameStore();
+
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (state.updatedGraph) {
-      applyServerState(state);
-    }
-  }, [state, applyServerState]);
-
-  useEffect(() => {
-    setThinking(isPending);
-  }, [isPending, setThinking]);
-
-  const handleChoice = (choice: string) => {
-    // Hidden form submission for choices
-    const formData = new FormData();
-    formData.append("input", choice);
-    formData.append("history", JSON.stringify(logs.filter(l => l.type === 'narrative').map(l => l.content)));
-    formData.append("currentGraph", JSON.stringify(kgot));
-    
-    // Programmatically trigger the form submission
-    const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
-    const inputField = document.querySelector('input[name="input"]') as HTMLInputElement;
-    if (inputField && submitBtn) {
-        inputField.value = choice;
-        submitBtn.click();
-    }
-  };
-
-  // Prevent hydration mismatch or empty render flicker
-  if (!isMounted) {
-    return (
-      <div className="h-screen w-full bg-[#050505] flex items-center justify-center text-[#facc15] font-mono animate-pulse">
-        INITIALIZING NEURO-SYMBOLIC ENGINE...
-      </div>
-    );
-  }
+  if (!isMounted) return null;
 
   return (
-    <main className="grid grid-cols-1 md:grid-cols-12 h-screen bg-[#050505] text-[#f5f5f4] font-serif overflow-hidden">
-      {/* Visual Layer */}
-      <div className="absolute inset-0 z-0 opacity-20 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] pointer-events-none"></div>
+    <main className="grid grid-cols-1 lg:grid-cols-12 h-screen bg-[#050505] text-[#f5f5f4] font-serif overflow-hidden">
+      {/* BACKGROUND NOISE & GRADIENT */}
+      <div className="absolute inset-0 pointer-events-none z-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
+      <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-br from-black via-zinc-950 to-red-950/20"></div>
 
-      {/* Left Panel: Neuro-Symbolic State */}
-      <section className="hidden md:block col-span-4 border-r border-[#1c1917] p-4 relative bg-black/80">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#881337] to-transparent opacity-50"></div>
-        <h3 className="font-mono text-xs text-[#ca8a04] mb-4 uppercase tracking-widest">KGoT Memory Structure</h3>
-        <NetworkGraph graphData={kgot} />
+      {/* LEFT COLUMN: VISUALS & STATE (4 Cols) */}
+      <section className="hidden lg:flex col-span-4 flex-col border-r border-[#1c1917] bg-black/80 z-10 relative">
+        {/* TOP: MEDIA PANEL (Image/Video) */}
+        <div className="h-1/3 border-b border-[#1c1917] relative">
+           <MediaPanel />
+        </div>
+
+        {/* MIDDLE: KGOT GRAPH */}
+        <div className="flex-1 border-b border-[#1c1917] relative p-4">
+          <div className="absolute top-2 left-4 z-10">
+            <h3 className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest">Neuro-Symbolic Memory</h3>
+          </div>
+          <NetworkGraph graphData={kgot} />
+        </div>
+
+        {/* BOTTOM: LEDGER (STATS) */}
+        <div className="h-auto p-4 bg-zinc-950/50">
+          <LedgerDisplay ledger={gameState.ledger} />
+        </div>
       </section>
 
-      {/* Right Panel: The Abyss */}
-      <section className="col-span-1 md:col-span-8 flex flex-col relative bg-stone-950/50 z-10">
-        <div className="flex-1 overflow-hidden p-4 md:p-8">
-          <NarrativeLog 
-            logs={logs} 
-            thinking={isPending} 
-            choices={useGameStore.getState().choices} 
-            onChoice={handleChoice} 
-            ledger={useGameStore.getState().gameState.ledger} 
-          />
-        </div>
+      {/* RIGHT COLUMN: NARRATIVE & INPUT (8 Cols) */}
+      <section className="col-span-1 lg:col-span-8 flex flex-col relative z-10 h-full">
         
-        {/* Input Terminal */}
-        <div className="p-6 border-t border-[#1c1917] bg-black/90 backdrop-blur-md">
-          <form action={formAction} className="flex gap-4">
-            {/* Hidden state inputs for the server action */}
-            <input type="hidden" name="history" value={JSON.stringify(logs.filter(l => l.type === 'narrative').map(l => l.content))} />
-            <input type="hidden" name="currentGraph" value={JSON.stringify(kgot)} />
-            
-            <input 
-              name="input"
-              className="flex-1 bg-[#1c1917]/30 border border-[#1c1917] p-3 rounded text-[#facc15] font-mono focus:outline-none focus:border-[#881337] transition-colors placeholder:text-stone-700"
-              placeholder="State your intent..."
-              autoComplete="off"
+        {/* HEADER */}
+        <header className="h-14 border-b border-[#1c1917] flex items-center justify-between px-8 bg-black/50 backdrop-blur-md">
+          <div className="flex items-center gap-4">
+            <h1 className="font-display text-xl text-zinc-300 tracking-widest">THE FORGE'S LOOM</h1>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-red-900/20 text-red-500 border border-red-900/50">
+              LIVE SESSION
+            </span>
+          </div>
+          <div className="font-mono text-[10px] text-zinc-600">
+            LOC: {gameState.location} // TURN: {gameState.turn}
+          </div>
+        </header>
+
+        {/* NARRATIVE SCROLL AREA */}
+        <div className="flex-1 overflow-hidden relative bg-gradient-to-b from-black/0 to-black/20">
+          <div className="absolute inset-0 p-8 overflow-y-auto custom-scrollbar">
+            <NarrativeLog 
+              logs={logs} 
+              thinking={isThinking} 
+              choices={[]} // We use ActionWheel instead of inline choices
+              onChoice={() => {}} 
+              ledger={gameState.ledger} 
             />
-            <button 
-              id="submit-btn"
-              type="submit" 
-              disabled={isPending}
-              className="bg-[#881337]/20 border border-[#881337]/50 text-[#881337] hover:bg-[#881337] hover:text-white px-8 py-2 rounded font-display tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isPending ? "COMPUTING..." : "COMMIT"}
-            </button>
-          </form>
+          </div>
+        </div>
+
+        {/* INPUT AREA */}
+        <div className="p-6 border-t border-[#1c1917] bg-black/90 backdrop-blur-xl">
+          {isThinking ? (
+            <div className="h-[140px] flex flex-col items-center justify-center gap-3 text-zinc-500 animate-pulse">
+              <Loader2 className="w-6 h-6 animate-spin text-red-500" />
+              <span className="font-mono text-xs tracking-[0.2em]">THE DIRECTOR IS WEAVING...</span>
+            </div>
+          ) : (
+            <div className="max-w-3xl mx-auto">
+              {/* Optional: Show specific choices if the Director provided them, otherwise generic wheel */}
+              {choices.length > 0 ? (
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {choices.map((choice, idx) => (
+                      <button 
+                        key={idx}
+                        onClick={() => processPlayerTurn(choice)}
+                        className="p-4 text-left border border-zinc-800 hover:border-amber-500/50 hover:bg-amber-900/10 transition-all rounded-sm"
+                      >
+                        <span className="font-serif italic text-zinc-300">"{choice}"</span>
+                      </button>
+                    ))}
+                 </div>
+              ) : (
+                <ActionWheel 
+                  onAction={(input) => processPlayerTurn(input)} 
+                  disabled={isThinking} 
+                />
+              )}
+            </div>
+          )}
         </div>
       </section>
     </main>

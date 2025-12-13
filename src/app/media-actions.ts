@@ -1,9 +1,10 @@
+
 'use server';
 
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { VISUAL_MANDATE, VIDEO_MANDATE } from '../config/visualMandate';
 
-// Lazy initialization function to prevent top-level errors if API KEY is missing during build
+// Lazy initialization to respect server-side environment variables
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const MAX_RETRIES = 3;
@@ -15,8 +16,9 @@ async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES):
     return await operation();
   } catch (error: any) {
     if (retries > 0) {
+      // Retry on transient errors (503, 429) or fetch failures
       const isRetryable = error.status === 503 || error.status === 429 || error.message?.includes('fetch failed');
-      if (isRetryable || retries > 1) { // Retry most errors except explicit 400s unless completely broken
+      if (isRetryable || retries > 1) { 
          const delay = BASE_DELAY * (MAX_RETRIES - retries + 1);
          console.warn(`[ServerAction] Operation failed, retrying in ${delay}ms... (Attempts left: ${retries})`);
          await new Promise(resolve => setTimeout(resolve, delay));
@@ -29,13 +31,13 @@ async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES):
 
 /**
  * Server Action: Generate Image
- * securely calls Gemini Image model using the provided prompt.
+ * Uses Gemini 2.5 Flash Image (Nano Banana) for high-speed, coherent visual generation.
  */
 export async function generateImageAction(prompt: string): Promise<string | undefined> {
   return withRetry(async () => {
     try {
       const ai = getAI();
-      // Ensure the prompt adheres to the JSON configuration expected by the prompt engineering in visualCoherenceEngine
+      // Enforce the strict visual mandate JSON wrapper for the model
       const qualityEnforcedPrompt = `
       GENERATE AN IMAGE BASED ON THIS STRICT JSON CONFIGURATION:
       \`\`\`json
@@ -60,14 +62,14 @@ export async function generateImageAction(prompt: string): Promise<string | unde
       return data;
     } catch (error) {
       console.error("[ServerAction] Image Generation Failed:", error);
-      throw error; // Propagate for retry
+      throw error;
     }
   });
 }
 
 /**
  * Server Action: Generate Speech
- * securely calls Gemini TTS model.
+ * Uses Gemini 2.5 Flash TTS for character-specific voice synthesis.
  */
 export async function generateSpeechAction(text: string, voiceName: string): Promise<{ audioData: string; duration: number } | undefined> {
   return withRetry(async () => {
@@ -90,10 +92,11 @@ export async function generateSpeechAction(text: string, voiceName: string): Pro
       
       if (!audioData) throw new Error("No audio data returned from Gemini.");
 
-      // Calculate duration on server to keep client light
+      // Calculate approximate duration on server to keep client logic simple
+      // PCM 24kHz, 1 channel, 16-bit depth usually
       const base64Length = audioData.length;
       const byteLength = (base64Length * 3) / 4; 
-      const sampleCount = byteLength / 2; 
+      const sampleCount = byteLength / 2; // 16-bit = 2 bytes per sample
       const duration = sampleCount / 24000; 
 
       return { audioData, duration };
@@ -107,7 +110,8 @@ export async function generateSpeechAction(text: string, voiceName: string): Pro
 
 /**
  * Server Action: Generate Video (Veo)
- * securely calls Veo model, polls for completion, and fetches result using API key.
+ * Uses Veo 3.1 Fast Preview for atmospheric video loops.
+ * Handles async polling and secure asset fetching.
  */
 export async function generateVideoAction(
   imageB64: string, 
@@ -141,9 +145,10 @@ export async function generateVideoAction(
         });
     });
 
-    // 2. Polling Loop (Not wrapped in global retry, handles its own lifecycle)
+    // 2. Polling Loop
+    // Veo generation can take time, so we poll with a limit.
     let attempts = 0;
-    const MAX_POLL_ATTEMPTS = 30; // Increased to 30 (approx 90-100s) for reliability
+    const MAX_POLL_ATTEMPTS = 40; 
     
     while (!operation.done && attempts < MAX_POLL_ATTEMPTS) {
       await new Promise(resolve => setTimeout(resolve, 3000)); // 3s interval
@@ -151,7 +156,6 @@ export async function generateVideoAction(
         operation = await ai.operations.getVideosOperation({ operation: operation });
       } catch (pollError) {
         console.warn(`[ServerAction] Polling transient error:`, pollError);
-        // Continue loop despite transient poll errors
       }
       attempts++;
     }
@@ -162,11 +166,11 @@ export async function generateVideoAction(
 
     const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (videoUri) {
-      // 3. Fetch Result (Retryable)
+      // 3. Fetch Result
+      // The URI requires the API key appended for access
       return await withRetry(async () => {
-        // Securely fetch the video binary using the API KEY on the server side
         const response = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
-        if (!response.ok) throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
+        if (!response.ok) throw new Error(`Failed to fetch video asset: ${response.status}`);
         
         const blob = await response.blob();
         const arrayBuffer = await blob.arrayBuffer();
@@ -177,12 +181,14 @@ export async function generateVideoAction(
     return undefined;
   } catch (e) {
     console.error("[ServerAction] Veo Generation Failed:", e);
-    return undefined; // Return undefined to allow client-side handling/logging
+    // Return undefined so the client handles it gracefully (e.g., falls back to image)
+    return undefined; 
   }
 }
 
 /**
  * Server Action: Distort Image
+ * Uses Gemini Image to apply psychological distortion effects.
  */
 export async function distortImageAction(imageB64: string, instruction: string): Promise<string | undefined> {
   return withRetry(async () => {
@@ -198,7 +204,7 @@ export async function distortImageAction(imageB64: string, instruction: string):
                 mimeType: 'image/jpeg',
               },
             },
-            { text: `${VISUAL_MANDATE.ZERO_DRIFT_HEADER} ${instruction}` }, 
+            { text: `${VISUAL_MANDATE.ZERO_DRIFT_HEADER} EFFECT: ${instruction}` }, 
           ],
         },
         config: {

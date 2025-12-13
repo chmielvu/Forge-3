@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -56,7 +57,8 @@ const VisualPromptSchema = z.object({
 // ==================== CHARACTER DNA DATABASE ====================
 
 const CHARACTER_DNA = {
-  "FACULTY_PROVOST": {
+  // --- FACULTY ---
+  "FACULTY_SELENE": { // Fixed ID from FACULTY_PROVOST
     consistency_token: "selene_token_x99",
     base_prompt: "statuesque woman late 40s, regal aristocratic beauty, sharp cheekbones, cold steel-gray eyes, raven-black hair in severe braids, wiry disciplined physique",
     costume_variants: {
@@ -74,7 +76,7 @@ const CHARACTER_DNA = {
     },
     manara_features: "kind approachable face HIDING cold analytical mind, disarming softness, non-threatening scholar physique"
   },
-  "FACULTY_INQUISITOR": {
+  "FACULTY_PETRA": { // Fixed ID from FACULTY_INQUISITOR
     consistency_token: "petra_token_x45",
     base_prompt: "woman late 20s, athletic lean wiry build, stark white hair in practical braids, sharp green eyes, predatory confident smirk, light freckles, scarred midriff visible",
     costume_variants: {
@@ -91,6 +93,53 @@ const CHARACTER_DNA = {
       "sensual_confessional": "off-shoulder white blouse revealing neck curve, leather corset, layered necklaces bohemian"
     },
     manara_features: "unsettlingly perfect beauty, heavy-lidded predatory analytical eyes, languid sensual softness TRAP"
+  },
+  "FACULTY_ASTRA": {
+    consistency_token: "astra_token_v33",
+    base_prompt: "woman late 30s, tired but elegant, dark circles under grey eyes, silver-streaked dark hair loose, compassionate but resigned expression",
+    costume_variants: {
+      "clinical_grey": "simple grey structured dress, silver brooch, sensible heels, holding clipboard",
+      "informal": "soft woolen wrap, reading glasses, weary posture"
+    },
+    manara_features: "expressive eyebrows, soft mouth often frowned in concern, posture of exhaustion, gentle hands"
+  },
+
+  // --- PREFECTS (Added) ---
+  "PREFECT_LOYALIST": { // Elara
+    consistency_token: "elara_token_z01",
+    base_prompt: "young woman 19yo, severe sharp features, pale skin, tight auburn bun, trembling hands often clasped, pristine uniform worn like armor",
+    costume_variants: {
+      "standard_uniform": "standard charcoal academy blazer perfectly pressed, knee-length pleated skirt, high collar, silver prefect badge shining",
+      "ritual_garb": "white ceremonial robe over uniform, stained with ash, severe and restrictive"
+    },
+    manara_features: "wide terrified eyes masking as zealotry, thin lips compressed, look of desperate fanaticism, brittle posture ready to snap"
+  },
+  "PREFECT_OBSESSIVE": { // Kaelen
+    consistency_token: "kaelen_token_y99",
+    base_prompt: "young woman 18yo, doll-like beauty, large dark eyes, straight black hime-cut hair, deceptively innocent, small stature",
+    costume_variants: {
+      "standard_uniform": "standard academy uniform but customized, shorter skirt, red ribbon choker, slightly disheveled",
+      "stalking_attire": "dark hooded cloak over uniform, clutching a stolen token, shadows hiding face"
+    },
+    manara_features: "unnerving unblinking stare (sanpaku eyes), flush of feverish obsession, pouty lips, juxtaposition of cute and lethal"
+  },
+  "PREFECT_DISSIDENT": { // Rhea
+    consistency_token: "rhea_token_x22",
+    base_prompt: "young woman 20yo, sharp angular face, messy fiery red hair, dark circles under eyes, cynical guarded expression, smoker",
+    costume_variants: {
+      "standard_uniform": "uniform worn carelessly, sleeves rolled up, top button undone, scuffed boots, tie loose",
+      "shadow_ops": "dark turtleneck, form-fitting trousers, blending into shadows, utility belt"
+    },
+    manara_features: "guarded suspicious gaze, tension in jaw, athletic wiry build, look of repressed anger, sneering lip"
+  },
+  "PREFECT_NURSE": { // Anya
+    consistency_token: "anya_token_w44",
+    base_prompt: "young woman 21yo, soft maternal curves, warm hazel eyes, messy strawberry blonde braid, deceptive warmth, taller than average",
+    costume_variants: {
+      "clinical_uniform": "white medical coat worn open over academy uniform, latex gloves, stethoscope, nurse cap askew",
+      "casual_study": "loose cardigan, reading glasses, hair down, holding anatomy textbook"
+    },
+    manara_features: "soft pillowy lips, half-lidded heavy gaze, flush of excitement, maternal figure with cruel undertone"
   }
 };
 
@@ -158,12 +207,13 @@ function buildMasterPrompt(data: z.infer<typeof VisualPromptSchema>): string {
     const dna = CHARACTER_DNA[char.id as keyof typeof CHARACTER_DNA];
     
     if (!dna) {
-      throw new Error(`Unknown character: ${char.id}`);
+      console.warn(`[Visuals] Unknown character ID: ${char.id}. Fallback to silhouette.`);
+      return `CHARACTER: ${char.id}\nDescription: A silhouette in the shadows.\nPose: ${char.pose}`;
     }
     
-    const costume = dna.costume_variants[
-      char.costume_id as keyof typeof dna.costume_variants
-    ];
+    // Default to first variant if specific costume ID not found
+    const costumeKey = char.costume_id as keyof typeof dna.costume_variants;
+    const costume = dna.costume_variants[costumeKey] || Object.values(dna.costume_variants)[0];
     
     return `
 CHARACTER: ${char.id}
@@ -265,7 +315,7 @@ export async function generateCharacterReference(
   const dna = CHARACTER_DNA[characterId as keyof typeof CHARACTER_DNA];
   
   if (!dna) {
-    throw new Error(`Unknown character: ${characterId}`);
+     return `REFERENCE SHEET: Unknown Character (${characterId})`;
   }
   
   // Generate a standalone reference image for consistency
@@ -344,7 +394,7 @@ function constructPromptFromState(sceneId: string, state: any): any {
     },
     characters: [
       {
-        id: "FACULTY_INQUISITOR",
+        id: "FACULTY_PETRA", // Updated to use correct ID
         pose: "dominant_stance_overlooking",
         expression: "predatory_grin",
         costume_id: "kinetic_uniform",
