@@ -2,9 +2,10 @@ import { create } from 'zustand';
 import { KnowledgeGraph } from '../lib/types/kgot';
 import { submitTurn } from '../actions/submitTurn';
 import { INITIAL_LEDGER } from '../constants';
-import { updateLedgerHelper, reconcileGraphHelper } from './stateHelpers';
+import { updateLedgerHelper } from './stateHelpers';
 import { createMultimodalSlice } from './multimodalSlice';
 import { LogEntry, CombinedGameStoreState } from '../types';
+import { KGotController } from '../controllers/KGotController';
 
 // Initial State for the KGoT
 const INITIAL_GRAPH: KnowledgeGraph = {
@@ -87,22 +88,17 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
       ? updateLedgerHelper(state.gameState.ledger, response.state_updates) 
       : state.gameState.ledger;
 
-    // 2. Update Graph (Reconcile KGoT)
-    const { nodes, edges } = reconcileGraphHelper(
-        state.kgot.nodes,
-        state.kgot.edges,
-        response.graph_updates
-    );
+    // 2. Update Graph (Reconcile KGoT using Controller)
+    const controller = new KGotController(state.kgot);
+    
+    if (response.graph_updates) {
+      controller.applyDelta(response.graph_updates);
+    }
 
-    const nextKgot: KnowledgeGraph = {
-        ...state.kgot,
-        nodes,
-        edges,
-        global_state: {
-            ...state.kgot.global_state,
-            turn_count: state.kgot.global_state.turn_count + 1
-        }
-    };
+    const nextKgot = controller.getGraph();
+    
+    // Increment global turn count in KGoT
+    nextKgot.global_state.turn_count = (state.kgot.global_state.turn_count || 0) + 1;
 
     return {
       gameState: {
