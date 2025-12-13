@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useGameStore } from '../state/gameStore';
-import { Play, Pause, FastForward, Rewind, Volume2, VolumeX, Loader2, RefreshCw, Speaker, Power } from 'lucide-react';
+import { Play, Pause, FastForward, Rewind, Volume2, VolumeX, Loader2, RefreshCw, Speaker, Power, AlertTriangle, ImageOff, MicOff } from 'lucide-react';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
 import { regenerateMediaForTurn } from '../state/mediaController';
 import { MediaStatus } from '../types';
@@ -28,7 +28,7 @@ const MediaPanel: React.FC<MediaPanelProps> = () => {
     pauseAudio,
     setVolume,
     setHasUserInteraction,
-    startSession // Destructured here
+    startSession 
   } = useGameStore();
 
   const currentTurn = currentTurnId ? getTurnById(currentTurnId) : undefined;
@@ -108,8 +108,8 @@ const MediaPanel: React.FC<MediaPanelProps> = () => {
   // Updated fallback UI with Manual Init Button
   if (!currentTurn) {
     return (
-      <div className="w-full h-full flex flex-col gap-4 items-center justify-center bg-forge-black text-forge-subtle font-mono text-xs uppercase p-8 text-center">
-        <span className="text-zinc-500">NO_NARRATIVE_TIMELINE_ACTIVE</span>
+      <div className="w-full h-full flex flex-col gap-4 items-center justify-center bg-forge-black text-forge-subtle font-mono text-xs uppercase p-8 text-center border-b border-stone-800">
+        <span className="text-zinc-500 animate-pulse tracking-widest">AWAITING_INPUT_SIGNAL</span>
         <p className="text-[10px] text-zinc-700 max-w-[200px]">
             The multimodal engine is waiting for the first narrative turn.
         </p>
@@ -127,15 +127,21 @@ const MediaPanel: React.FC<MediaPanelProps> = () => {
 
   return (
     <div className="relative w-full h-full bg-black flex flex-col items-center justify-center text-forge-text font-serif">
-      <div className="relative flex-1 w-full flex items-center justify-center bg-stone-950 overflow-hidden">
+      <div className="relative flex-1 w-full flex items-center justify-center bg-stone-950 overflow-hidden group">
+        
+        {/* Loading Overlay */}
         {(videoStatus === MediaStatus.pending || imageStatus === MediaStatus.pending || audioStatus === MediaStatus.pending) && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70 text-forge-gold animate-pulse">
-            <Loader2 size={32} className="animate-spin mb-4" />
-            <span className="font-mono text-xs uppercase tracking-widest">GENERATING_MEDIA...</span>
-            <span className="font-mono text-[10px] text-stone-500 mt-2">({imageStatus} | {audioStatus} | {videoStatus})</span>
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 text-forge-gold animate-pulse backdrop-blur-[2px]">
+            <Loader2 size={32} className="animate-spin mb-4 text-forge-gold opacity-80" />
+            <span className="font-mono text-xs uppercase tracking-widest text-forge-gold/80">GENERATING_MEDIA...</span>
+            <div className="flex gap-2 mt-2">
+                {imageStatus === MediaStatus.pending && <span className="text-[9px] bg-stone-800 px-1 text-white">IMG</span>}
+                {audioStatus === MediaStatus.pending && <span className="text-[9px] bg-stone-800 px-1 text-white">AUD</span>}
+            </div>
           </div>
         )}
 
+        {/* Content Render */}
         {videoUrl && videoStatus === MediaStatus.ready ? (
           <video
             src={videoUrl}
@@ -151,20 +157,28 @@ const MediaPanel: React.FC<MediaPanelProps> = () => {
             onLoad={() => setImageLoaded(true)}
           />
         ) : (
-          <div className="w-full h-full bg-stone-900 flex items-center justify-center">
-            <span className="font-display text-4xl text-forge-subtle opacity-30">NO_VISUAL_FEED</span>
+          <div className="w-full h-full bg-stone-900 flex flex-col items-center justify-center gap-4">
+            <span className="font-display text-4xl text-forge-subtle opacity-20">NO_VISUAL_FEED</span>
           </div>
         )}
 
-        {(imageStatus === MediaStatus.error || audioStatus === MediaStatus.error || videoStatus === MediaStatus.error) && (
-            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-red-950/80 text-white font-mono text-xs uppercase p-4">
-                <span className="text-red-400 mb-2">MEDIA_GENERATION_FAILED</span>
-                <button 
-                    onClick={() => handleRegenerateMedia()}
-                    className="mt-4 px-3 py-1 bg-red-700 hover:bg-red-600 text-white rounded-sm text-xs flex items-center gap-2"
-                >
-                    <RefreshCw size={12} /> RETRY
-                </button>
+        {/* Error Overlay - specific to type */}
+        {(imageStatus === MediaStatus.error || audioStatus === MediaStatus.error) && (
+            <div className="absolute top-4 right-4 z-30 flex flex-col gap-2 items-end pointer-events-none">
+                {imageStatus === MediaStatus.error && (
+                    <div className="flex items-center gap-2 bg-red-950/90 border border-red-800 p-2 rounded-sm pointer-events-auto">
+                        <ImageOff size={14} className="text-red-400" />
+                        <span className="text-[10px] text-red-200 font-mono">IMG_FAIL</span>
+                        <button onClick={() => handleRegenerateMedia('image')} className="text-red-400 hover:text-white" title="Retry Image"><RefreshCw size={12}/></button>
+                    </div>
+                )}
+                {audioStatus === MediaStatus.error && (
+                    <div className="flex items-center gap-2 bg-red-950/90 border border-red-800 p-2 rounded-sm pointer-events-auto">
+                        <MicOff size={14} className="text-red-400" />
+                        <span className="text-[10px] text-red-200 font-mono">AUD_FAIL</span>
+                        <button onClick={() => handleRegenerateMedia('audio')} className="text-red-400 hover:text-white" title="Retry Audio"><RefreshCw size={12}/></button>
+                    </div>
+                )}
             </div>
         )}
       </div>
@@ -174,7 +188,11 @@ const MediaPanel: React.FC<MediaPanelProps> = () => {
           <button onClick={goToPreviousTurn} className="p-2 text-stone-500 hover:text-forge-gold transition-colors"><Rewind size={20} /></button>
           <button
             onClick={handlePlayPause}
-            className="flex items-center justify-center w-10 h-10 rounded-full bg-forge-gold text-black shadow-lg hover:bg-yellow-400 transition-colors"
+            className={`flex items-center justify-center w-10 h-10 rounded-full shadow-lg transition-all duration-300
+                ${audioStatus === MediaStatus.ready 
+                    ? 'bg-forge-gold text-black hover:bg-yellow-400 hover:scale-105' 
+                    : 'bg-stone-800 text-stone-600 cursor-not-allowed'}
+            `}
             disabled={audioStatus !== MediaStatus.ready && !audioPlayback.isPlaying}
           >
             {audioPlayback.isPlaying && audioPlayback.currentPlayingTurnId === currentTurn.id ? <Pause size={20} /> : <Play size={20} />}
@@ -183,11 +201,11 @@ const MediaPanel: React.FC<MediaPanelProps> = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="font-mono text-[10px] text-stone-500">{formatTime((progress / 100) * (audioDuration || 0))}</span>
+          <span className="font-mono text-[10px] text-stone-500 w-8 text-right">{formatTime((progress / 100) * (audioDuration || 0))}</span>
           <div className="flex-1 h-1 bg-stone-800 rounded-full relative overflow-hidden">
             <div className="absolute inset-y-0 left-0 bg-forge-gold rounded-full transition-all duration-75 ease-linear" style={{ width: `${progress}%` }}></div>
           </div>
-          <span className="font-mono text-[10px] text-stone-500">{formatTime(audioDuration || 0)}</span>
+          <span className="font-mono text-[10px] text-stone-500 w-8">{formatTime(audioDuration || 0)}</span>
         </div>
 
         <div className="flex items-center gap-4 text-stone-500">

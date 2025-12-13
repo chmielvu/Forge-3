@@ -1,28 +1,75 @@
+
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { VISUAL_MANDATE, VIDEO_MANDATE } from '../config/visualMandate';
 
-// Client-side initialization for Vite
-const getAI = () => new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY as string });
+// Robust API Key Retrieval
+const getApiKey = (): string => {
+  // 1. Try process.env.API_KEY (injected by Vite define or Node)
+  try {
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env?.API_KEY) {
+      // @ts-ignore
+      return process.env.API_KEY;
+    }
+  } catch (e) {}
 
-const MAX_RETRIES = 3;
+  // 2. Try import.meta.env.VITE_GEMINI_API_KEY (Vite standard)
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) {
+      // @ts-ignore
+      return import.meta.env.VITE_GEMINI_API_KEY;
+    }
+  } catch (e) {}
+
+  // 3. Fallback check for direct replacement or other vars
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env?.API_KEY) {
+      // @ts-ignore
+      return import.meta.env.API_KEY;
+    }
+  } catch (e) {}
+
+  console.warn("API Key not found in process.env.API_KEY or VITE_GEMINI_API_KEY");
+  return '';
+};
+
+const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
+
+const MAX_RETRIES = 2; // Lowered to fail fast
 const BASE_DELAY = 1000;
+
+export class MediaGenerationError extends Error {
+    constructor(public type: 'SAFETY' | 'NETWORK' | 'QUOTA' | 'UNKNOWN', message: string) {
+        super(message);
+    }
+}
 
 // Helper for exponential backoff retries
 async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
   try {
     return await operation();
   } catch (error: any) {
-    if (retries > 0) {
-      // Retry on transient errors (503, 429) or fetch failures
-      const isRetryable = error.status === 503 || error.status === 429 || error.message?.includes('fetch failed');
-      if (isRetryable || retries > 1) { 
+    // Categorize Error
+    let type: MediaGenerationError['type'] = 'UNKNOWN';
+    if (error.status === 429) type = 'QUOTA';
+    else if (error.message?.includes('SAFETY') || error.response?.promptFeedback?.blockReason) type = 'SAFETY';
+    else if (error.message?.includes('fetch failed')) type = 'NETWORK';
+
+    if (type === 'SAFETY') {
+        console.warn(`[GeminiMediaService] Blocked by Safety settings. No retry.`);
+        throw new MediaGenerationError('SAFETY', 'Content blocked by safety filters.');
+    }
+
+    if (retries > 0 && (type === 'NETWORK' || type === 'QUOTA' || type === 'UNKNOWN')) {
          const delay = BASE_DELAY * (MAX_RETRIES - retries + 1);
-         console.warn(`[GeminiMediaService] Operation failed, retrying in ${delay}ms... (Attempts left: ${retries})`);
+         console.warn(`[GeminiMediaService] Operation failed (${type}), retrying in ${delay}ms... (Attempts left: ${retries})`);
          await new Promise(resolve => setTimeout(resolve, delay));
          return withRetry(operation, retries - 1);
-      }
     }
-    throw error;
+    
+    throw new MediaGenerationError(type, error.message || 'Unknown generation error');
   }
 }
 
@@ -31,6 +78,11 @@ async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES):
  * Uses Gemini 2.5 Flash Image (Nano Banana) for high-speed, coherent visual generation.
  */
 export async function generateImageAction(prompt: string): Promise<string | undefined> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+      throw new Error("API key is missing. Please provide a valid API key.");
+  }
+
   return withRetry(async () => {
     try {
       const ai = getAI();
@@ -49,6 +101,7 @@ export async function generateImageAction(prompt: string): Promise<string | unde
           safetySettings: [
             { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
             { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
           ],
           temperature: 0.7, 
         }
@@ -58,7 +111,6 @@ export async function generateImageAction(prompt: string): Promise<string | unde
       if (!data) throw new Error("No image data returned from Gemini.");
       return data;
     } catch (error) {
-      console.error("[GeminiMediaService] Image Generation Failed:", error);
       throw error;
     }
   });
@@ -69,6 +121,11 @@ export async function generateImageAction(prompt: string): Promise<string | unde
  * Uses Gemini 2.5 Flash TTS for character-specific voice synthesis.
  */
 export async function generateSpeechAction(text: string, voiceName: string): Promise<{ audioData: string; duration: number } | undefined> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+      throw new Error("API key is missing. Please provide a valid API key.");
+  }
+
   return withRetry(async () => {
     try {
       const ai = getAI();
@@ -99,7 +156,6 @@ export async function generateSpeechAction(text: string, voiceName: string): Pro
       return { audioData, duration };
 
     } catch (error) {
-      console.error("[GeminiMediaService] Audio Generation Failed:", error);
       throw error;
     }
   });
@@ -114,6 +170,9 @@ export async function generateVideoAction(
   visualPrompt: string, 
   aspectRatio: '16:9' | '9:16'
 ): Promise<string | undefined> {
+  const apiKey = getApiKey();
+  if (!apiKey) return undefined;
+
   try {
     const ai = getAI();
     const motionPrompt = `
@@ -163,7 +222,7 @@ export async function generateVideoAction(
     if (videoUri) {
       // 3. Fetch Result
       return await withRetry(async () => {
-        const response = await fetch(`${videoUri}&key=${(import.meta as any).env.VITE_GEMINI_API_KEY as string}`);
+        const response = await fetch(`${videoUri}&key=${apiKey}`);
         if (!response.ok) throw new Error(`Failed to fetch video asset: ${response.status}`);
         
         const blob = await response.blob();
@@ -184,7 +243,6 @@ export async function generateVideoAction(
     return undefined;
   } catch (e) {
     console.error("[GeminiMediaService] Veo Generation Failed:", e);
-    // Return undefined so the client handles it gracefully (e.g., falls back to image)
     return undefined; 
   }
 }
@@ -194,6 +252,9 @@ export async function generateVideoAction(
  * Uses Gemini Image to apply psychological distortion effects.
  */
 export async function distortImageAction(imageB64: string, instruction: string): Promise<string | undefined> {
+  const apiKey = getApiKey();
+  if (!apiKey) return undefined;
+
   return withRetry(async () => {
     try {
       const ai = getAI();

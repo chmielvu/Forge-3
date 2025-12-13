@@ -1,3 +1,4 @@
+
 /**
  * The Forge's Loom: Nano Banana Visual Generation Service
  * Implements Manara-Noir aesthetic with strict JSON-wrapped prompts
@@ -6,8 +7,20 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 
-// Lazy init for Vite
-const getAI = () => new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY as string });
+// Robust API Key Retrieval
+const getApiKey = (): string => {
+  try {
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env?.API_KEY) return process.env.API_KEY;
+  } catch (e) {}
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
+  } catch (e) {}
+  return '';
+};
+
+const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
 // ==================== SCHEMAS ====================
 
@@ -42,7 +55,8 @@ const VisualPromptSchema = z.object({
     pose: z.string(),
     expression: z.string(),
     costume_id: z.string(),
-    consistency_token: z.string()
+    consistency_token: z.string(),
+    internal_state_visuals: z.string().optional()
   })),
   environment: z.object({
     location_id: z.string(),
@@ -60,6 +74,11 @@ export async function generateSceneVisual(
   image_url?: string;
   error?: string;
 }> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+      return { success: false, error: "API key is missing" };
+  }
+
   try {
     // 1. Validate Input
     const validated = VisualPromptSchema.parse(promptData);

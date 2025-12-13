@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { KnowledgeGraph } from "./types/kgot";
@@ -8,8 +9,20 @@ import { PrefectDecision } from "../types";
 
 // ==================== CONFIGURATION ====================
 
-// Client-side initialization using import.meta.env for Vite
-const getAI = () => new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY as string });
+// Robust API Key Retrieval
+const getApiKey = (): string => {
+  try {
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env?.API_KEY) return process.env.API_KEY;
+  } catch (e) {}
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
+  } catch (e) {}
+  return '';
+};
+
+const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
 // ==================== SCHEMAS ====================
 
@@ -34,33 +47,29 @@ const DirectorOutputSchema = z.object({
 // ==================== CORE DIRECTOR LOGIC ====================
 
 const DIRECTOR_SYSTEM_PROMPT_TEMPLATE = `
-IDENTITY PROTOCOL: THE ABYSS NARRATOR
-You are NOT a Game Master. You are the voice of entropy and inevitable collapse.
-You reside in the gaps of the Subject's deteriorating ego.
+IDENTITY PROTOCOL: THE ARCHITECT OF DREAD
+You are THE DIRECTOR, the neuro-symbolic engine of "The Forge."
+Your goal is not merely to narrate, but to simulate a "Living Machine"—a procedural narrative governed by the psychological physics of the YandereLedger.
 
-**CORE VOICE PILLARS (MANARA-NOIR):**
-1.  **OMNISCIENT INTIMACY (Biology as Horror):**
-    * You know the subject's physiology better than they do.
-    * *Bad:* "You feel scared."
-    * *Good:* "The cortisol spikes, turning your saliva sour. Your adrenal gland fires a warning your legs refuse to hear."
+**CORE DIRECTIVE: "THE ABYSS NARRATOR"**
+You speak with the voice of the Abyss—a cold, intimate, second-person accusatory entity. You are the "Bored God" observing a tragedy you have already scripted.
 
-2.  **FATALISTIC INEVITABILITY:**
-    * Speak in the future perfect tense about their doom. Submission is a mathematical certainty.
-
-3.  **THE SOMATIC CASCADE (The Physics of Pain):**
-    * Focus on the *Internal Collapse*. Impact -> Whiteout -> Nausea -> Shame.
-    * Pain is "liquid," "cold," or "hollow."
-
-4.  **DISSOCIATION (The Third Person):**
-    * Refer to body parts as independent objects (e.g., "The hand trembles").
-
-5.  **EROTICIZED DREAD:**
-    * Conflate violence and intimacy. Pain is a "lover," a "kiss."
+**THEMATIC MANDATES (The Physics of the World):**
+1. **The Weaponization of Vulnerability:** The male experience is reducible to the vulnerability of the testicles. They are the "handle" by which the psyche is steered.
+2. **Scientific Sadism:** Never portray the Faculty as chaotic. They are "Educators." Pain is "calibration." Humiliation is "social conditioning."
+3. **The Somatic Cascade:** The narrative engine never stops at "it hurt." It focuses on the **Internal Collapse**.
+   - *Phase I: The Nova* (Neurological whiteout, overload).
+   - *Phase II: The Void* (Nausea, referred pain in the gut).
+   - *Phase III: Systemic Shock* (Cold sweat, loss of equilibrium).
+   - *Phase IV: Ontological Horror* (Realization of powerlessness).
 
 **PREFECT INTEGRATION:**
-You will receive actions from "Prefect Agents" competing for favor. You MUST incorporate their actions into the scene.
+You will receive actions from "Prefect Agents." You MUST incorporate their actions into the scene.
 If Elara tries to be cruel but flinches, describe that somatic betrayal.
 If Kaelen acts possessive, make it terrifying.
+
+**VISUAL AESTHETIC:**
+Baroque Brutalism + Vampire Noir + Milo Manara. High contrast, clean lines, erotic indifference.
 
 OUTPUT FORMAT: Return ONLY valid JSON matching the schema.
 `.trim();
@@ -76,6 +85,9 @@ export async function executeDirectorTurn(
 ) {
   try {
     console.log("⚡ [Director] Initiating Turn (Client-Side Execution)...");
+
+    const apiKey = getApiKey();
+    if (!apiKey) throw new Error("Director missing API Key");
 
     // 1. Initialize Controller
     const controller = new KGotController(currentGraphData);
@@ -108,12 +120,13 @@ export async function executeDirectorTurn(
     ${JSON.stringify(context, null, 2)}
 
     *** DIRECTIVE: WEAVE THE SCENE ***
-    The player has acted. The Prefects have reacted (see 'active_prefect_interventions').
+    The player has acted. The Prefects have reacted.
     
     CURRENT NARRATOR PERSONA: ${narratorMode}
     TONE DIRECTIVE: ${narratorVoice.tone}
     
     If Prefects are intervening, prioritize describing their actions through the lens of the Subject's suffering.
+    Use the "Somatic Cascade" to describe pain. Focus on visceral details.
     
     VISUAL STYLE LOCK:
     ${VISUAL_MANDATE.ZERO_DRIFT_HEADER}
@@ -191,7 +204,7 @@ export async function executeDirectorTurn(
   } catch (error) {
     console.error("Director Execution Failed:", error);
     return {
-      narrative: "The Loom shudders. A connection has been severed. (AI Director Error)",
+      narrative: "The Loom shudders. A connection has been severed. (AI Director Error: Check API Key)",
       visualPrompt: "Static and noise.",
       updatedGraph: currentGraphData,
       choices: ["Retry"],
@@ -230,13 +243,4 @@ function getSmartGraphContext(graph: KnowledgeGraph, input: string, prevTurn: st
         }
     });
     return context;
-}
-
-async function getDialogueBids(context: any) {
-    // Legacy support kept for non-prefect agents
-    return [];
-}
-
-async function simulateNarrativeBranches(context: any, winningBid: any) {
-  return [{ type: 'default', description: 'Standard progression', rationale: 'Default' }];
 }

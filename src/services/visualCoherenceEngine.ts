@@ -5,8 +5,8 @@ import { VISUAL_MANDATE, LIGHTING_PRESETS } from '../config/visualMandate';
 import { FORGE_MOTIFS, ARCHETYPE_VISUAL_MAP } from '../data/motifs';
 
 /**
- * COHERENCE ENGINE V2.2 (Psych-Enhanced)
- * Ensures visual continuity and deep psychological resonance.
+ * COHERENCE ENGINE V2.6 (Psych-Somatic Mapping)
+ * Ensures visual continuity and maps internal psychological conflict to external visual tells.
  */
 class VisualCoherenceEngine {
   private memory: VisualMemory;
@@ -151,6 +151,9 @@ class VisualCoherenceEngine {
     } else if (lower.includes("cell") || lower.includes("cage")) {
         location = "isolation cell, rusted iron, damp stone";
         lightingScheme = LIGHTING_PRESETS.Harsh;
+    } else if (lower.includes("calibration") || lower.includes("slab")) {
+        location = "The Calibration Chamber, black basalt, surgical spotlight";
+        lightingScheme = LIGHTING_PRESETS.Harsh;
     }
 
     // Atmosphere Logic based on Ledger
@@ -199,22 +202,42 @@ class VisualCoherenceEngine {
         attire: map.attire || "uniform"
       };
 
-      // Trait -> Visual Mapping
+      // Trait -> Visual Mapping (PDF Alignment)
       if (dna.traitVector.cruelty > 0.7) {
         moodModifiers.push("predatory", "sharp-angled");
         aestheticInjects.push(FORGE_MOTIFS.TeasingCruelty);
       }
-      if (dna.traitVector.submission_to_authority > 0.8) {
+      
+      // Elara-specific: Internal Conflict (Flinching Zealot)
+      if (dna.id.includes('LOYALIST') || dna.traitVector.submission_to_authority > 0.8) {
         moodModifiers.push("rigid", "anxious-perfection");
-        aestheticInjects.push("hands clasped tight", "stiff posture");
+        aestheticInjects.push("hands clasped tight until knuckles white", "posture too stiff", "eyes wide with suppressed panic");
+        if (narrativeText.includes("strike") || narrativeText.includes("punish")) {
+            aestheticInjects.push("subtle flinch", "micro-expression of horror");
+        }
       }
+      
+      // Kaelen-specific: The Obsessive (Yandere/Dere Switch)
+      if (dna.id.includes('OBSESSIVE') || dna.archetype === 'The Yandere') {
+         if (narrativeText.includes("blood") || narrativeText.includes("knife") || narrativeText.includes("dead")) {
+             moodModifiers.push("dead-eyed", "hollow", "yan-mode");
+             aestheticInjects.push("flat affect", "dilated pupils", "empty smile");
+         } else {
+             moodModifiers.push("adoring", "dere-mode");
+             aestheticInjects.push("flushed cheeks", "wide innocent eyes");
+         }
+      }
+
+      // Ambition -> Dominance
       if (dna.traitVector.ambition > 0.8) {
         moodModifiers.push("looming", "commanding");
-        aestheticInjects.push("chin raised", "center frame composition");
+        aestheticInjects.push("chin raised", "center frame composition", "looking down at viewer");
       }
+      
+      // Cunning -> Shadows
       if (dna.traitVector.cunning > 0.7) {
         moodModifiers.push("observant", "calculating");
-        aestheticInjects.push("eyes in shadow", "half-smile");
+        aestheticInjects.push("eyes in shadow", "half-smile", "reflecting light in glasses/eyes");
       }
 
       // Favor Score -> Lighting/Atmosphere Mapping
@@ -224,11 +247,6 @@ class VisualCoherenceEngine {
       } else if (dna.favorScore < 30) {
         aestheticInjects.push("swallowed by shadows", "sweat on brow", "desperate eyes");
         moodModifiers.push("condemned", "fearful");
-      }
-
-      // Weakness Foreshadowing (Subtle)
-      if (dna.favorScore < 40) {
-         aestheticInjects.push(`visual hint of weakness: ${dna.secretWeakness.substring(0, 20)}...`);
       }
     }
 

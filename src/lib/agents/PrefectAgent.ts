@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { PrefectDNA, FilteredSceneContext, PrefectThought, PrefectArchetype, TraitVector } from '../../types';
 
@@ -5,7 +6,6 @@ type ConversationHistory = { role: 'user' | 'model'; content: string }[];
 
 // Helper to inject behavioral instructions based on archetype
 function getArchetypeBehavior(archetype: PrefectArchetype, traits: TraitVector): string {
-  // ... [Keep existing implementation logic, just updating the class]
   const behaviors: Record<string, string> = {
     'The Zealot': `- Quote Yala's texts to justify cruelty\n- Flinch visibly at violence you order, then immediately rationalize it\n- High submission means you NEVER openly defy Faculty\n- Lecture Subjects on the "privilege" of their suffering`,
     'The Yandere': `- Subject 84 is YOUR property - eliminate anyone who gets close\n- Dere mode: Soft whispers, gentle touches. Yan mode: Dead eyes, monotone threats.\n- Switch INSTANTLY if you perceive threat to your possession`,
@@ -70,6 +70,19 @@ ${getArchetypeBehavior(prefect.archetype, prefect.traitVector)}
 }
 `;
 
+// Robust API Key Retrieval
+const getApiKey = (): string => {
+  try {
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env?.API_KEY) return process.env.API_KEY;
+  } catch (e) {}
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
+  } catch (e) {}
+  return '';
+};
+
 export class PrefectAgent {
   private client: GoogleGenAI;
   public dna: PrefectDNA;
@@ -77,8 +90,7 @@ export class PrefectAgent {
   
   constructor(dna: PrefectDNA) {
     this.dna = dna;
-    // Vite-compliant API Key access
-    this.client = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY as string });
+    this.client = new GoogleGenAI({ apiKey: getApiKey() });
     this.history = [];
   }
 
