@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import { KnowledgeGraph } from '../lib/types/kgot';
 import { submitTurn } from '../actions/submitTurn';
@@ -7,35 +8,9 @@ import { createMultimodalSlice } from './multimodalSlice';
 import { LogEntry, CombinedGameStoreState } from '../types';
 import { KGotController } from '../controllers/KGotController';
 
-// Initial State for the KGoT
-const INITIAL_GRAPH: KnowledgeGraph = {
-  nodes: {
-    'FACULTY_SELENE': {
-      id: 'FACULTY_SELENE',
-      type: 'ENTITY',
-      label: 'The Provost',
-      attributes: { dominance: 1.0, location: 'The High Tower' }
-    },
-    'FACULTY_PETRA': {
-        id: 'FACULTY_PETRA',
-        type: 'ENTITY',
-        label: 'The Inquisitor',
-        attributes: { aggression: 0.9, location: 'The Courtyard' }
-    },
-    'LOC_COURTYARD': {
-      id: 'LOC_COURTYARD',
-      type: 'LOCATION',
-      label: 'The Weeping Courtyard',
-      attributes: { atmosphere: 'oppressive', weather: 'rain' }
-    }
-  },
-  edges: [],
-  global_state: {
-    turn_count: 0,
-    tension_level: 10,
-    narrative_phase: 'ACT_1'
-  }
-};
+// Initialize the Controller to get the canonical graph
+const controller = new KGotController({ nodes: {}, edges: [], global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' } });
+const INITIAL_GRAPH: KnowledgeGraph = controller.getGraph();
 
 const INITIAL_GAME_STATE = {
     ledger: INITIAL_LEDGER,
@@ -83,13 +58,18 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
   })),
 
   applyDirectorUpdates: (response) => set((state) => {
-    // 1. Update Ledger
+    // 1. Update Ledger (Standard Game State)
     const nextLedger = response.state_updates 
       ? updateLedgerHelper(state.gameState.ledger, response.state_updates) 
       : state.gameState.ledger;
 
     // 2. Update Graph (Reconcile KGoT using Controller)
     const controller = new KGotController(state.kgot);
+    
+    // Sync ledger to KGoT node if player node exists
+    if (state.kgot.nodes['Subject_84']) {
+        controller.updateLedger('Subject_84', nextLedger);
+    }
     
     if (response.graph_updates) {
       controller.applyDelta(response.graph_updates);
@@ -142,6 +122,9 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
 
         // Normally we would update KGoT here based on result.updatedGraph, but submitTurn returns the full graph in this mock
         // In a real delta scenario, we'd merge.
+        if (result.updatedGraph) {
+           set({ kgot: result.updatedGraph });
+        }
         
     } catch (e) {
         console.error(e);
@@ -151,9 +134,12 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
 
   resetGame: () => {
     get().resetMultimodalState();
+    // Re-initialize controller for fresh graph
+    const freshController = new KGotController({ nodes: {}, edges: [], global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' } });
+    
     set({
       gameState: INITIAL_GAME_STATE,
-      kgot: INITIAL_GRAPH,
+      kgot: freshController.getGraph(),
       logs: [],
       choices: [],
       isThinking: false,

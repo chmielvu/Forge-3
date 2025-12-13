@@ -32,7 +32,8 @@ export async function submitTurn(prevState: any, formData: FormData) {
       visualPrompt: result.visualPrompt,
       updatedGraph: result.updatedGraph,
       choices: result.choices,
-      thoughtProcess: result.thoughtProcess
+      thoughtProcess: result.thoughtProcess,
+      state_updates: result.state_updates
     };
   } catch (e) {
     console.error(e);
