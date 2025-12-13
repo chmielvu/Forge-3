@@ -1,12 +1,13 @@
 
 import { create } from 'zustand';
 import { KnowledgeGraph } from '../lib/types/kgot';
-import { submitTurn } from '../actions/submitTurn';
+import { submitTurn } from '../app/actions';
 import { INITIAL_LEDGER } from '../constants';
 import { updateLedgerHelper } from './stateHelpers';
 import { createMultimodalSlice } from './multimodalSlice';
 import { LogEntry, CombinedGameStoreState } from '../types';
 import { KGotController } from '../controllers/KGotController';
+import { enqueueTurnForMedia } from './mediaController';
 
 // Initialize the Controller to get the canonical graph
 const controller = new KGotController({ nodes: {}, edges: [], global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' } });
@@ -57,31 +58,76 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
     logs: state.logs.map(log => log.id === logId ? { ...log, ...media } : log)
   })),
 
-  // NEW: Handle Server Action Result directly
-  applyServerState: (result: any) => set((state) => {
-      const newLogs = [...state.logs];
-      if (result.thoughtProcess) {
-          newLogs.push({ id: `thought-${Date.now()}`, type: 'thought', content: result.thoughtProcess });
-      }
+  // Handle Server Action Result directly
+  applyServerState: (result: any) => {
+      // 1. Register Multimodal Turn if valid narrative exists
+      let newTurnId: string | null = null;
       if (result.narrative) {
-          newLogs.push({ id: `narrative-${Date.now()}`, type: 'narrative', content: result.narrative, visualContext: result.visualPrompt });
-      }
-      
-      // Update KGoT if provided
-      let nextKgot = state.kgot;
-      if (result.updatedGraph) {
-          // Could invoke KGotController here if reconciliation needed, 
-          // but if server sends full graph, we can replace.
-          nextKgot = result.updatedGraph;
+          const newTurn = get().registerTurn(result.narrative, result.visualPrompt, {
+              ledgerSnapshot: result.state_updates ? { ...get().gameState.ledger, ...result.state_updates } : get().gameState.ledger,
+              directorDebug: result.thoughtProcess
+          });
+          newTurnId = newTurn.id;
+          
+          // Trigger media generation
+          enqueueTurnForMedia(
+            newTurn, 
+            'Subject_84', 
+            get().gameState.ledger
+          );
       }
 
-      return {
-          kgot: nextKgot,
-          choices: result.choices || [],
-          logs: newLogs,
-          isThinking: false
-      };
-  }),
+      // 2. Update Core State
+      set((state) => {
+          const newLogs = [...state.logs];
+          
+          if (result.thoughtProcess) {
+              newLogs.push({ id: `thought-${Date.now()}`, type: 'thought', content: result.thoughtProcess });
+          }
+          
+          // Add narrative log linked to multimodal turn if possible
+          if (result.narrative) {
+              newLogs.push({ 
+                  id: newTurnId || `narrative-${Date.now()}`, 
+                  type: 'narrative', 
+                  content: result.narrative, 
+                  visualContext: result.visualPrompt 
+              });
+          }
+
+          // Add psychosis text if present
+          if (result.psychosisText) {
+              newLogs.push({
+                  id: `psychosis-${Date.now()}`,
+                  type: 'psychosis',
+                  content: result.psychosisText
+              });
+          }
+          
+          // Update KGoT if provided
+          let nextKgot = state.kgot;
+          if (result.updatedGraph) {
+              nextKgot = result.updatedGraph;
+          }
+
+          // Update Ledger if provided
+          let nextLedger = state.gameState.ledger;
+          if (result.state_updates) {
+             nextLedger = updateLedgerHelper(state.gameState.ledger, result.state_updates);
+          }
+
+          return {
+              kgot: nextKgot,
+              choices: result.choices || [],
+              logs: newLogs,
+              isThinking: false,
+              gameState: {
+                  ...state.gameState,
+                  ledger: nextLedger
+              }
+          };
+      });
+  },
 
   applyDirectorUpdates: (response) => set((state) => {
     // 1. Update Ledger (Standard Game State)
@@ -125,30 +171,25 @@ export const useGameStore = create<CombinedGameStoreState>((set, get, api) => ({
     set({ isThinking: true });
     
     try {
-        const result = await submitTurn({
-            sessionId: 'session-1',
-            playerAction: { type: 'INTERACT', payload: input },
-            currentGraph: state.kgot
-        });
+        const result = await submitTurn(
+            {}, 
+            (() => {
+                const fd = new FormData();
+                fd.append('input', input);
+                fd.append('history', JSON.stringify(state.logs.filter(l => l.type === 'narrative').map(l => l.content)));
+                fd.append('currentGraph', JSON.stringify(state.kgot));
+                return fd;
+            })()
+        );
 
-        // Register new multimodal turn
-        const newTurn = state.registerTurn(result.narrative, JSON.stringify(result.visuals), {
-            ledgerSnapshot: state.gameState.ledger,
-            directorDebug: result.thought_process
-        });
-
-        set(s => ({
-            choices: result.choices,
-            logs: [...s.logs, 
-                { id: `thought-${Date.now()}`, type: 'thought', content: result.thought_process },
-                { id: newTurn.id, type: 'narrative', content: newTurn.text }
-            ],
-            isThinking: false
-        }));
-
-        if (result.updatedGraph) {
-           set({ kgot: result.updatedGraph });
+        if ((result as any).error) {
+            console.error((result as any).error);
+            set({ isThinking: false });
+            return;
         }
+
+        // Apply state updates
+        get().applyServerState(result);
         
     } catch (e) {
         console.error(e);

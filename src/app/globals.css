@@ -1,0 +1,68 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --forge-black: #050505;
+    --forge-gold: #facc15;
+    --forge-crimson: #881337;
+    --forge-subtle: #78716c;
+    
+    --font-display: 'Cinzel', serif;
+    --font-serif: 'Cormorant Garamond', serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    background-color: var(--forge-black);
+    color: #f5f5f4;
+  }
+}
+
+@layer utilities {
+  .mask-image-gradient {
+    mask-image: linear-gradient(to bottom, black 90%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 90%, transparent 100%);
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(28, 25, 23, 0.3);
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #78716c;
+    border-radius: 3px;
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .bg-radial-gradient-crimson {
+     background: radial-gradient(circle, rgba(136,19,55,0.15) 0%, rgba(0,0,0,0) 70%);
+  }
+
+  .animate-glitch-text {
+    animation: glitch-anim 2s infinite linear alternate-reverse;
+  }
+
+  @keyframes glitch-anim {
+    0% { opacity: 1; transform: skewX(0deg); }
+    5% { opacity: 0.8; transform: skewX(10deg); filter: blur(1px); }
+    10% { opacity: 1; transform: skewX(0deg); filter: none; }
+    90% { opacity: 1; transform: skewX(0deg); }
+    95% { opacity: 0.9; transform: skewX(-5deg); text-shadow: 2px 0 red, -2px 0 blue; }
+    100% { opacity: 1; transform: skewX(0deg); }
+  }
+}

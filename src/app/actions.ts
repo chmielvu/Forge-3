@@ -1,4 +1,3 @@
-
 'use server';
 
 import { z } from "zod";
@@ -36,7 +35,7 @@ export async function submitTurn(prevState: any, formData: FormData) {
   }
 
   // 3. Parse JSON strings (History and Graph are passed as hidden inputs)
-  let history = [];
+  let history: string[] = [];
   let currentGraph = {};
 
   try {

@@ -1,3 +1,3 @@
 
-// DEPRECATED: This file is no longer used in the Next.js architecture.
-// Please refer to src/app/page.tsx for the application entry point.
+// DEPRECATED: This project uses Next.js.
+// Entry point is src/app/layout.tsx and src/app/page.tsx

@@ -1,3 +1,4 @@
+
 import { KnowledgeGraph } from './lib/types/kgot';
 
 export enum CharacterId {
@@ -34,7 +35,7 @@ export interface GraphLink {
 
 export interface LogEntry {
   id: string;
-  type: 'system' | 'narrative' | 'thought' | 'tool_output';
+  type: 'system' | 'narrative' | 'thought' | 'tool_output' | 'psychosis';
   content: string;
   visualContext?: string; 
   imageData?: string; 
@@ -505,6 +506,7 @@ export interface CombinedGameStoreState extends MultimodalSliceExports {
   updateGameState: (updates: Partial<GameState>) => void;
   applyDirectorUpdates: (response: DirectorOutput) => void;
   processPlayerTurn: (input: string) => Promise<void>;
+  applyServerState: (result: any) => void; // Added applyServerState
   
   // System
   resetGame: () => void;

@@ -6,10 +6,11 @@ import { submitTurn } from './actions';
 import { useGameStore } from '@/state/gameStore';
 import NarrativeLog from '@/components/NarrativeLog';
 import NetworkGraph from '@/components/NetworkGraph';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const INITIAL_STATE = { narrative: "The Iron Sandbox Initialized.", updatedGraph: null, choices: [], thoughtProcess: "" };
 
-export default function Page() {
+function GameInterface() {
   const [state, formAction, isPending] = useActionState(submitTurn, INITIAL_STATE);
   const { applyServerState, setThinking, kgot, logs } = useGameStore();
 
@@ -29,10 +30,8 @@ export default function Page() {
     formData.append("input", choice);
     formData.append("history", JSON.stringify(logs.filter(l => l.type === 'narrative').map(l => l.content)));
     formData.append("currentGraph", JSON.stringify(kgot));
-    // We cannot call formAction directly here as it expects the payload from the form event usually, 
-    // but in Next.js useActionState, we can call it with FormData.
-    // However, it's bound to the form. 
-    // To trigger it programmatically:
+    
+    // Programmatically trigger the form submission
     const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
     const inputField = document.querySelector('input[name="input"]') as HTMLInputElement;
     if (inputField && submitBtn) {
@@ -61,7 +60,7 @@ export default function Page() {
             thinking={isPending} 
             choices={useGameStore.getState().choices} 
             onChoice={handleChoice} 
-            ledger={{}} 
+            ledger={useGameStore.getState().gameState.ledger} 
           />
         </div>
         
@@ -90,5 +89,13 @@ export default function Page() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function Page() {
+  return (
+    <ErrorBoundary>
+      <GameInterface />
+    </ErrorBoundary>
   );
 }

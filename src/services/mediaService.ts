@@ -1,10 +1,29 @@
+
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { YandereLedger, PrefectDNA, CharacterId, MultimodalTurn } from "../types";
 import { BEHAVIOR_CONFIG } from "../config/behaviorTuning"; 
 import { visualCoherenceEngine } from './visualCoherenceEngine';
 import { VISUAL_MANDATE, VIDEO_MANDATE } from '../config/visualMandate';
+import { CharacterId as CId } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+// Voice Mapping for specific characters
+export const CHARACTER_VOICE_MAP: Record<string, string> = {
+  [CId.PROVOST]: 'Zephyr', // Authoritative, Calm
+  [CId.INQUISITOR]: 'Fenrir', // Aggressive, Wild
+  [CId.LOGICIAN]: 'Charon', // Deep, Analytical
+  [CId.CONFESSOR]: 'Kore', // Soft, Whispering
+  [CId.ASTRA]: 'Puck', // Anxious, Higher pitch
+  [CId.OBSESSIVE]: 'Kore', // Dere-mode (Soft)
+  [CId.LOYALIST]: 'Puck', // Brittle, Sharp
+  [CId.DISSIDENT]: 'Fenrir', // Intense
+  'Subject_84': 'Charon' // Internal monologue
+};
+
+export const getCharacterVoiceId = (charId: string): string => {
+  return CHARACTER_VOICE_MAP[charId] || 'Zephyr';
+};
 
 // --- VISUAL PROMPT BUILDERS ---
 
@@ -101,6 +120,9 @@ export const generateNarrativeImage = async (
 
 // --- AUDIO ENGINE ---
 
+/**
+ * Heuristic fallback if no explicit voice ID is provided
+ */
 const selectVoiceForNarrative = (narrative: string): string => {
   const lower = narrative.toLowerCase();
   if (lower.includes('shout') || lower.includes('fury') || lower.includes('petra')) return 'Fenrir';
@@ -109,14 +131,14 @@ const selectVoiceForNarrative = (narrative: string): string => {
   return 'Zephyr'; // Selene/Default
 };
 
-export const generateSpeech = async (narrative: string): Promise<{ audioData: string; duration: number } | undefined> => {
+export const generateSpeech = async (narrative: string, voiceIdOverride?: string): Promise<{ audioData: string; duration: number } | undefined> => {
   if (!BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableAudio) {
     if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log("[mediaService] Audio generation is disabled by config.");
     return Promise.resolve(undefined);
   }
 
   try {
-    const voiceName = selectVoiceForNarrative(narrative);
+    const voiceName = voiceIdOverride || selectVoiceForNarrative(narrative);
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-preview-tts',
       contents: { parts: [{ text: narrative }] },
@@ -217,14 +239,15 @@ export const generateEnhancedMedia = async (
   visualPrompt: string, 
   ledger: YandereLedger,
   target: PrefectDNA | CharacterId, 
-  previousTurn?: MultimodalTurn
+  previousTurn?: MultimodalTurn,
+  narratorVoiceId?: string
 ): Promise<{ audioData?: string, imageData?: string, videoData?: string }> => {
   
   // 1. Generate Image (Internal buildVisualPrompt call)
   const imagePromise = generateNarrativeImage(target, visualPrompt, ledger, narrative, previousTurn);
   
   // 2. Generate Audio
-  const audioPromise = generateSpeech(narrative);
+  const audioPromise = generateSpeech(narrative, narratorVoiceId);
 
   let videoPromise: Promise<string | undefined> = Promise.resolve(undefined);
   

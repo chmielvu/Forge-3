@@ -1,8 +1,10 @@
+
 import { useGameStore } from './gameStore';
 import { generateNarrativeImage, generateSpeech, animateImageWithVeo, buildVisualPrompt } from '../services/mediaService';
 import { MediaQueueItem, MediaStatus, MultimodalTurn, CharacterId, YandereLedger, PrefectDNA } from '../types';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
 import { INITIAL_LEDGER } from '../constants';
+import { selectNarratorMode, NARRATOR_VOICES } from '../services/narratorEngine';
 
 // Use number for browser-compatible timer type
 let mediaProcessingTimeout: number | null = null;
@@ -41,7 +43,16 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
         break;
       case 'audio':
         if (BEHAVIOR_CONFIG.ANIMATION.ENABLE_TTS && BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableAudio) {
-          const result = await generateSpeech(item.narrativeText || item.prompt);
+          // Determine voice ID based on ledger state
+          const ledger = turn.metadata?.ledgerSnapshot || INITIAL_LEDGER;
+          const mode = selectNarratorMode(ledger);
+          const voiceId = NARRATOR_VOICES[mode]?.voiceId || 'Zephyr';
+
+          const result = await generateSpeech(
+             item.narrativeText || item.prompt, 
+             voiceId
+          );
+
           if (result && typeof result !== 'string') {
              dataUrl = result.audioData;
              duration = result.duration;
