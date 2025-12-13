@@ -1,4 +1,4 @@
-
+import { KnowledgeGraph } from './lib/types/kgot';
 
 export enum CharacterId {
   PROVOST = 'Provost_Selene',
@@ -477,6 +477,7 @@ export interface MultimodalSliceExports {
 export interface CombinedGameStoreState extends MultimodalSliceExports {
   // Core Game State
   gameState: GameState;
+  kgot: KnowledgeGraph;
   logs: LogEntry[]; 
   choices: string[];
   
@@ -503,6 +504,7 @@ export interface CombinedGameStoreState extends MultimodalSliceExports {
   // Complex Updates
   updateGameState: (updates: Partial<GameState>) => void;
   applyDirectorUpdates: (response: DirectorOutput) => void;
+  processPlayerTurn: (input: string) => Promise<void>;
   
   // System
   resetGame: () => void;

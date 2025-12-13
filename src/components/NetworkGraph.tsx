@@ -1,7 +1,13 @@
+
+'use client';
+
 import React, { useEffect, useRef, useMemo } from 'react';
 import * as d3 from 'd3';
-import { useGameStore } from '../state/gameStore';
-import { KGotNode, KGotEdge } from '../lib/types/kgot';
+import { KnowledgeGraph, KGotEdge } from '../lib/types/kgot';
+
+interface Props {
+  graphData: KnowledgeGraph;
+}
 
 interface SimulationNode extends d3.SimulationNodeDatum {
   id: string;
@@ -11,36 +17,34 @@ interface SimulationNode extends d3.SimulationNodeDatum {
 }
 
 const NODE_COLORS = {
-  ENTITY: '#ef4444', // Red-500
-  LOCATION: '#3b82f6', // Blue-500
-  EVENT: '#eab308', // Yellow-500
-  CONCEPT: '#a855f7', // Purple-500
+  ENTITY: '#ef4444', 
+  LOCATION: '#3b82f6',
+  EVENT: '#eab308',
+  CONCEPT: '#a855f7',
 };
 
-const NetworkGraph: React.FC = () => {
-  const kgot = useGameStore((state) => (state as any).kgot); // Access new KGoT state
+const NetworkGraph: React.FC<Props> = ({ graphData }) => {
   const svgRef = useRef<SVGSVGElement>(null);
 
-  // Transform KGoT structure to D3 structure
   const simulationNodes = useMemo(() => {
-    if (!kgot || !kgot.nodes) return [];
-    return Object.values(kgot.nodes).map((n: any) => ({
+    if (!graphData || !graphData.nodes) return [];
+    return Object.values(graphData.nodes).map((n: any) => ({
       id: n.id,
       label: n.label,
       group: n.type,
       val: n.type === 'ENTITY' ? 20 : 10
     })) as SimulationNode[];
-  }, [kgot]);
+  }, [graphData]);
 
   const simulationLinks = useMemo(() => {
-    if (!kgot || !kgot.edges) return [];
-    return kgot.edges.map((e: KGotEdge) => ({
+    if (!graphData || !graphData.edges) return [];
+    return graphData.edges.map((e: KGotEdge) => ({
       source: e.source,
       target: e.target,
       label: e.label,
       value: e.weight
     })) as d3.SimulationLinkDatum<SimulationNode>[];
-  }, [kgot]);
+  }, [graphData]);
 
   useEffect(() => {
     if (!svgRef.current || simulationNodes.length === 0) return;
@@ -127,9 +131,6 @@ const NetworkGraph: React.FC = () => {
 
   return (
     <div className="w-full h-full bg-slate-950 border border-slate-800 rounded-lg overflow-hidden relative">
-       <div className="absolute top-2 right-2 text-xs font-mono text-slate-500">
-        KGoT Nodes: {simulationNodes.length} | Edges: {simulationLinks.length}
-      </div>
       <svg ref={svgRef} className="w-full h-full" />
     </div>
   );

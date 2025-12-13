@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useGameStore } from './state/gameStore';
 import { turnService } from './state/turnService'; // Keep for init
@@ -15,6 +16,7 @@ import { Menu, Terminal, Activity, Zap, X } from 'lucide-react';
 const App: React.FC = () => {
   const { 
     gameState,
+    kgot,
     logs,
     choices,
     isThinking,
@@ -117,7 +119,7 @@ const App: React.FC = () => {
             <div className="flex-1 max-w-2xl space-y-8 pt-10">
                <h2 className="font-display text-3xl text-forge-gold border-b border-forge-gold/30 pb-4">Knowledge Graph (KGoT)</h2>
                <div className="h-[400px] w-full">
-                 <NetworkGraph />
+                 <NetworkGraph graphData={kgot} />
                </div>
             </div>
             
