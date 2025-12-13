@@ -4,12 +4,12 @@ import { VISUAL_MANDATE, LIGHTING_PRESETS } from '../config/visualMandate';
 import { FORGE_MOTIFS, ARCHETYPE_VISUAL_MAP } from '../data/motifs';
 
 /**
- * COHERENCE ENGINE V2
+ * COHERENCE ENGINE V2.1 (Text-Aware)
  * Ensures visual continuity across turns by tracking:
- * - Character appearance consistency (clothing, injuries)
- * - Environmental continuity
+ * - Character appearance consistency (clothing, injuries) inferred from Ledger AND Narrative
+ * - Environmental continuity extracted from Scene Context
  * - Lighting/time consistency
- * - Emotional state visualization
+ * - Emotional state visualization via Sentiment Heuristics
  */
 class VisualCoherenceEngine {
   private memory: VisualMemory;
@@ -40,11 +40,11 @@ class VisualCoherenceEngine {
     narrativeText: string,
     previousTurn?: MultimodalTurn
   ): string {
-    // 1. Update character state based on ledger
-    this.updateCharacterStates(target, ledger);
+    // 1. Update character state based on ledger AND text
+    this.updateCharacterStates(target, ledger, narrativeText);
     
-    // 2. Determine environmental continuity from text
-    this.inferEnvironmentFromContext(sceneContext); 
+    // 2. Determine environmental continuity from text AND ledger
+    this.inferEnvironmentFromContext(sceneContext, ledger); 
     
     // 3. Build base prompt with strict continuity directives
     const basePromptParts = this.constructBasePrompt(target, sceneContext, ledger, narrativeText);
@@ -68,7 +68,7 @@ class VisualCoherenceEngine {
       
       // Logic & Continuity
       sceneContext: sceneContext.substring(0, 300),
-      narrativeTone: this.inferEmotionalState(ledger),
+      narrativeTone: this.inferEmotionalState(ledger, narrativeText),
       continuity: continuityDirectives,
       styleConsistency: styleConsistencyLock,
       
@@ -81,30 +81,51 @@ class VisualCoherenceEngine {
 
   private updateCharacterStates(
     target: PrefectDNA | CharacterId | string,
-    ledger: YandereLedger
+    ledger: YandereLedger,
+    text: string
   ): void {
     const characterId = typeof target === 'string' ? target : target.id;
     
     const currentState: CharacterVisualState = {
       characterId,
       lastSeenTurn: this.memory.turnHistory.length,
-      clothingState: this.inferClothingState(ledger),
-      emotionalState: this.inferEmotionalState(ledger),
-      injuries: this.inferInjuries(ledger),
-      dominancePosture: this.inferDominancePosture(characterId, ledger)
+      clothingState: this.inferClothingState(ledger, text),
+      emotionalState: this.inferEmotionalState(ledger, text),
+      injuries: this.inferInjuries(ledger, text),
+      dominancePosture: this.inferDominancePosture(characterId, ledger, text)
     };
     
     this.memory.lastCharacterAppearances.set(characterId, currentState);
   }
 
-  private inferClothingState(ledger: YandereLedger): CharacterVisualState['clothingState'] {
+  private inferClothingState(ledger: YandereLedger, text: string): CharacterVisualState['clothingState'] {
+    const lower = text.toLowerCase();
+    
+    // Textual overrides
+    if (lower.match(/tear|rip|shred|cut/)) return 'torn';
+    if (lower.match(/mess|dishevel|wild|loose/)) return 'disheveled';
+    if (lower.match(/blood|bleed|stain|red/)) return 'bloodstained';
+    
+    // Ledger Fallbacks
     if (ledger.physicalIntegrity < 50) return 'torn';
     if (ledger.traumaLevel > 70) return 'disheveled';
     if (ledger.shamePainAbyssLevel > 80) return 'bloodstained';
     return 'pristine';
   }
 
-  private inferEmotionalState(ledger: YandereLedger): CharacterVisualState['emotionalState'] {
+  private inferEmotionalState(ledger: YandereLedger, text: string): CharacterVisualState['emotionalState'] {
+    const lower = text.toLowerCase();
+
+    // Textual overrides (Priority)
+    if (lower.match(/cry|weep|sob|tear|break/)) return 'broken';
+    if (lower.match(/laugh|grin|smile|manic/)) return 'ecstatic';
+    if (lower.match(/glare|frown|fury|rage/)) return 'agitated';
+    if (lower.match(/shiver|tremble|shake|terror/)) return 'terrified';
+    if (lower.match(/moan|gasp|want|need|heat/)) return 'desirous';
+    if (lower.match(/shame|blush|avert/)) return 'humiliated';
+    if (lower.match(/hopeless|void|nothing|empty/)) return 'despairing';
+    
+    // Ledger Fallbacks
     if (ledger.hopeLevel < 20) return 'despairing';
     if (ledger.traumaLevel > 80) return 'terrified';
     if (ledger.shamePainAbyssLevel > 80) return 'humiliated';
@@ -114,22 +135,41 @@ class VisualCoherenceEngine {
     return 'composed';
   }
 
-  private inferInjuries(ledger: YandereLedger): string[] {
+  private inferInjuries(ledger: YandereLedger, text: string): string[] {
     const injuries: string[] = [];
-    if (ledger.physicalIntegrity < 80) injuries.push('visible bruising on wrists and neck');
+    const lower = text.toLowerCase();
+
+    // Textual inference
+    if (lower.includes('bruise') || lower.includes('blow')) injuries.push('fresh bruising');
+    if (lower.includes('cut') || lower.includes('slice') || lower.includes('bleed')) injuries.push('bleeding laceration');
+    if (lower.includes('choke') || lower.includes('throat')) injuries.push('bruised neck');
+    if (lower.includes('slap') || lower.includes('cheek')) injuries.push('red handprint on cheek');
+
+    // Ledger inference
+    if (ledger.physicalIntegrity < 80 && !injuries.some(i => i.includes('bruis'))) injuries.push('visible bruising on wrists and neck');
     if (ledger.traumaLevel > 60) injuries.push('trembling hands, stress-induced muscle tension');
-    if (ledger.shamePainAbyssLevel > 70) injuries.push('tear-stained cheeks, bloodshot eyes, puffy eyes');
-    return injuries;
+    if (ledger.shamePainAbyssLevel > 70) injuries.push('tear-stained cheeks, bloodshot eyes');
+    
+    return [...new Set(injuries)]; // Dedupe
   }
 
-  private inferDominancePosture(characterId: string, ledger: YandereLedger): number {
+  private inferDominancePosture(characterId: string, ledger: YandereLedger, text: string): number {
+    const lower = text.toLowerCase();
+    
     if (characterId === CharacterId.PLAYER) {
+      if (lower.match(/kneel|bow|beg|crawl/)) return 0.1;
+      if (lower.match(/stand|glare|spit|resist/)) return 0.6;
       return Math.max(0, Math.min(1, (100 - ledger.complianceScore + ledger.hopeLevel) / 200));
     }
+    
+    // Agents
+    if (lower.match(/loom|tower|step on|down at/)) return 1.0;
+    if (lower.match(/lean|sit|lounge/)) return 0.8;
+    
     return 0.9; // Faculty/Prefects default to high dominance
   }
 
-  private inferEnvironmentFromContext(context: string): void {
+  private inferEnvironmentFromContext(context: string, ledger: YandereLedger): void {
     const lower = context.toLowerCase();
     
     let location = this.memory.environmentState.location;
@@ -137,6 +177,7 @@ class VisualCoherenceEngine {
     let atmosphericEffects = [...this.memory.environmentState.atmosphericEffects];
     let dominantColors = [...this.memory.environmentState.dominantColors];
     
+    // Location Detection
     if (lower.includes("dock") || lower.includes("arrival")) {
         location = "volcanic rock dock, stormy sky, weeping stone, ocean spray, iron gates";
         lightingScheme = LIGHTING_PRESETS.Moody;
@@ -155,10 +196,21 @@ class VisualCoherenceEngine {
         dominantColors = ['#050505', '#1c1917', '#44403c', '#be123c'];
     }
 
+    // Dynamic Text-Based Atmospheric Tweaks
+    if (lower.includes("rain") || lower.includes("storm")) atmosphericEffects.push("heavy rain", "wet surfaces");
+    if (lower.includes("smoke") || lower.includes("cigarette")) atmosphericEffects.push("swirling smoke");
+    if (lower.includes("mist") || lower.includes("steam")) atmosphericEffects.push("volumetric fog");
+    if (lower.includes("blood")) atmosphericEffects.push("metallic scent visual", "blood slick");
+
+    // Dynamic Lighting Tweaks
+    if (lower.includes("dark") || lower.includes("shadow")) lightingScheme = "Heavy Chiaroscuro, minimal light, deep black shadows";
+    if (lower.includes("flicker") || lower.includes("candle")) lightingScheme = LIGHTING_PRESETS.WarmCandle;
+    if (ledger.traumaLevel > 80) lightingScheme = "Oppressive, suffocating darkness with single harsh spotlight (Trauma Filter)";
+
     this.memory.environmentState = {
       location,
       lightingScheme,
-      atmosphericEffects,
+      atmosphericEffects: [...new Set(atmosphericEffects)].slice(-5), // Keep unique, max 5
       dominantColors
     };
   }
@@ -217,6 +269,12 @@ class VisualCoherenceEngine {
     if (ledger.arousalLevel > 60) aestheticInjects.push(FORGE_MOTIFS.RimLitCleavage, FORGE_MOTIFS.WetSilkEffect);
     if (ledger.traumaLevel > 70) aestheticInjects.push(FORGE_MOTIFS.TremblingHands);
 
+    // --- Text Injections ---
+    const lowerText = narrativeText.toLowerCase();
+    if (lowerText.includes("smile")) aestheticInjects.push("subtle predatory smile");
+    if (lowerText.includes("glare")) aestheticInjects.push("cold furious stare");
+    if (lowerText.includes("touch") || lowerText.includes("caress")) aestheticInjects.push(FORGE_MOTIFS.LethalCaress);
+
     return {
       subject: {
         characterId,
@@ -244,8 +302,15 @@ class VisualCoherenceEngine {
     let base = desc.description || "Figure";
     if (state?.clothingState === 'disheveled') base += ", disheveled uniform, hair escaping";
     if (state?.clothingState === 'torn') base += ", torn clothing, exposed skin";
+    if (state?.clothingState === 'bloodstained') base += ", bloodstains on fabric";
     if (ledger.arousalLevel > 60) base += ", flushed skin, sweat-glistened";
     if (ledger.shamePainAbyssLevel > 70) base += ", tear-stained cheeks";
+    
+    // Inject emotional state into appearance description
+    if (state?.emotionalState) {
+        base += `, EXPRESSION: ${state.emotionalState.toUpperCase()}`;
+    }
+    
     return base;
   }
 
@@ -288,7 +353,7 @@ class VisualCoherenceEngine {
       turnIndex: turn.turnIndex,
       dominantCharacterId: turn.metadata?.activeCharacters[0] || CharacterId.PLAYER,
       location: turn.metadata?.location || 'Unknown',
-      emotionalTone: this.inferEmotionalState(turn.metadata.ledgerSnapshot)
+      emotionalTone: this.inferEmotionalState(turn.metadata.ledgerSnapshot, turn.text)
     });
   }
 
