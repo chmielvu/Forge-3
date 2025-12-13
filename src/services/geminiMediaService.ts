@@ -4,69 +4,126 @@ import { VISUAL_MANDATE, VIDEO_MANDATE } from '../config/visualMandate';
 
 // Robust API Key Retrieval
 const getApiKey = (): string => {
-  // 1. Try process.env.API_KEY (injected by Vite define or Node)
   try {
     // @ts-ignore
-    if (typeof process !== 'undefined' && process.env?.API_KEY) {
-      // @ts-ignore
-      return process.env.API_KEY;
-    }
+    if (typeof process !== 'undefined' && process.env?.API_KEY) return process.env.API_KEY;
   } catch (e) {}
-
-  // 2. Try import.meta.env.VITE_GEMINI_API_KEY (Vite standard)
   try {
     // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) {
-      // @ts-ignore
-      return import.meta.env.VITE_GEMINI_API_KEY;
-    }
+    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
   } catch (e) {}
-
-  // 3. Fallback check for direct replacement or other vars
   try {
     // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env?.API_KEY) {
-      // @ts-ignore
-      return import.meta.env.API_KEY;
-    }
+    if (typeof import.meta !== 'undefined' && import.meta.env?.API_KEY) return import.meta.env.API_KEY;
   } catch (e) {}
-
-  console.warn("API Key not found in process.env.API_KEY or VITE_GEMINI_API_KEY");
   return '';
 };
 
 const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
-const MAX_RETRIES = 2; // Lowered to fail fast
-const BASE_DELAY = 1000;
+// --- RATE LIMITING QUEUE ---
+class RequestQueue {
+    // Queue now holds explicit resolve/reject handlers to allow external Promise management
+    private queue: { operation: () => Promise<any>; resolve: (value: any) => void; reject: (reason: any) => void }[] = [];
+    private processing = false;
+    private lastRequestTime = 0;
+    // Conservative throttle to prevent 429s (1 request every 4.1s -> ~14 RPM to stay under 15 RPM limit)
+    private minDelay = 4100; 
+
+    async add<T>(operation: () => Promise<T>): Promise<T> {
+        return new Promise((resolve, reject) => {
+            this.queue.push({ operation, resolve, reject });
+            this.process();
+        });
+    }
+
+    async process() {
+        if (this.processing || this.queue.length === 0) return;
+        this.processing = true;
+
+        const now = Date.now();
+        const timeSinceLast = now - this.lastRequestTime;
+        
+        // Enforce rate limit delay
+        if (timeSinceLast < this.minDelay) {
+            await new Promise(r => setTimeout(r, this.minDelay - timeSinceLast));
+        }
+
+        const task = this.queue.shift();
+        if (task) {
+            this.lastRequestTime = Date.now();
+            try {
+                // Execute the actual API call
+                const result = await task.operation();
+                task.resolve(result);
+            } catch (e) {
+                task.reject(e);
+            }
+        }
+
+        this.processing = false;
+        
+        // Process next item if available
+        if (this.queue.length > 0) {
+            this.process();
+        }
+    }
+}
+
+const mediaQueue = new RequestQueue();
+
+const MAX_RETRIES = 3; 
+const BASE_DELAY = 2000; // Increased base delay for stability
 
 export class MediaGenerationError extends Error {
-    constructor(public type: 'SAFETY' | 'NETWORK' | 'QUOTA' | 'UNKNOWN', message: string) {
+    constructor(public type: 'SAFETY' | 'NETWORK' | 'QUOTA' | 'UNKNOWN' | 'AUTH', message: string) {
         super(message);
     }
 }
 
 // Helper for exponential backoff retries
+// CRITICAL: withRetry wraps the queueing logic, not the other way around. 
+// This prevents deadlock where a retrying task blocks the queue processing loop.
 async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
   try {
-    return await operation();
+      // Submit operation to the rate-limited queue
+      return await mediaQueue.add(operation);
   } catch (error: any) {
     // Categorize Error
     let type: MediaGenerationError['type'] = 'UNKNOWN';
-    if (error.status === 429) type = 'QUOTA';
-    else if (error.message?.includes('SAFETY') || error.response?.promptFeedback?.blockReason) type = 'SAFETY';
-    else if (error.message?.includes('fetch failed')) type = 'NETWORK';
+    
+    // Check for specific error types passed from operation
+    if (error instanceof MediaGenerationError) {
+         type = error.type;
+    } else {
+         if (error.status === 429) type = 'QUOTA';
+         else if (error.message?.includes('SAFETY') || error.response?.promptFeedback?.blockReason) type = 'SAFETY';
+         else if (error.message?.includes('API key')) type = 'AUTH';
+         else if (error.message?.includes('fetch failed')) type = 'NETWORK';
+    }
 
     if (type === 'SAFETY') {
         console.warn(`[GeminiMediaService] Blocked by Safety settings. No retry.`);
-        throw new MediaGenerationError('SAFETY', 'Content blocked by safety filters.');
+        if (error instanceof MediaGenerationError) throw error;
+        throw new MediaGenerationError('SAFETY', error.message || 'Content blocked by safety filters.');
     }
 
-    if (retries > 0 && (type === 'NETWORK' || type === 'QUOTA' || type === 'UNKNOWN')) {
-         const delay = BASE_DELAY * (MAX_RETRIES - retries + 1);
+    if (type === 'AUTH') {
+         throw new MediaGenerationError('AUTH', 'API Key missing or invalid.');
+    }
+
+    if (retries > 0) {
+         // Exponential Backoff: 2s, 4s, 8s
+         const attempt = MAX_RETRIES - retries + 1;
+         const delay = BASE_DELAY * Math.pow(2, attempt - 1);
+         
          console.warn(`[GeminiMediaService] Operation failed (${type}), retrying in ${delay}ms... (Attempts left: ${retries})`);
+         
+         // Wait for the delay *outside* the queue lock
          await new Promise(resolve => setTimeout(resolve, delay));
-         return withRetry(operation, retries - 1);
+         
+         // Recursively try again (this adds a new item to the queue)
+         return withRetry(operation, retries - 1); 
     }
     
     throw new MediaGenerationError(type, error.message || 'Unknown generation error');
@@ -75,16 +132,12 @@ async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES):
 
 /**
  * Generate Image
- * Uses Gemini 2.5 Flash Image (Nano Banana) for high-speed, coherent visual generation.
  */
 export async function generateImageAction(prompt: string): Promise<string | undefined> {
   const apiKey = getApiKey();
-  if (!apiKey) {
-      throw new Error("API key is missing. Please provide a valid API key.");
-  }
+  if (!apiKey) throw new MediaGenerationError('AUTH', "API key is missing.");
 
   return withRetry(async () => {
-    try {
       const ai = getAI();
       // Enforce the strict visual mandate JSON wrapper for the model
       const qualityEnforcedPrompt = `
@@ -107,27 +160,39 @@ export async function generateImageAction(prompt: string): Promise<string | unde
         }
       });
 
-      const data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (!data) throw new Error("No image data returned from Gemini.");
-      return data;
-    } catch (error) {
-      throw error;
-    }
+      const candidate = response.candidates?.[0];
+      
+      // 1. Check for Inline Data (Success)
+      const imagePart = candidate?.content?.parts?.find(p => p.inlineData);
+      if (imagePart?.inlineData?.data) {
+          return imagePart.inlineData.data;
+      }
+
+      // 2. Check for Text Refusal (Model refused but didn't throw standard safety error)
+      const textPart = candidate?.content?.parts?.find(p => p.text);
+      if (textPart?.text) {
+          console.warn("[GeminiMediaService] Model Refused Image Generation:", textPart.text);
+          // Treat textual refusal as SAFETY to prevent retries
+          throw new MediaGenerationError('SAFETY', `Model Refusal: ${textPart.text.substring(0, 120)}...`);
+      }
+
+      // 3. Check for explicit finish reason
+      if (candidate?.finishReason === 'SAFETY' || candidate?.finishReason === 'RECITATION' || candidate?.finishReason === 'OTHER') {
+          throw new MediaGenerationError('SAFETY', `Generation stopped: ${candidate.finishReason}`);
+      }
+
+      throw new Error("No image data returned from Gemini (Unknown reason).");
   });
 }
 
 /**
  * Generate Speech
- * Uses Gemini 2.5 Flash TTS for character-specific voice synthesis.
  */
 export async function generateSpeechAction(text: string, voiceName: string): Promise<{ audioData: string; duration: number } | undefined> {
   const apiKey = getApiKey();
-  if (!apiKey) {
-      throw new Error("API key is missing. Please provide a valid API key.");
-  }
+  if (!apiKey) throw new MediaGenerationError('AUTH', "API key is missing.");
 
   return withRetry(async () => {
-    try {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
@@ -143,27 +208,20 @@ export async function generateSpeechAction(text: string, voiceName: string): Pro
       });
       
       const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      
       if (!audioData) throw new Error("No audio data returned from Gemini.");
 
-      // Calculate approximate duration on server to keep client logic simple
-      // PCM 24kHz, 1 channel, 16-bit depth usually
+      // Calculate approximate duration
       const base64Length = audioData.length;
       const byteLength = (base64Length * 3) / 4; 
-      const sampleCount = byteLength / 2; // 16-bit = 2 bytes per sample
+      const sampleCount = byteLength / 2; 
       const duration = sampleCount / 24000; 
 
       return { audioData, duration };
-
-    } catch (error) {
-      throw error;
-    }
   });
 }
 
 /**
  * Generate Video (Veo)
- * Uses Veo 3.1 Fast Preview for atmospheric video loops.
  */
 export async function generateVideoAction(
   imageB64: string, 
@@ -183,7 +241,7 @@ export async function generateVideoAction(
       Aesthetic: ${VISUAL_MANDATE.STYLE}
     `;
 
-    // 1. Initiate Generation (Retryable)
+    // 1. Initiate Generation (Queued)
     let operation = await withRetry(async () => {
         return await ai.models.generateVideos({
             model: 'veo-3.1-fast-generate-preview',
@@ -200,12 +258,12 @@ export async function generateVideoAction(
         });
     });
 
-    // 2. Polling Loop
+    // 2. Polling Loop (Not Queued, runs independently)
     let attempts = 0;
     const MAX_POLL_ATTEMPTS = 40; 
     
     while (!operation.done && attempts < MAX_POLL_ATTEMPTS) {
-      await new Promise(resolve => setTimeout(resolve, 3000)); // 3s interval
+      await new Promise(resolve => setTimeout(resolve, 3000)); 
       try {
         operation = await ai.operations.getVideosOperation({ operation: operation });
       } catch (pollError) {
@@ -228,7 +286,6 @@ export async function generateVideoAction(
         const blob = await response.blob();
         const arrayBuffer = await blob.arrayBuffer();
         
-        // Browser native base64 conversion
         let binary = '';
         const bytes = new Uint8Array(arrayBuffer);
         const len = bytes.byteLength;
@@ -249,14 +306,12 @@ export async function generateVideoAction(
 
 /**
  * Distort Image
- * Uses Gemini Image to apply psychological distortion effects.
  */
 export async function distortImageAction(imageB64: string, instruction: string): Promise<string | undefined> {
   const apiKey = getApiKey();
   if (!apiKey) return undefined;
 
   return withRetry(async () => {
-    try {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -279,12 +334,14 @@ export async function distortImageAction(imageB64: string, instruction: string):
         },
       });
 
-      const data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (!data) throw new Error("No distortion data returned.");
+      const candidate = response.candidates?.[0];
+      const data = candidate?.content?.parts?.[0]?.inlineData?.data;
+      
+      if (!data) {
+          const text = candidate?.content?.parts?.[0]?.text;
+          if (text) throw new MediaGenerationError('SAFETY', `Distortion Refused: ${text}`);
+          throw new Error("No distortion data returned.");
+      }
       return data;
-    } catch (e) {
-      console.error("[GeminiMediaService] Image Distortion Failed:", e);
-      throw e;
-    }
   });
 }

@@ -47,7 +47,7 @@ export class PrefectManager {
 
     // Run agents in parallel
     await Promise.all(activeAgents.map(async (agent) => {
-        // Customize context for this specific agent (relative favor scores)
+        // Customize context for this specific agent
         const context = {
             ...sceneContextBase,
             yourFavorScore: agent.dna.favorScore,
@@ -55,7 +55,8 @@ export class PrefectManager {
                 .filter(p => p.id !== agent.dna.id)
                 .map(p => ({
                     name: p.displayName,
-                    recentActions: "Observed", // Placeholder - would track real history
+                    // Use actual last public action if available, else fallback
+                    recentActions: p.lastPublicAction || "Scanning the room for disobedience",
                     favorScore: p.favorScore,
                     perceivedThreat: p.favorScore > agent.dna.favorScore ? 0.8 : 0.3
                 }))
@@ -64,7 +65,15 @@ export class PrefectManager {
         const thought = await agent.think(context);
         thoughts.push(thought);
 
-        // Apply immediate favor updates based on self-assessment (Director will validate later)
+        // --- PERSISTENCE LOGIC ---
+        
+        // 1. Update Emotional State
+        agent.dna.currentEmotionalState = thought.emotionalState;
+        
+        // 2. Update Public Action (for others to see next turn)
+        agent.dna.lastPublicAction = thought.publicAction;
+
+        // 3. Update Favor Score (with clamping)
         if (thought.favorScoreDelta) {
             agent.dna.favorScore = Math.max(0, Math.min(100, agent.dna.favorScore + thought.favorScoreDelta));
         }

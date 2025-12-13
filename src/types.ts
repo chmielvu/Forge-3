@@ -69,6 +69,7 @@ export interface GameState {
   links: GraphLink[];
   turn: number;
   location: string;
+  seed: number; // Added for deterministic procedural generation
 }
 
 // Legacy Director Output (UI Consumption)
@@ -174,6 +175,13 @@ export interface PrefectDNA {
   favorScore: number;
   relationships: Record<string, number>;
   traumaBondLevel?: number;
+  // Deep State Persistence
+  currentEmotionalState?: {
+    paranoia: number;
+    desperation: number;
+    confidence: number;
+  };
+  lastPublicAction?: string;
 }
 
 export interface PrefectPrivateState {
@@ -322,16 +330,16 @@ export interface MultimodalTurn {
   // Media status tracking
   imageStatus: MediaStatus;
   imageData?: string;
-  imageError?: string; // Added error field
+  imageError?: string; 
   
   audioStatus: MediaStatus;
   audioUrl?: string; // Base64 audio string
   audioDuration?: number; // In seconds
-  audioError?: string; // Added error field
+  audioError?: string; 
   
   videoStatus: MediaStatus;
   videoUrl?: string; // Base64 video string (or blob URL)
-  videoError?: string; // Added error field
+  videoError?: string; 
   
   // Metadata for coherence, debug, etc.
   metadata?: {
@@ -502,7 +510,7 @@ export interface CombinedGameStoreState extends MultimodalSliceExports {
   updateGameState: (updates: Partial<GameState>) => void;
   applyDirectorUpdates: (response: DirectorOutput) => void;
   processPlayerTurn: (input: string) => Promise<void>;
-  applyServerState: (result: any) => void; // Added applyServerState
+  applyServerState: (result: any) => void; 
   
   // System
   resetGame: () => void;

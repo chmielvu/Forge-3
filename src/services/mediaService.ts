@@ -75,25 +75,27 @@ export const generateNarrativeImage = async (
     const imageData = await generateImageAction(finalCoherentPrompt);
     
     if (!imageData) {
-      if (retryCount < MAX_IMAGE_RETRIES) {
-        console.warn(`[mediaService] Image generation attempt ${retryCount + 1} failed (no data), retrying...`);
-        await new Promise(resolve => setTimeout(resolve, 1000 + (retryCount * 1000))); 
-        return generateNarrativeImage(target, sceneContext, ledger, narrativeText, previousTurn, retryCount + 1);
-      } else {
-        console.error(`[mediaService] Image generation failed after ${MAX_IMAGE_RETRIES + 1} attempts (no data).`);
-        return undefined;
-      }
+       // Should be caught by service error throwing, but safety check
+       throw new Error("Empty image data received.");
     }
     
     return imageData;
-  } catch (error) {
+  } catch (error: any) {
+    // Critical errors are rethrown immediately without retry loop if they are permanent
+    if (error.type === 'AUTH' || error.type === 'SAFETY') {
+         console.error(`[mediaService] Critical Image Error (${error.type}): ${error.message}`);
+         throw error;
+    }
+
     if (retryCount < MAX_IMAGE_RETRIES) {
       console.warn(`[mediaService] Image generation error on attempt ${retryCount + 1}, retrying...`, error);
+      // Backoff handled in service mostly, but here we retry the whole logic (e.g. prompt rebuild)
       await new Promise(resolve => setTimeout(resolve, 2000 + (retryCount * 2000))); 
       return generateNarrativeImage(target, sceneContext, ledger, narrativeText, previousTurn, retryCount + 1);
     }
+    
     console.error(`[mediaService] Image generation failed after ${MAX_IMAGE_RETRIES + 1} attempts.`, error);
-    throw error;
+    throw error; // Propagate error so UI can show it
   }
 };
 
@@ -120,9 +122,10 @@ export const generateSpeech = async (narrative: string, voiceIdOverride?: string
     const voiceName = voiceIdOverride || selectVoiceForNarrative(narrative);
     // Call Service
     return await generateSpeechAction(narrative, voiceName);
-  } catch (error) {
+  } catch (error: any) {
     console.error("⚠️ Audio generation failed:", error);
-    return undefined;
+    // Throw error so it bubbles to UI
+    throw new Error(error.message || "Audio generation failed");
   }
 };
 
@@ -142,9 +145,10 @@ export const animateImageWithVeo = async (
     // Call Service
     // Note: Motion prompt construction logic moved to Service to ensure visual mandate security
     return await generateVideoAction(imageB64, visualPrompt, aspectRatio);
-  } catch (e) {
+  } catch (e: any) {
     console.error("Veo Animation Failed:", e);
-    return undefined;
+    // Throw error so it bubbles to UI (optional for video as it's an enhancement)
+    throw new Error(e.message || "Video generation failed");
   }
 };
 
@@ -160,10 +164,13 @@ export const generateEnhancedMedia = async (
 ): Promise<{ audioData?: string, imageData?: string, videoData?: string }> => {
   
   // 1. Generate Image (Internal buildVisualPrompt call)
-  const imagePromise = generateNarrativeImage(target, visualPrompt, ledger, narrative, previousTurn);
+  // Use allSettled to allow partial success (e.g., Image works, Audio fails)
   
-  // 2. Generate Audio
-  const audioPromise = generateSpeech(narrative, narratorVoiceId);
+  const imagePromise = generateNarrativeImage(target, visualPrompt, ledger, narrative, previousTurn)
+    .catch(e => { console.warn("Image gen failed in orchestrator:", e); return undefined; });
+  
+  const audioPromise = generateSpeech(narrative, narratorVoiceId)
+    .catch(e => { console.warn("Audio gen failed in orchestrator:", e); return undefined; });
 
   let videoPromise: Promise<string | undefined> = Promise.resolve(undefined);
   

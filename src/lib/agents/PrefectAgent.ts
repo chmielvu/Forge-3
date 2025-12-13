@@ -23,8 +23,29 @@ function getArchetypeBehavior(archetype: PrefectArchetype, traits: TraitVector):
   return behaviors[archetype] || '';
 }
 
-const buildPrefectPrompt = (prefect: PrefectDNA, scene: FilteredSceneContext): string => `
-You are ${prefect.displayName}, a Prefect at The Forge competing for one of TWO Teaching Assistant positions.
+const buildPrefectPrompt = (prefect: PrefectDNA, scene: FilteredSceneContext): string => {
+  // Format relationships for the prompt
+  const relationshipContext = Object.entries(prefect.relationships)
+    .map(([targetId, score]) => {
+      const name = targetId.includes('PREFECT') ? targetId.split('_')[2] : targetId;
+      const sentiment = score > 0 ? "Positive/Alliance" : "Negative/Rivalry";
+      return `- ${name}: ${sentiment} (${score})`;
+    })
+    .join('\n');
+
+  // Format Emotional State
+  const emotionalContext = prefect.currentEmotionalState 
+    ? `
+=== YOUR CURRENT PSYCHE (PERSISTENT) ===
+- Paranoia: ${(prefect.currentEmotionalState.paranoia * 100).toFixed(0)}%
+- Desperation: ${(prefect.currentEmotionalState.desperation * 100).toFixed(0)}%
+- Confidence: ${(prefect.currentEmotionalState.confidence * 100).toFixed(0)}%
+- Last Action: "${prefect.lastPublicAction || 'None'}"
+` 
+    : "";
+
+  return `
+You are ${prefect.displayName}, a Prefect at The Forge.
 
 === YOUR IDENTITY ===
 Archetype: ${prefect.archetype}
@@ -36,39 +57,49 @@ Trait Profile:
 - Cunning: ${prefect.traitVector.cunning.toFixed(2)}
 - Submission: ${prefect.traitVector.submission_to_authority.toFixed(2)}
 - Ambition: ${prefect.traitVector.ambition.toFixed(2)}
+${emotionalContext}
 
-=== THE COMPETITION (ZERO-SUM) ===
-Your current Favor Score: ${scene.yourFavorScore}/100
-Competitors:
-${scene.otherPrefects.map(p => `- ${p.name}: ${p.favorScore} (Recent: ${p.recentActions})`).join('\n')}
+=== YOUR RELATIONSHIPS ===
+${relationshipContext || "None active."}
+
+=== IMMEDIATE CAUSALITY (MANDATORY) ===
+The Player (Subject 84) just attempted this action: "${scene.yourRecentActions[0] || 'Stood silently.'}".
+You MUST react directly to this specific action.
+- If they complied: Do you reward them, ignore them, or find a flaw?
+- If they defied: Do you punish them, laugh, or feel threatened?
+- If they observed: Do you catch their gaze?
 
 === CURRENT SCENE ===
 Location: ${scene.location}
-Scene: ${scene.description}
+Scene Description: ${scene.description}
 Faculty Mood: ${scene.facultyMood}
 Faculty Present: ${scene.facultyPresent.join(', ')}
-Subject 84 Trauma: ${scene.playerTrauma}/1.0
+Subject 84 Trauma Level: ${scene.playerTrauma.toFixed(2)}/1.0
 
-=== STRATEGIC MANDATES ===
-1. How can you INCREASE your favor while DECREASING a competitor's?
-2. Who is vulnerable to sabotage?
-3. What does the Faculty want to see RIGHT NOW?
-
-=== BEHAVIOR ===
+=== ARCHETYPE BEHAVIOR ===
 ${getArchetypeBehavior(prefect.archetype, prefect.traitVector)}
 
 === RESPONSE FORMAT (JSON) ===
 {
-  "publicAction": "What you do/say openly",
-  "hiddenMotivation": "Your TRUE reason",
-  "internalMonologue": "Private thoughts",
-  "sabotageAttempt": { "target": "Name", "method": "...", "deniability": 0.0-1.0 } | null,
+  "publicAction": "What you do/say openly. MUST DIRECTLY ADDRESS THE PLAYER'S ACTION.",
+  "hiddenMotivation": "Your TRUE internal reasoning for this action",
+  "internalMonologue": "Your private stream of consciousness",
+  "sabotageAttempt": { 
+    "target": "Name of rival", 
+    "method": "Description of sabotage", 
+    "deniability": 0.0-1.0 
+  } | null,
   "allianceSignal": { "target": "Name", "message": "..." } | null,
-  "emotionalState": { "paranoia": 0-1, "desperation": 0-1, "confidence": 0-1 },
+  "emotionalState": { 
+    "paranoia": 0.0-1.0, 
+    "desperation": 0.0-1.0, 
+    "confidence": 0.0-1.0 
+  },
   "secretsUncovered": ["string"],
-  "favorScoreDelta": number (-10 to 10 estimate)
+  "favorScoreDelta": number (Estimate your gain/loss, -10 to 10)
 }
 `;
+};
 
 // Robust API Key Retrieval
 const getApiKey = (): string => {
@@ -102,7 +133,7 @@ export class PrefectAgent {
         model: 'gemini-2.5-flash-lite-latest', 
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: {
-          temperature: 0.95, // High variance for competition
+          temperature: 0.95, // High variance for dynamic social interactions
           responseMimeType: 'application/json',
           responseSchema: {
             type: 'OBJECT',
@@ -152,6 +183,7 @@ export class PrefectAgent {
       // Update history
       this.history.push({ role: 'user', content: prompt });
       this.history.push({ role: 'model', content: text });
+      if (this.history.length > 6) this.history.shift(); // Keep context window small
 
       return thought;
 
@@ -164,12 +196,12 @@ export class PrefectAgent {
   private generateFallbackThought(): PrefectThought {
     return {
       agentId: this.dna.id,
-      publicAction: `${this.dna.displayName} watches silently, calculating options.`,
-      hiddenMotivation: "System Error - Fallback Mode",
-      internalMonologue: "...",
+      publicAction: `${this.dna.displayName} watches the scene silently, eyes narrowed.`,
+      hiddenMotivation: "Assessing risks before committing to action.",
+      internalMonologue: "Too dangerous to move yet. Wait for a mistake.",
       sabotageAttempt: null,
       allianceSignal: null,
-      emotionalState: { paranoia: 0.5, desperation: 0.5, confidence: 0.5 },
+      emotionalState: { paranoia: 0.5, desperation: 0.2, confidence: 0.5 },
       secretsUncovered: [],
       favorScoreDelta: 0
     };
