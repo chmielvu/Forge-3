@@ -71,6 +71,22 @@ const SubjectPanel: React.FC = () => {
               "{sub.visualCondition}"
             </div>
 
+            {/* Injuries Section */}
+            {sub.injuries && sub.injuries.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-zinc-800/50">
+                    <span className="text-[9px] font-mono text-red-500/70 uppercase tracking-wider block mb-1">
+                        Somatic Trauma
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                        {sub.injuries.map((inj, idx) => (
+                            <span key={idx} className="text-[9px] px-1.5 py-px bg-red-950/30 border border-red-900/30 text-red-400 rounded-sm">
+                                {inj}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
           </div>
         ))}
       </div>

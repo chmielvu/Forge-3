@@ -1,4 +1,5 @@
 
+
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { KnowledgeGraph } from '../lib/types/kgot';
@@ -7,7 +8,7 @@ import { INITIAL_LEDGER } from '../constants';
 import { updateLedgerHelper } from './stateHelpers';
 import { createMultimodalSlice } from './multimodalSlice';
 import { createSubjectSlice } from './subjectSlice';
-import { LogEntry, CombinedGameStoreState, CharacterId, PrefectDNA, PrefectDecision, GameState } from '../types';
+import { LogEntry, CombinedGameStoreState, CharacterId, PrefectDNA, PrefectDecision, GameState, YandereLedger } from '../types';
 import { KGotController } from '../controllers/KGotController';
 import { enqueueTurnForMedia } from './mediaController';
 import { createIndexedDBStorage, forgeStorage } from '../utils/indexedDBStorage'; // Import forgeStorage
@@ -591,7 +592,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
     }),
     {
       name: 'forge-game-state',
-      storage: createIndexedDBStorage(), // Use IndexedDB storage
+      // Fix: wrap string-based storage in createJSONStorage to match PersistStorage expectation
+      storage: createJSONStorage(() => createIndexedDBStorage()), 
       partialize: (state) => ({
         gameState: state.gameState,
         kgot: state.kgot,
@@ -603,7 +605,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       }),
       merge: (persistedState, currentState) => {
         // Handle potential versioning or schema changes in persisted state
-        const state = persistedState as CombinedGameStoreState;
+        const state = persistedState as Partial<CombinedGameStoreState>;
         return { ...currentState, ...state, sessionActive: false, isThinking: false }; // Ensure session isn't active on reload
       },
     }

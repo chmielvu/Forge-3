@@ -225,9 +225,9 @@ export interface CombinedGameStoreState extends MultimodalSliceExports, SubjectS
   applyDirectorUpdates: (response: any) => void;
   processPlayerTurn: (input: string) => void;
   resetGame: () => void;
-  startSession: () => void;
-  saveSnapshot: () => void;
-  loadSnapshot: () => void;
+  startSession: (isLiteMode?: boolean) => Promise<void>;
+  saveSnapshot: () => Promise<void>;
+  loadSnapshot: () => Promise<void>;
 }
 
 export type PrefectArchetype = 

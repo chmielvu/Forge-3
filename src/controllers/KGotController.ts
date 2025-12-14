@@ -1,4 +1,5 @@
 
+
 import Graph from 'graphology';
 import { z } from 'zod';
 import { KnowledgeGraph, KGotNode, KGotEdge, NodeType, Memory } from '../lib/types/kgot';
@@ -331,9 +332,11 @@ export class KGotController {
     // 1. Calculate Centrality to protect key nodes (e.g. The Provost)
     let scores: Record<string, number> = {};
     try {
-        scores = pagerank(this.graph);
-    } catch(e) {
-        console.warn("[KGot] Prune: PageRank failed, proceeding without centrality protection.");
+        scores = pagerank(this.graph) as Record<string, number>; // Explicitly cast to Record<string, number>
+        // Use scores for weighting, but do not return early
+    } catch (e) {
+        console.warn("PageRank failed:", e);
+        // Continue execution even if PageRank fails
     }
 
     const edgesToRemove: string[] = [];
@@ -462,26 +465,49 @@ export class KGotController {
 
               const targetId = this.resolveTargetId(valid.target_id) || valid.target_id;
               const sourceId = this.resolveTargetId(valid.source_id) || valid.source_id;
-              const injuryNodeId = `INJURY_${Date.now()}_${valid.injury_name.replace(/\s+/g, '_').toUpperCase()}`;
+              
+              // DETERMINISTIC ID: Enables updating existing injuries instead of duplicating
+              const normalizedInjuryName = valid.injury_name.trim().replace(/\s+/g, '_').toUpperCase();
+              const injuryNodeId = `INJURY_${targetId}_${normalizedInjuryName}`;
 
-              // 1. Create INJURY Node
-              this.addNode({
-                  id: injuryNodeId,
-                  type: 'INJURY',
-                  label: valid.injury_name,
-                  attributes: {
-                      severity: valid.severity || 0.5,
-                      grammar_phase: valid.grammar_phase || 'Shock',
-                      timestamp: this.globalState.turn_count
-                  }
-              });
+              if (this.graph.hasNode(injuryNodeId)) {
+                  // UPDATE PATH: Escalation
+                  const nodeAttrs = this.graph.getNodeAttributes(injuryNodeId);
+                  const currentSeverity = nodeAttrs.attributes?.severity || 0;
+                  const newSeverity = Math.min(1.0, currentSeverity + (valid.severity || 0.1));
+                  
+                  this.graph.mergeNodeAttributes(injuryNodeId, {
+                      attributes: {
+                          ...nodeAttrs.attributes,
+                          severity: newSeverity,
+                          timestamp: this.globalState.turn_count,
+                          // Update grammar phase if provided
+                          grammar_phase: valid.grammar_phase || nodeAttrs.attributes?.grammar_phase,
+                          last_updated: Date.now()
+                      }
+                  });
+                  console.log(`[KGot] Updated Injury Node: ${injuryNodeId} -> Severity ${newSeverity}`);
+              } else {
+                  // CREATE PATH: New Trauma
+                  this.addNode({
+                      id: injuryNodeId,
+                      type: 'INJURY',
+                      label: valid.injury_name,
+                      attributes: {
+                          severity: valid.severity || 0.5,
+                          grammar_phase: valid.grammar_phase || 'Shock',
+                          timestamp: this.globalState.turn_count,
+                          description: `Inflicted by ${sourceId}`
+                      }
+                  });
 
-              // 2. Link to Subject
-              this.addEdge(injuryNodeId, targetId, 'AFFLICTS', valid.severity || 0.5, { type: 'INJURY_LINK' });
+                  // 2. Link to Subject
+                  this.addEdge(injuryNodeId, targetId, 'AFFLICTS', valid.severity || 0.5, { type: 'INJURY_LINK' });
 
-              // 3. Link to Inflictor
-              this.addEdge(injuryNodeId, sourceId, 'CAUSED_BY', 1.0, { type: 'INJURY_SOURCE' });
-
+                  // 3. Link to Inflictor
+                  this.addEdge(injuryNodeId, sourceId, 'CAUSED_BY', 1.0, { type: 'INJURY_SOURCE' });
+                  console.log(`[KGot] Created Injury Node: ${injuryNodeId}`);
+              }
               break;
           }
 
