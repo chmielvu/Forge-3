@@ -443,9 +443,9 @@ export class KGotController {
 
   // --- Director-Specific Mutation Handler ---
   
-  public applyMutations(mutations: Array<{ operation: string, params: any }>): void {
+  public applyMutations(mutations: Array<{ operation: string, params?: any }>): void {
     mutations.forEach(mutation => {
-      const { operation, params } = mutation;
+      const { operation, params = {} } = mutation;
       
       switch (operation) {
         case 'add_edge':

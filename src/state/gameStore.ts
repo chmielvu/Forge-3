@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { KnowledgeGraph } from '../lib/types/kgot';
-import { executeDirectorTurn } from '../lib/director';
+import { executeUnifiedDirectorTurn } from '../lib/unifiedDirector';
 import { INITIAL_LEDGER } from '../constants';
 import { updateLedgerHelper } from './stateHelpers';
 import { createMultimodalSlice } from './multimodalSlice';
@@ -10,7 +10,6 @@ import { createSubjectSlice } from './subjectSlice';
 import { LogEntry, CombinedGameStoreState, CharacterId, PrefectDNA, PrefectDecision, GameState } from '../types';
 import { KGotController } from '../controllers/KGotController';
 import { enqueueTurnForMedia } from './mediaController';
-import { prefectManager } from '../services/prefectManager';
 import { createIndexedDBStorage } from '../utils/indexedDBStorage';
 
 // Initialize the Controller to get the canonical graph structure
@@ -42,6 +41,55 @@ const INITIAL_LOGS: LogEntry[] = [
     content: 'SUBJECT_84 DETECTED. BIOMETRICS: ELEVATED CORTISOL.'
   }
 ];
+
+// Helper to select active prefects for the scene
+function selectActivePrefects(
+  prefects: PrefectDNA[], 
+  ledger: any, 
+  count: number = 2
+): PrefectDNA[] {
+  const scores = new Map<string, number>();
+  
+  prefects.forEach(p => {
+    let score = 0.1;
+    
+    // Ledger reactivity
+    if (ledger.traumaLevel > 60) {
+      if (p.archetype === 'The Nurse') score += 0.6;
+      if (p.archetype === 'The Voyeur') score += 0.3;
+    }
+    
+    if (ledger.complianceScore < 40) {
+      if (p.archetype === 'The Zealot') score += 0.5;
+      if (p.archetype === 'The Sadist') score += 0.4;
+    }
+    
+    // Archetype-specific
+    switch (p.archetype) {
+      case 'The Yandere':
+        score += 0.4;
+        if (ledger.complianceScore < 30) score += 0.2;
+        break;
+      case 'The Dissident':
+        if (ledger.hopeLevel > 40) score += 0.4;
+        break;
+      // ... other archetypes
+    }
+    
+    if (p.favorScore > 70) score += 0.2;
+    if (p.currentEmotionalState?.paranoia > 0.7) score += 0.2;
+    
+    scores.set(p.id, score);
+  });
+  
+  return [...prefects]
+    .sort((a, b) => {
+      const scoreA = scores.get(a.id) || 0;
+      const scoreB = scores.get(b.id) || 0;
+      return (scoreB + Math.random() * 0.3) - (scoreA + Math.random() * 0.3);
+    })
+    .slice(0, count);
+}
 
 export interface GameStoreWithPrefects extends CombinedGameStoreState {
     prefects: PrefectDNA[];
@@ -87,19 +135,36 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       })),
 
       applyServerState: (result: any) => {
-          // 1. Register Multimodal Turn
+          // 1. Identify Primary Actor for Visualization
+          // Try to find which prefect was most active in the simulation results
+          let primaryActor: PrefectDNA | CharacterId | string = CharacterId.PLAYER; // Default to player/POV
+          
+          if (result.prefectSimulations && result.prefectSimulations.length > 0) {
+              // Heuristic: Pick the prefect with the longest public action text, assuming they are the focus
+              const sortedSims = [...result.prefectSimulations].sort((a: any, b: any) => 
+                  (b.public_action?.length || 0) - (a.public_action?.length || 0)
+              );
+              const activeId = sortedSims[0].prefect_id;
+              const prefect = get().prefects.find(p => p.id === activeId);
+              if (prefect) {
+                  primaryActor = prefect;
+              }
+          }
+
+          // 2. Register Multimodal Turn
           let newTurnId: string | null = null;
           if (result.narrative) {
               const newTurn = get().registerTurn(result.narrative, result.visualPrompt, {
                   ledgerSnapshot: result.state_updates ? { ...get().gameState.ledger, ...result.state_updates } : get().gameState.ledger,
-                  directorDebug: result.thoughtProcess
+                  directorDebug: result.thoughtProcess,
+                  activeCharacters: typeof primaryActor !== 'string' ? [primaryActor.id] : [primaryActor]
               });
               newTurnId = newTurn.id;
               
               // Trigger media generation pipeline
               enqueueTurnForMedia(
                 newTurn, 
-                'Subject_84', 
+                primaryActor, 
                 get().gameState.ledger
               );
           }
@@ -160,99 +225,118 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         const state = get();
         set({ isThinking: true });
         
-        // 1. Trigger Subject Reactions (Sync Logic)
+        // 1. Trigger Subject Reactions (client-side, instant)
         let actionType: 'COMPLY' | 'DEFY' | 'OBSERVE' | 'SPEAK' = 'OBSERVE';
         const lower = input.toLowerCase();
-        if (lower.includes('submit') || lower.includes('yes') || lower.includes('bow')) actionType = 'COMPLY';
-        else if (lower.includes('resist') || lower.includes('no') || lower.includes('spit')) actionType = 'DEFY';
+        if (lower.includes('submit') || lower.includes('yes')) actionType = 'COMPLY';
+        else if (lower.includes('resist') || lower.includes('no')) actionType = 'DEFY';
         else if (lower.includes('speak') || lower.includes('ask')) actionType = 'SPEAK';
         
         get().triggerSubjectReaction(actionType, input);
-
+        
         try {
-            const history = state.logs.filter(l => l.type === 'narrative').map(l => l.content);
+          const history = state.logs.filter(l => l.type === 'narrative').map(l => l.content);
+          
+          // 2. Initialize prefects if needed
+          let currentPrefects = state.prefects;
+          if (currentPrefects.length === 0) {
+            // Initialize from prefectManager logic or generate new
+            const { initializePrefects } = await import('../lib/agents/PrefectGenerator');
+            currentPrefects = initializePrefects(state.gameState.seed);
+            set({ prefects: currentPrefects });
+          }
+          
+          // 3. Select 2-3 active prefects (client-side logic, no API calls)
+          const activePrefects = selectActivePrefects(
+            currentPrefects, 
+            state.gameState.ledger, 
+            2 // Reduce to 2 for faster inference
+          );
+          
+          // 4. SINGLE API CALL - Unified Director handles everything
+          const result = await executeUnifiedDirectorTurn(
+            input,
+            history,
+            state.kgot,
+            activePrefects
+          );
+          
+          // 5. Process prefect simulation results (update DNA state)
+          if (result.prefectSimulations && result.prefectSimulations.length > 0) {
+            const updatedPrefects = [...state.prefects];
             
-            // 2. Initialize or Hydrate Prefect Manager
-            if (prefectManager.getPrefects().length === 0) {
-                 if (state.prefects.length > 0) {
-                     prefectManager.loadState(state.prefects);
-                 } else {
-                     prefectManager.initialize(state.gameState.seed);
-                 }
-            }
-
-            // 3. Simulate Prefect Turn
-            const { thoughts, updatedDNA } = await prefectManager.simulateTurn(
-                state.gameState, 
-                history, 
-                input,
-                state.kgot,
-                get().addLog // Pass logger for error reporting
-            );
-            
-            // Update store with new DNA (persisting emotional shifts)
-            get().updatePrefects(updatedDNA);
-
-            // 4. Map Thoughts to Decisions for Director
-            const prefectDecisions: PrefectDecision[] = thoughts.map(t => {
-                let detailedAction = t.publicAction;
-                if (t.sabotageAttempt) {
-                    detailedAction += ` [INTERNAL SUBROUTINE: SABOTAGE Attempt against ${t.sabotageAttempt.target} via ${t.sabotageAttempt.method}]`;
-                }
-                if (t.allianceSignal) {
-                    detailedAction += ` [INTERNAL SUBROUTINE: ALLIANCE Signal to ${t.allianceSignal.target}: "${t.allianceSignal.message}"]`;
-                }
-
-                return {
-                    prefectId: t.agentId,
-                    action: 'act', 
-                    actionDetail: detailedAction,
-                    publicUtterance: null,
-                    hiddenProposal: t.hiddenMotivation,
-                    targetId: t.sabotageAttempt?.target || t.allianceSignal?.target || null,
-                    stateDelta: {},
-                    confidence: t.emotionalState.confidence
-                };
-            });
-
-            // 5. System Log for Debugging/Transparency
-            if (thoughts.length > 0) {
-                const agentLog = thoughts.map(t => {
-                    const name = t.agentId.split('_').pop() || 'AGENT';
-                    let status = "";
-                    if (t.sabotageAttempt) status = `[⚠️ SABOTAGE: ${t.sabotageAttempt.target}]`;
-                    else if (t.allianceSignal) status = `[🤝 ALLIANCE: ${t.allianceSignal.target}]`;
-                    
-                    return `${name}: "${t.hiddenMotivation.substring(0, 40)}..." ${status}`;
-                }).join(' | ');
-
-                get().addLog({
-                    id: `prefect-sim-${Date.now()}`,
-                    type: 'system',
-                    content: `PREFECT SIMULATION :: ${agentLog}`
-                });
+            result.prefectSimulations.forEach((sim: any) => {
+              const prefectIndex = updatedPrefects.findIndex(p => p.id === sim.prefect_id);
+              if (prefectIndex !== -1) {
+                const prefect = updatedPrefects[prefectIndex];
                 
-                set({ lastSimulationLog: `PREFECT SIMULATION :: ${agentLog}` });
-            }
-
-            // 6. Execute Director Turn
-            const result = await executeDirectorTurn(
-                input, 
-                history, 
-                state.kgot,
-                prefectDecisions 
-            );
-
-            get().applyServerState(result);
-            
-        } catch (e) {
-            console.error("Critical Client Director Error:", e);
-            set({ isThinking: false });
-            get().addLog({
-                id: `error-${Date.now()}`,
-                type: 'system',
-                content: 'CRITICAL: NEURO-SYMBOLIC DISCONNECT. RETRYING CONNECTION...'
+                // Update state from simulation
+                prefect.currentEmotionalState = sim.emotional_state;
+                prefect.lastPublicAction = sim.public_action;
+                
+                if (sim.favor_score_delta) {
+                  prefect.favorScore = Math.max(0, Math.min(100, 
+                    prefect.favorScore + sim.favor_score_delta
+                  ));
+                }
+                
+                if (sim.secrets_uncovered?.length) {
+                  prefect.knowledge = [
+                    ...(prefect.knowledge || []),
+                    ...sim.secrets_uncovered
+                  ].slice(-10); // Keep last 10
+                }
+                
+                // Handle sabotage/alliance (update relationships)
+                if (sim.sabotage_attempt) {
+                  const targetId = updatedPrefects.find(p => 
+                    p.displayName.includes(sim.sabotage_attempt.target)
+                  )?.id;
+                  if (targetId) {
+                    prefect.relationships[targetId] = 
+                      Math.max(-1, (prefect.relationships[targetId] || 0) - 0.3);
+                  }
+                }
+                
+                if (sim.alliance_signal) {
+                  const targetId = updatedPrefects.find(p => 
+                    p.displayName.includes(sim.alliance_signal.target)
+                  )?.id;
+                  if (targetId) {
+                    prefect.relationships[targetId] = 
+                      Math.min(1, (prefect.relationships[targetId] || 0) + 0.2);
+                  }
+                }
+                
+                updatedPrefects[prefectIndex] = prefect;
+              }
             });
+            
+            set({ prefects: updatedPrefects });
+            
+            // Create a system log showing prefect simulation summary
+            const simLog = result.prefectSimulations
+              .map((s: any) => `${s.prefect_name}: "${s.hidden_motivation.substring(0, 40)}..."`)
+              .join(' | ');
+            
+            get().addLog({
+              id: `sim-${Date.now()}`,
+              type: 'system',
+              content: `PREFECT SIMULATION :: ${simLog}`
+            });
+          }
+          
+          // 6. Apply the rest of the result (same as before)
+          get().applyServerState(result);
+          
+        } catch (e) {
+          console.error("Unified Director Error:", e);
+          set({ isThinking: false });
+          get().addLog({
+            id: `error-${Date.now()}`,
+            type: 'system',
+            content: 'ERROR: Neuro-Symbolic disconnect. Retrying...'
+          });
         }
       },
 
@@ -280,14 +364,11 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       startSession: async () => {
         const state = get();
         
-        // Initialize Prefects
-        if (prefectManager.getPrefects().length === 0) {
-            if (state.prefects.length > 0) {
-                prefectManager.loadState(state.prefects);
-            } else {
-                prefectManager.initialize(state.gameState.seed);
-                set({ prefects: prefectManager.getPrefects() });
-            }
+        // Initialize Prefects if needed
+        if (state.prefects.length === 0) {
+            const { initializePrefects } = await import('../lib/agents/PrefectGenerator');
+            const newPrefects = initializePrefects(state.gameState.seed);
+            set({ prefects: newPrefects });
         }
 
         // Initialize Remedial Class
@@ -301,10 +382,11 @@ export const useGameStore = create<GameStoreWithPrefects>()(
            set({ isThinking: true });
            
            try {
-               const result = await executeDirectorTurn(
+               const result = await executeUnifiedDirectorTurn(
                    "INITIALIZE_SIMULATION", 
                    [], 
-                   state.kgot
+                   state.kgot,
+                   [] // No active prefects for intro
                );
                get().applyServerState(result);
            } catch (e) {

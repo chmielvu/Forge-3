@@ -33,7 +33,8 @@ export function buildVisualPrompt(
   sceneContext: string,
   ledger: YandereLedger,
   narrativeText: string,
-  previousTurn?: MultimodalTurn 
+  previousTurn?: MultimodalTurn,
+  directorVisualPrompt?: string // NEW: Optional director instruction
 ): string {
   // Delegate to the VisualCoherenceEngine for detailed prompt construction
   return visualCoherenceEngine.buildCoherentPrompt(
@@ -41,7 +42,8 @@ export function buildVisualPrompt(
     sceneContext, 
     ledger, 
     narrativeText,
-    previousTurn
+    previousTurn,
+    directorVisualPrompt
   );
 }
 
@@ -59,7 +61,8 @@ export const generateNarrativeImage = async (
   ledger: YandereLedger,
   narrativeText: string,
   previousTurn?: MultimodalTurn,
-  retryCount: number = 0
+  retryCount: number = 0,
+  directorVisualPrompt?: string // NEW
 ): Promise<string | undefined> => {
   
   if (!BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableImages) {
@@ -68,7 +71,7 @@ export const generateNarrativeImage = async (
   }
 
   // 1. Build the coherent prompt internally (Client Side State)
-  const finalCoherentPrompt = buildVisualPrompt(target, sceneContext, ledger, narrativeText, previousTurn);
+  const finalCoherentPrompt = buildVisualPrompt(target, sceneContext, ledger, narrativeText, previousTurn, directorVisualPrompt);
 
   try {
     // 2. Call Service (Client Side Execution)
@@ -91,7 +94,7 @@ export const generateNarrativeImage = async (
       console.warn(`[mediaService] Image generation error on attempt ${retryCount + 1}, retrying...`, error);
       // Backoff handled in service mostly, but here we retry the whole logic (e.g. prompt rebuild)
       await new Promise(resolve => setTimeout(resolve, 2000 + (retryCount * 2000))); 
-      return generateNarrativeImage(target, sceneContext, ledger, narrativeText, previousTurn, retryCount + 1);
+      return generateNarrativeImage(target, sceneContext, ledger, narrativeText, previousTurn, retryCount + 1, directorVisualPrompt);
     }
     
     console.error(`[mediaService] Image generation failed after ${MAX_IMAGE_RETRIES + 1} attempts.`, error);
@@ -166,7 +169,7 @@ export const generateEnhancedMedia = async (
   // 1. Generate Image (Internal buildVisualPrompt call)
   // Use allSettled to allow partial success (e.g., Image works, Audio fails)
   
-  const imagePromise = generateNarrativeImage(target, visualPrompt, ledger, narrative, previousTurn)
+  const imagePromise = generateNarrativeImage(target, visualPrompt, ledger, narrative, previousTurn, 0, visualPrompt)
     .catch(e => { console.warn("Image gen failed in orchestrator:", e); return undefined; });
   
   const audioPromise = generateSpeech(narrative, narratorVoiceId)
@@ -187,7 +190,7 @@ export const generateEnhancedMedia = async (
           return undefined;
         }
         // Build coherent prompt for video
-        const coherentPrompt = buildVisualPrompt(target, visualPrompt, ledger, narrative, previousTurn);
+        const coherentPrompt = buildVisualPrompt(target, visualPrompt, ledger, narrative, previousTurn, visualPrompt);
         return await animateImageWithVeo(imageBase64, coherentPrompt, '16:9');
       } catch (e) {
         console.error("Conditional video generation failed:", e);

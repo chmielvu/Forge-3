@@ -33,4 +33,15 @@ export const BEHAVIOR_CONFIG = {
     enableVideo: false,         // Globally enable/disable video generation (for non-thresholded scenes)
     MAX_MEDIA_QUEUE_RETRIES: 3, // Max retries for failed media generation
   },
+  UNIFIED_DIRECTOR: {
+    // How many prefects to simulate per turn
+    ACTIVE_PREFECT_COUNT: 2, // Reduced from 3 for faster inference
+    
+    // Whether to use gemini-2.5-flash (fast) or gemini-3-pro (slower, higher quality)
+    // Note: Implementation forces Gemini 3 Pro as requested
+    USE_PRO_MODEL: true,
+    
+    // Whether to include full prefect DNA in prompt (verbose but accurate)
+    INCLUDE_FULL_CONTEXT: true
+  }
 };

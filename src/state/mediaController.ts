@@ -40,13 +40,15 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
 
     switch (item.type) {
       case 'image':
-        // Generate image using full context, building prompt internally
+        // Generate image using full context, passing the Director's specific prompt
         dataUrl = await generateNarrativeImage(
             item.target || CharacterId.PLAYER,
             turn.text, // Use narrative text as scene context
             turn.metadata?.ledgerSnapshot || INITIAL_LEDGER,
             item.narrativeText || turn.text,
-            item.previousTurn
+            item.previousTurn,
+            0, // Initial retry count
+            item.prompt // Pass the Director's specific visual prompt (stored in item.prompt)
         );
         break;
       case 'audio':
@@ -160,7 +162,6 @@ const processMediaQueue = async (): Promise<void> => {
 
   if (availableSlots <= 0 && pending.length > 0) {
     // Already processing max concurrent items, and more are pending. Reschedule check.
-    // if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] Max concurrent items (${MAX_CONCURRENT_MEDIA_GENERATION}) in progress, rescheduling queue check.`);
     if (mediaProcessingTimeout) window.clearTimeout(mediaProcessingTimeout);
     mediaProcessingTimeout = window.setTimeout(processMediaQueue, MEDIA_PROCESSING_DELAY_MS);
     return;
@@ -168,7 +169,6 @@ const processMediaQueue = async (): Promise<void> => {
 
   if (pending.length === 0 && inProgress.length === 0) {
     // Queue is entirely empty
-    // if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log("[MediaController] Media queue is empty.");
     mediaProcessingTimeout = null; // Clear timeout when queue is truly empty
     return;
   }
@@ -207,21 +207,17 @@ export const enqueueTurnForMedia = (
     return;
   }
 
-  // Pre-build coherent visual prompt for potential Video generation usage
-  const finalCoherentVisualPrompt = buildVisualPrompt(
-    target, 
-    turn.text, 
-    ledger, 
-    turn.text, 
-    previousTurn
-  );
+  // Use the visualPrompt from the turn (Director Output) if available, otherwise fallback
+  const directorVisualPrompt = turn.visualPrompt;
 
   // Image
   if ((turn.imageStatus === MediaStatus.idle || forceEnqueue) && BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableImages) {
     store.enqueueMediaForTurn({
       turnId: turn.id,
       type: 'image',
-      prompt: finalCoherentVisualPrompt, // Stored for debugging or video reuse, but image gen builds fresh
+      // Pass the director's visual prompt here. It will be passed to generateNarrativeImage
+      // which will then pass it to buildVisualPrompt for coherent styling.
+      prompt: directorVisualPrompt || turn.text, 
       narrativeText: turn.text,
       target: target,
       previousTurn: previousTurn,
@@ -247,10 +243,20 @@ export const enqueueTurnForMedia = (
                           (turn.metadata?.ledgerSnapshot?.shamePainAbyssLevel || 0) > BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableVideoAboveShame;
   
   if ((turn.videoStatus === MediaStatus.idle || forceEnqueue) && BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableVideo && isHighIntensity) {
+    // For video, we might want a slightly more stable prompt or the same one
+    const coherentVideoPrompt = buildVisualPrompt(
+        target, 
+        turn.text, 
+        ledger, 
+        turn.text, 
+        previousTurn,
+        directorVisualPrompt // Use same visual base
+    );
+
     store.enqueueMediaForTurn({
       turnId: turn.id,
       type: 'video',
-      prompt: finalCoherentVisualPrompt, // Video uses this pre-built prompt
+      prompt: coherentVideoPrompt, // Video uses pre-built coherent prompt
       narrativeText: turn.text,
       target: target,
       previousTurn: previousTurn,
@@ -277,7 +283,16 @@ export const regenerateMediaForTurn = async (turnId: string, type?: 'image' | 'a
 
   const previousTurnIndex = turn.turnIndex - 1;
   const previousTurn = previousTurnIndex >= 0 ? store.multimodalTimeline[previousTurnIndex] : undefined;
-  const target = turn.metadata?.activeCharacters?.[0] || CharacterId.PLAYER;
+  
+  // Try to find the specific active character from metadata, or fallback to player
+  // This improves targeting for re-generations
+  let target: string | PrefectDNA = CharacterId.PLAYER;
+  if (turn.metadata?.activeCharacters && turn.metadata.activeCharacters.length > 0) {
+      // Find matching prefect object if available in store
+      const prefectId = turn.metadata.activeCharacters[0];
+      const prefect = store.prefects.find(p => p.id === prefectId);
+      target = prefect || prefectId;
+  }
 
   const itemsToRemove: MediaQueueItem[] = [];
   if (!type || type === 'image') itemsToRemove.push({ turnId, type: 'image', prompt: '' });

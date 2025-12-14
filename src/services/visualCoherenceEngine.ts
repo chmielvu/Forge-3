@@ -31,7 +31,8 @@ class VisualCoherenceEngine {
     sceneContext: string,
     ledger: YandereLedger,
     narrativeText: string,
-    previousTurn?: MultimodalTurn
+    previousTurn?: MultimodalTurn,
+    directorVisualInstruction?: string // NEW: Direct override from Director
   ): string {
     this.updateCharacterStates(target, ledger, narrativeText);
     this.inferEnvironmentFromContext(sceneContext, ledger); 
@@ -43,19 +44,31 @@ class VisualCoherenceEngine {
     // Calculate Dynamic Camera Angle based on Psychological Dominance
     const cameraDirectives = this.calculateCameraDynamics(target, ledger, narrativeText);
 
+    // If Director provided a specific visual instruction, use it as the core subject description
+    // while keeping the stylistic wrappers (lighting, camera, aesthetics).
+    if (directorVisualInstruction && directorVisualInstruction.length > 10) {
+        basePromptParts.subject.description = {
+            ...basePromptParts.subject.description,
+            director_override: directorVisualInstruction
+        };
+    }
+
     const finalPromptObject = {
       header: VISUAL_MANDATE.ZERO_DRIFT_HEADER,
       style: VISUAL_MANDATE.STYLE,
       ...VISUAL_MANDATE.TECHNICAL,
       
-      subject: basePromptParts.subject,
+      // Priority: Director Instruction > Heuristic Description
+      scene_action: directorVisualInstruction || basePromptParts.subject.description,
+      
+      subject_details: basePromptParts.subject, // Details (clothing, injuries) reinforce the action
       environment: basePromptParts.environment,
       psychometrics: basePromptParts.psychometricVisualization,
       
-      camera: cameraDirectives, // NEW: Dynamic camera control
+      camera: cameraDirectives, 
       
-      sceneContext: sceneContext.substring(0, 300),
-      narrativeTone: this.inferEmotionalState(ledger, narrativeText),
+      // Context for nuances
+      narrative_tone: this.inferEmotionalState(ledger, narrativeText),
       continuity: continuityDirectives,
       styleConsistency: styleConsistencyLock,
       
