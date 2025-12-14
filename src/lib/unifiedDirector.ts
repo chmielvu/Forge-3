@@ -83,6 +83,20 @@ function buildPrefectContextBlock(
     const driveInstr = getSpecificDriveInstruction(prefect.archetype);
     const weaknessInstr = getSpecificWeaknessInstruction(prefect.archetype);
 
+    // Identify active rivals in the scene to inject specific conflict triggers
+    const rivalsInScene = activePrefects.filter(p => p.id !== prefect.id).map(p => p.archetype);
+    let conflictTrigger = "";
+    
+    if (prefect.archetype === 'The Zealot' && rivalsInScene.includes('The Yandere')) {
+        conflictTrigger = "CONFLICT TRIGGER: You are terrified of the Yandere's instability. If she gets close to the subject, INTERVENE with a rule citation to separate them.";
+    }
+    if (prefect.archetype === 'The Yandere' && rivalsInScene.includes('The Zealot')) {
+        conflictTrigger = "CONFLICT TRIGGER: The Zealot is trying to take your toy away with her 'rules'. Ignore her or threaten her subtly.";
+    }
+    if (prefect.archetype === 'The Sadist' && rivalsInScene.includes('The Nurse')) {
+        conflictTrigger = "CONFLICT TRIGGER: The Nurse is 'coddling' the subject. Break something she just fixed to prove a point.";
+    }
+
     return `
 ### PREFECT ${idx + 1}: ${prefect.displayName} (${prefect.archetype})
 
@@ -114,6 +128,7 @@ function buildPrefectContextBlock(
 1. **DRIVE ADVANCEMENT:** ${driveInstr}
 2. **WEAKNESS MANIFESTATION:** ${weaknessInstr}
    (The weakness MUST appear in the 'public_action' text as a physical or tonal tell).
+3. **${conflictTrigger || "MAINTAIN STATUS QUO"}**
 
 ---`;
   }).join('\n');

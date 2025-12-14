@@ -42,6 +42,72 @@ const INITIAL_LOGS: LogEntry[] = [
   }
 ];
 
+// Helper: Lightweight K-Means Clustering (replacing heavy ml5)
+function simpleKMeans(vectors: Record<string, number[]>, k: number = 3): Record<string, string[]> {
+    const keys = Object.keys(vectors);
+    if (keys.length < k) return { 'cluster_0': keys };
+
+    // 1. Initialize Centroids randomly
+    const centroids: number[][] = [];
+    for (let i = 0; i < k; i++) {
+        centroids.push(vectors[keys[Math.floor(Math.random() * keys.length)]]);
+    }
+
+    let assignments: Record<string, number> = {};
+    let iterations = 0;
+    
+    // 2. Iteration Loop
+    while (iterations < 10) {
+        // Assign
+        let changed = false;
+        keys.forEach(key => {
+            const vec = vectors[key];
+            let minDist = Infinity;
+            let closest = 0;
+            centroids.forEach((cent, idx) => {
+                const dist = vec.reduce((sum, v, i) => sum + Math.pow(v - cent[i], 2), 0);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = idx;
+                }
+            });
+            if (assignments[key] !== closest) changed = true;
+            assignments[key] = closest;
+        });
+
+        if (!changed) break;
+
+        // Update Centroids
+        const newCentroids = Array(k).fill(0).map(() => Array(vectors[keys[0]].length).fill(0));
+        const counts = Array(k).fill(0);
+        
+        keys.forEach(key => {
+            const cluster = assignments[key];
+            const vec = vectors[key];
+            vec.forEach((v, i) => newCentroids[cluster][i] += v);
+            counts[cluster]++;
+        });
+
+        for(let i=0; i<k; i++) {
+            if (counts[i] > 0) {
+                newCentroids[i] = newCentroids[i].map(v => v / counts[i]);
+                centroids[i] = newCentroids[i];
+            }
+        }
+        iterations++;
+    }
+
+    // 3. Group by Cluster
+    const groups: Record<string, string[]> = {};
+    Object.entries(assignments).forEach(([node, cluster]) => {
+        const clusterName = `cluster_${cluster}`;
+        if (!groups[clusterName]) groups[clusterName] = [];
+        groups[clusterName].push(node);
+    });
+    
+    return groups;
+}
+
 // Helper to select active prefects for the scene
 function selectActivePrefects(
   prefects: PrefectDNA[], 
@@ -94,6 +160,8 @@ function selectActivePrefects(
 export interface GameStoreWithPrefects extends CombinedGameStoreState {
     prefects: PrefectDNA[];
     updatePrefects: (prefects: PrefectDNA[]) => void;
+    narrativeClusters: Record<string, string[]>; // New: Stores Node2Vec Clusters
+    analyzeGraph: () => void; // New: Triggers analysis
 }
 
 export const useGameStore = create<GameStoreWithPrefects>()(
@@ -104,6 +172,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       logs: INITIAL_LOGS,
       choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
       prefects: [], 
+      sessionActive: false, // Default to false
+      narrativeClusters: {},
       
       isThinking: false,
       isMenuOpen: false,
@@ -134,13 +204,29 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         logs: state.logs.map(log => log.id === logId ? { ...log, ...media } : log)
       })),
 
+      analyzeGraph: async () => {
+          // Triggered periodically or after turns to update embeddings and clusters
+          const state = get();
+          const currentController = new KGotController(state.kgot);
+          
+          // 1. Compute GraphSAGE Embeddings (Deep Learning for Graph)
+          const embeddings = await currentController.getGraphSAGEEmbeddings();
+          
+          // 2. Perform Clustering (Narrative Subplots)
+          // K=3 for finding e.g., 'Trauma Group', 'Faculty Elite', 'Resistance'
+          const clusters = simpleKMeans(embeddings, 3);
+          
+          // 3. Log results to system if changed
+          console.log("[GraphAnalysis] Narrative Clusters updated (SAGE):", clusters);
+          
+          set({ narrativeClusters: clusters });
+      },
+
       applyServerState: (result: any) => {
           // 1. Identify Primary Actor for Visualization
-          // Try to find which prefect was most active in the simulation results
           let primaryActor: PrefectDNA | CharacterId | string = CharacterId.PLAYER; // Default to player/POV
           
           if (result.prefectSimulations && result.prefectSimulations.length > 0) {
-              // Heuristic: Pick the prefect with the longest public action text, assuming they are the focus
               const sortedSims = [...result.prefectSimulations].sort((a: any, b: any) => 
                   (b.public_action?.length || 0) - (a.public_action?.length || 0)
               );
@@ -214,10 +300,12 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                   }
               };
           });
+          
+          // Trigger async graph analysis
+          setTimeout(() => get().analyzeGraph(), 100);
       },
 
       applyDirectorUpdates: (response: any) => {
-        // Legacy compat
         console.warn("Using legacy applyDirectorUpdates - migrate to applyServerState");
       },
 
@@ -225,7 +313,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         const state = get();
         set({ isThinking: true });
         
-        // 1. Trigger Subject Reactions (client-side, instant)
         let actionType: 'COMPLY' | 'DEFY' | 'OBSERVE' | 'SPEAK' = 'OBSERVE';
         const lower = input.toLowerCase();
         if (lower.includes('submit') || lower.includes('yes')) actionType = 'COMPLY';
@@ -237,23 +324,19 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         try {
           const history = state.logs.filter(l => l.type === 'narrative').map(l => l.content);
           
-          // 2. Initialize prefects if needed
           let currentPrefects = state.prefects;
           if (currentPrefects.length === 0) {
-            // Initialize from prefectManager logic or generate new
             const { initializePrefects } = await import('../lib/agents/PrefectGenerator');
             currentPrefects = initializePrefects(state.gameState.seed);
             set({ prefects: currentPrefects });
           }
           
-          // 3. Select 2-3 active prefects (client-side logic, no API calls)
           const activePrefects = selectActivePrefects(
             currentPrefects, 
             state.gameState.ledger, 
-            2 // Reduce to 2 for faster inference
+            2 
           );
           
-          // 4. SINGLE API CALL - Unified Director handles everything
           const result = await executeUnifiedDirectorTurn(
             input,
             history,
@@ -261,7 +344,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             activePrefects
           );
           
-          // 5. Process prefect simulation results (update DNA state)
           if (result.prefectSimulations && result.prefectSimulations.length > 0) {
             const updatedPrefects = [...state.prefects];
             
@@ -270,7 +352,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
               if (prefectIndex !== -1) {
                 const prefect = updatedPrefects[prefectIndex];
                 
-                // Update state from simulation
                 prefect.currentEmotionalState = sim.emotional_state;
                 prefect.lastPublicAction = sim.public_action;
                 
@@ -284,10 +365,9 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                   prefect.knowledge = [
                     ...(prefect.knowledge || []),
                     ...sim.secrets_uncovered
-                  ].slice(-10); // Keep last 10
+                  ].slice(-10); 
                 }
                 
-                // Handle sabotage/alliance (update relationships)
                 if (sim.sabotage_attempt) {
                   const targetId = updatedPrefects.find(p => 
                     p.displayName.includes(sim.sabotage_attempt.target)
@@ -314,7 +394,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             
             set({ prefects: updatedPrefects });
             
-            // Create a system log showing prefect simulation summary
             const simLog = result.prefectSimulations
               .map((s: any) => `${s.prefect_name}: "${s.hidden_motivation.substring(0, 40)}..."`)
               .join(' | ');
@@ -326,7 +405,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             });
           }
           
-          // 6. Apply the rest of the result (same as before)
           get().applyServerState(result);
           
         } catch (e) {
@@ -351,32 +429,31 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           logs: INITIAL_LOGS,
           choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
           prefects: [],
+          sessionActive: false, // Reset active state
+          narrativeClusters: {},
           isThinking: false,
           executedCode: undefined,
           lastSimulationLog: undefined,
           lastDirectorDebug: undefined,
         });
         
-        // Restart session logic
-        setTimeout(() => get().startSession(), 500);
+        // Removed auto-start. User must click enter again.
       },
 
       startSession: async () => {
+        set({ sessionActive: true }); // Activate session
         const state = get();
         
-        // Initialize Prefects if needed
         if (state.prefects.length === 0) {
             const { initializePrefects } = await import('../lib/agents/PrefectGenerator');
             const newPrefects = initializePrefects(state.gameState.seed);
             set({ prefects: newPrefects });
         }
 
-        // Initialize Remedial Class
         if (Object.keys(state.subjects).length === 0) {
             state.initializeSubjects();
         }
 
-        // Bootstrapping: Generate the opening scene via the Director if timeline is empty
         if (state.multimodalTimeline.length === 0) {
            console.log("[GameStore] Bootstrapping opening scene...");
            set({ isThinking: true });
@@ -386,7 +463,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                    "INITIALIZE_SIMULATION", 
                    [], 
                    state.kgot,
-                   [] // No active prefects for intro
+                   [] 
                );
                get().applyServerState(result);
            } catch (e) {
@@ -394,6 +471,9 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                set({ isThinking: false });
            }
         }
+        
+        // Trigger initial graph analysis
+        get().analyzeGraph();
       },
       
       saveSnapshot: () => {
@@ -411,6 +491,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         kgot: state.kgot,
         prefects: state.prefects,
         subjects: state.subjects,
+        sessionActive: state.sessionActive,
       }),
     }
   )

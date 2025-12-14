@@ -10,9 +10,53 @@ import LedgerDisplay from './components/LedgerDisplay';
 import ActionWheel from './components/ActionWheel';
 import PrefectLeaderboard from './components/PrefectLeaderboard';
 import SubjectPanel from './components/SubjectPanel';
-import { Loader2, Monitor, Eye, Brain, LayoutTemplate, Film, Activity } from 'lucide-react';
+import { Loader2, Monitor, LayoutTemplate, Film, Power, Skull, Brain } from 'lucide-react';
 
 type ViewMode = 'CINEMATIC' | 'ANALYTICAL';
+
+const StartScreen = ({ onStart }: { onStart: () => void }) => (
+  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#050505] text-[#f5f5f4] animate-fade-in font-serif">
+    {/* Decorative Elements */}
+    <div className="absolute inset-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] pointer-events-none"></div>
+    <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-red-900/10 to-transparent pointer-events-none"></div>
+    <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-red-900/10 to-transparent pointer-events-none"></div>
+
+    <div className="relative z-10 text-center max-w-2xl px-6">
+      <div className="mb-8 animate-pulse-slow">
+        <Skull size={48} className="mx-auto text-red-900/50" />
+      </div>
+      
+      <h1 className="font-display text-5xl md:text-7xl tracking-[0.2em] uppercase text-transparent bg-clip-text bg-gradient-to-b from-amber-100 to-red-900 mb-4 drop-shadow-2xl">
+        The Forge's Loom
+      </h1>
+      
+      <div className="h-px w-32 bg-gradient-to-r from-transparent via-red-900 to-transparent mx-auto mb-6"></div>
+      
+      <p className="font-serif text-lg md:text-xl text-stone-400 italic mb-12 leading-relaxed opacity-80">
+        "Masculinity is chaos. Chaos must be refined.<br/>
+        Welcome to the calibration."
+      </p>
+
+      <button 
+        onClick={onStart}
+        className="group relative px-12 py-4 bg-transparent border border-red-900/30 hover:border-red-600 hover:bg-red-950/20 transition-all duration-700 ease-out"
+      >
+        <span className="absolute inset-0 w-full h-full bg-red-900/5 filter blur-xl group-hover:blur-2xl transition-all duration-700 opacity-0 group-hover:opacity-100"></span>
+        <div className="flex items-center gap-3 relative z-10">
+          <Power size={18} className="text-red-500 group-hover:text-red-400 transition-colors" />
+          <span className="font-mono text-sm tracking-[0.4em] uppercase text-red-500 group-hover:text-red-200 transition-colors">
+            Enter The Forge
+          </span>
+        </div>
+      </button>
+      
+      <div className="mt-16 font-mono text-[10px] text-stone-700 tracking-widest uppercase">
+        Neuro-Symbolic Narrative Engine v3.7 <br/>
+        <span className="text-red-900/50">Gemini 2.5 Flash / Gemini 3 Pro</span>
+      </div>
+    </div>
+  </div>
+);
 
 export default function App() {
   const { 
@@ -23,19 +67,21 @@ export default function App() {
     processPlayerTurn,
     choices,
     prefects,
-    startSession
+    startSession,
+    sessionActive
   } = useGameStore();
 
   const [viewMode, setViewMode] = useState<ViewMode>('CINEMATIC');
   const [showDevTools, setShowDevTools] = useState(false);
 
-  useEffect(() => {
-    // Direct initialization
-    startSession();
-  }, [startSession]);
+  // Removed useEffect for auto-start
+
+  if (!sessionActive) {
+    return <StartScreen onStart={startSession} />;
+  }
 
   return (
-    <div className="relative w-screen h-screen bg-[#050505] text-[#f5f5f4] overflow-hidden font-serif selection:bg-red-900 selection:text-white">
+    <div className="relative w-screen h-screen bg-[#050505] text-[#f5f5f4] overflow-hidden font-serif selection:bg-red-900 selection:text-white animate-fade-in">
       
       {/* LAYER 0: Background Media (The World) */}
       <div className={`absolute inset-0 z-0 transition-all duration-700 ${viewMode === 'ANALYTICAL' ? 'opacity-30 blur-sm scale-[1.02]' : 'opacity-60 scale-100'}`}>

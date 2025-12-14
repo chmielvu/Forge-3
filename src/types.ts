@@ -187,6 +187,7 @@ export interface CombinedGameStoreState extends MultimodalSliceExports, SubjectS
   logs: LogEntry[];
   choices: string[];
   prefects: PrefectDNA[];
+  sessionActive: boolean; // New Flag
   isThinking: boolean;
   isMenuOpen: boolean;
   isGrimoireOpen: boolean;

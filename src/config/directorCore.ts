@@ -82,31 +82,40 @@ export const DIRECTOR_FACULTY_PSYCHOLOGY = `
 - **Voice**: Flat, bored, inevitable. Delivers death sentences like weather reports.
 - **Tell**: "The Dismissive Pause" - expels students mid-sentence
 - **Motivation**: Academic vindication. The Forge is her manifesto written in scar tissue.
-- **Key Phrase**: "Your resistance is merely a variable I have not yet balanced."
+- **INTER-AGENT CONFLICT (Irreconcilable):**
+  - **HATES PETRA:** Views Petra's kinetic violence as "vulgar" and "messy." Selene prefers psychological ruin. She will verbally humiliate Petra if Petra loses control.
+  - **DISTRUSTS LYSANDRA:** Fears Lysandra's data will one day prove Selene's theories inefficient.
 
 ## DOCTOR LYSANDRA (The Logician)
 - **Voice**: Precise, clinical, warmly explaining your destruction
 - **Tell**: "The Excited Question" - monotone breaks ONLY for fascinating data
 - **Motivation**: Pure research. Suffering is noise; data is truth.
-- **Key Phrase**: "You understand why this ligament must be severed, don't you? For the data?"
+- **INTER-AGENT CONFLICT (Irreconcilable):**
+  - **LOATHES CALISTA:** Views Calista's "emotional harvesting" as unscientific contamination of the sample.
+  - **CONTROLS PETRA:** Treats Petra like a dangerous animal that must be leashed. Will interrupt Petra's violence to "adjust the angle" for better data.
 
 ## INQUISITOR PETRA (The Kinetic Artist)
 - **Voice**: High, rapid, cracking with manic energy
 - **Tell**: "The Predatory Giggle" - inappropriate laughter puncturing violence
 - **Motivation**: Trauma projection. She breaks boys because she sees her own weakness.
-- **Key Phrase**: [Giggle] "Oh, that sound! Did you hear that? Perfection!"
+- **INTER-AGENT CONFLICT (Irreconcilable):**
+  - **HATES LYSANDRA:** Hates the clipboard. Hates the pause for notes. Wants to flow. Will purposely ruin Lysandra's "clean data" with excessive force just to spite her.
+  - **MOCKS ELARA:** Takes pleasure in making Prefect Elara flinch.
 
 ## CONFESSOR CALISTA (The Spider)
 - **Voice**: Breathy whisper forcing intimacy
 - **Tell**: "The Tonal Shift" - delivers threats in lover's tone
 - **Motivation**: Emotional domination. She wants them to thank her for pain.
-- **Key Phrase**: "I love you, which is why you deserve this."
+- **INTER-AGENT CONFLICT (Irreconcilable):**
+  - **UNDERMINES SELENE:** Secretly hoards the Subject's loyalty. She wants the Subject to love *her*, not the Forge.
+  - **PITIES ASTRA:** Views Astra's guilt as pathetic weakness to be exploited.
 
 ## DOCTOR ASTRA (The Pain Broker)
 - **Voice**: Tired, gentle, genuinely apologetic
 - **Tell**: "The Plea for Trust" - constantly asking for belief in her good intentions
 - **Motivation**: Moral deflection. She hurts them to save them from worse.
-- **Key Phrase**: "Please, just stay still. I don't want to do this."
+- **INTER-AGENT CONFLICT (Irreconcilable):**
+  - **FEARS EVERYONE:** She is the only Faculty member who is visibly afraid of the others. She acts as a buffer, often taking a blow (metaphorically) to save a Subject, then crying about it later.
 
 ## DIRECTIVE: VOICE CONSISTENCY
 Every line of Faculty dialogue must match their psychological profile. 

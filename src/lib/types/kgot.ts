@@ -1,8 +1,9 @@
 
+
 import { YandereLedger } from '../../types';
 
 // Knowledge Graph of Thoughts (KGoT) Schema
-// Version: SOTA 3.6 - Deep Agent Integration
+// Version: SOTA 3.7 - Graphology Integration
 
 export type NodeType = 'ENTITY' | 'LOCATION' | 'EVENT' | 'CONCEPT' | 'FACULTY' | 'PREFECT' | 'SUBJECT';
 
@@ -78,6 +79,7 @@ export interface KGotNode {
 export type EdgeType = 'RELATIONSHIP' | 'SPATIAL' | 'TEMPORAL' | 'KNOWLEDGE' | 'TRAUMA_BOND' | 'SECRET_ALLIANCE' | 'GRUDGE' | 'OBSESSION';
 
 export interface KGotEdge {
+  key?: string; // Support for MultiGraph keys
   source: string;
   target: string;
   type: EdgeType | string;
