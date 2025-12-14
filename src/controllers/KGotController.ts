@@ -251,6 +251,19 @@ export class KGotController {
 
     const key = `${sourceId}_${targetId}_${relation}`;
     try {
+        // DEDUPLICATION & DECAY LOGIC
+        // Check for existing similar edge types between these nodes
+        const existingEdges = this.graph.edges(sourceId, targetId).filter(e => 
+            this.graph.getEdgeAttribute(e, 'type') === (meta?.type || 'RELATIONSHIP')
+        );
+        
+        // Decay existing edges to represent memory fade/focus shift
+        existingEdges.forEach(e => {
+            const currentWeight = this.graph.getEdgeAttribute(e, 'weight');
+            this.graph.setEdgeAttribute(e, 'weight', currentWeight * 0.8);
+        });
+
+        // Add or Update the new edge
         if (!(this.graph as any).hasEdge(key)) {
             this.graph.addEdgeWithKey(key, sourceId, targetId, {
                 label: relation,
@@ -265,6 +278,14 @@ export class KGotController {
                 this.graph.setEdgeAttribute(key, 'meta', { ...currentMeta, ...meta });
             }
         }
+        
+        // Update Activity Timestamp for Magellan
+        if ((this.graph as any).hasNode(sourceId)) {
+            this.graph.mergeNodeAttributes(sourceId, {
+                last_active_turn: this.globalState.turn_count
+            });
+        }
+
     } catch (e) {
         console.error(`[KGot] Graphology Error adding edge ${key}:`, e);
     }

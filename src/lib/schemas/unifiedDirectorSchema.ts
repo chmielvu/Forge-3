@@ -77,7 +77,7 @@ export const UnifiedDirectorOutputSchema = {
     // === PART 2: NARRATIVE SYNTHESIS (Director's original role) ===
     thought_signature: { 
       type: Type.STRING,
-      description: "I-MCTS reasoning path chosen"
+      description: "The I-MCTS Execution Log. MUST format as: 'BRANCHES: [A: Trauma, B: Subversion, C: Novelty] -> EVALUATION: [Scores] -> SELECTION: [Chosen Branch]'"
     },
     
     somatic_state: {
@@ -92,7 +92,12 @@ export const UnifiedDirectorOutputSchema = {
     
     narrative_text: { 
       type: Type.STRING,
-      description: "The external observable scene with all prefect actions integrated"
+      description: "The external observable scene with all prefect actions integrated. Must match the requested 'Abyss Narrator' voice mode."
+    },
+    
+    audio_markup: {
+      type: Type.STRING,
+      description: "The narrative text wrapped in tags indicating emotional direction for TTS (e.g. [FAST], [WHISPER], [BREATHY])."
     },
     
     visual_prompt: { type: Type.STRING },
@@ -185,6 +190,7 @@ export interface UnifiedDirectorOutput {
     internal_collapse: string;
   };
   narrative_text: string;
+  audio_markup?: string;
   visual_prompt: string;
   choices: string[];
   ledger_update?: Partial<any>;

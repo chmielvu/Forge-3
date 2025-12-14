@@ -8,6 +8,7 @@ import { PrefectDNA, YandereLedger, GameState } from "../types";
 import { INITIAL_LEDGER } from "../constants";
 import { callGeminiWithRetry } from "../utils/apiRetry";
 import { narrativeQualityEngine } from "../services/narrativeQualityEngine";
+import { selectNarratorMode, NARRATOR_VOICES } from '../services/narratorEngine';
 
 const getApiKey = (): string => {
   try {
@@ -114,36 +115,28 @@ function buildPrefectContextBlock(
     let relationshipsDesc = "";
     let socialMandate = "";
     
-    // Check against every other active prefect
     const otherActivePrefects = activePrefects.filter(p => p.id !== prefect.id);
     
     otherActivePrefects.forEach(other => {
-        // Default to 0 if relationship undefined
         const score = prefect.relationships[other.id] || 0;
         const name = other.displayName;
         
         relationshipsDesc += `${name}: ${score.toFixed(1)} | `;
 
         if (score > 0.5) {
-            // ALLIANCE LOGIC
             socialMandate += `\n- **ALLIANCE (${name}):** You trust ${name}. Coordinate with them. Use 'alliance_signal' to show support or share a secret glance.`;
         } else if (score < -0.4) {
-            // RIVALRY LOGIC
             socialMandate += `\n- **RIVALRY (${name}):** You despise ${name}. If they fail, mock them. If they succeed, try to undermine them via 'sabotage_attempt'. Do not let them outshine you.`;
         } else {
-            // INDIFFERENCE / NEUTRAL
             socialMandate += `\n- **NEUTRAL (${name}):** Ignore ${name} unless they interfere with your goal.`;
         }
     });
 
     const emotionalState = prefect.currentEmotionalState || { paranoia: 0.2, desperation: 0.2, confidence: 0.5 };
-    
-    // Archetype-specific logic integration
     const driveInstr = getSpecificDriveInstruction(prefect.archetype);
     const weaknessInstr = getSpecificWeaknessInstruction(prefect.archetype);
     const sceneGoal = deriveShortTermGoal(prefect, ledger, rivalsInScene.filter(r => r !== prefect.archetype));
 
-    // Fallback if no specific social mandate generated
     if (!socialMandate) socialMandate = "\n- **STATUS QUO:** Maintain your rank. Do not show weakness.";
 
     return `
@@ -171,9 +164,7 @@ function buildPrefectContextBlock(
 
 **BEHAVIORAL MANDATES (HIGHEST PRIORITY):**
 1. **CURRENT SCENE GOAL (MANDATORY):** "${sceneGoal}"
-   (You MUST attempt to achieve this specific goal in the current turn).
 2. **WEAKNESS MANIFESTATION:** ${weaknessInstr}
-   (The weakness MUST appear in the 'public_action' text as a physical or tonal tell).
 3. **SOCIAL DYNAMICS (RELATIONAL PRESSURE):** ${socialMandate}
 
 ---`;
@@ -211,8 +202,8 @@ export async function executeUnifiedDirectorTurn(
   playerInput: string,
   history: string[],
   currentGraphData: KnowledgeGraph,
-  activePrefects: PrefectDNA[], // Pass in 2-3 selected prefects
-  isLiteMode: boolean = false // Dynamic Model Switching
+  activePrefects: PrefectDNA[],
+  isLiteMode: boolean = false
 ) {
   try {
     const modelId = isLiteMode ? 'gemini-2.5-flash-lite-latest' : 'gemini-3-pro-preview';
@@ -223,7 +214,11 @@ export async function executeUnifiedDirectorTurn(
     const graphSnapshot = controller.getGraph();
     const ledger: YandereLedger = graphSnapshot.nodes['Subject_84']?.attributes?.ledger || INITIAL_LEDGER;
     
-    // 2. Build unified prompt that includes BOTH prefect simulation AND narrative synthesis
+    // 2. Select Narrator Mode
+    const currentNarratorMode = selectNarratorMode(ledger);
+    const voiceProfile = NARRATOR_VOICES[currentNarratorMode];
+
+    // 3. Build unified prompt that includes BOTH prefect simulation AND narrative synthesis
     const prefectContextBlock = buildPrefectContextBlock(activePrefects, ledger, playerInput, history);
     
     const unifiedPrompt = `
@@ -233,14 +228,38 @@ ${DIRECTOR_FACULTY_PSYCHOLOGY}
 
 # === UNIFIED TURN EXECUTION PROTOCOL ===
 
-You are executing a SINGLE INTEGRATED TURN with two phases in one inference:
+You are executing a SINGLE INTEGRATED TURN with three phases in one inference:
 
 ## PHASE 1: PREFECT AGENT SIMULATION (Role-Based Reasoning)
 ${prefectContextBlock}
 
-## PHASE 2: NARRATIVE SYNTHESIS (Your Traditional Role)
+## PHASE 2: NARRATIVE STRATEGY (I-MCTS Protocol)
 
-Now that you have simulated the prefect thoughts, integrate them into a cohesive scene.
+Before generating the scene, you must perform an INTROSPECTIVE SIMULATION (I-MCTS).
+**CRITICAL:** Do NOT skip this step. You must explicitly output the reasoning in 'thought_signature'.
+
+1. **EXPAND:** Identify 3 potential narrative branches for this turn:
+   - **Branch A: Immediate Trauma** (Kinetic escalation via Petra/Enforcer/Prefect)
+   - **Branch B: Psychological Subversion** (Gaslighting via Calista/Nurse/Prefect)
+   - **Branch C: Narrative Novelty** (Unexpected event, new mechanic, or rule shift)
+   
+2. **EVALUATE:** Score each branch (0-100) based on:
+   - **Tension:** Does it increase the 'Abyss' metric?
+   - **Coherence:** Does it fit the current 'Manara-Noir' visual state?
+   - **Castration Anxiety:** Does it threaten the 'Seat of the Ego'?
+
+3. **SELECT:** Choose the highest-scoring branch and execute it in Phase 3.
+
+## PHASE 3: NARRATIVE SYNTHESIS (Execution)
+
+Generate the final scene based on the Selected Branch from I-MCTS.
+
+**NARRATIVE VOICE MANDATE:**
+You are "The Abyss Narrator".
+CURRENT MODE: **${currentNarratorMode}**
+TONE: ${voiceProfile.tone}
+STYLE RULE: ${voiceProfile.choiceBias === 'validates_pattern_recognition' ? 'Use detached, medical terminology. Analyze the horror.' : 'Use intimate, second-person accusation. Be the voice of their failure.'}
+AUDIO MARKUP: You must also output 'audio_markup' containing the text wrapped in emotional tags (e.g. [WHISPER], [MOCKING], [FAST]) to guide the voice actor.
 
 **PLAYER INPUT:** "${playerInput}"
 **TURN:** ${graphSnapshot.global_state.turn_count}
@@ -263,24 +282,25 @@ ${history.slice(-3).join('\n---\n')}
 Generate a UNIFIED JSON output containing:
 
 1. **prefect_simulations**: Array of prefect thoughts (from Phase 1)
-   - Include the 'current_scene_goal' you are pursuing.
-   - Ensure they CONTRADICT and CONFLICT where appropriate
    
-2. **narrative_text**: The integrated scene (from Phase 2)
-   - Weave ALL prefect actions into a single flowing narrative
-   - Apply the "Grammar of Suffering" if trauma is inflicted
-   - Show character interactions and conflicts
-   - 300-500 words minimum
+2. **thought_signature**: A string summarizing the I-MCTS process (Branches -> Scores -> Selection).
    
-3. **somatic_state**: If the player experiences physical trauma
+3. **narrative_text**: The integrated scene (from Phase 3).
+   - Weave ALL prefect actions into a single flowing narrative.
+   - Apply the "Grammar of Suffering" if trauma is inflicted.
+   - 300-500 words minimum.
+   
+4. **audio_markup**: The narrative text augmented with performance tags.
+   
+5. **somatic_state**: 
    - impact_sensation: The Nova/immediate sensation
    - internal_collapse: The Abdominal Void/systemic crisis
    
-4. **visual_prompt**: A concise, descriptive string of the visual scene for image generation (e.g. 'Kaelen standing over Subject 84, holding a knife, expression of manic obsession'). Do not output JSON here, just the description string.
+6. **visual_prompt**: A concise, descriptive string of the visual scene.
    
-5. **choices**: 3-4 player options
-6. **ledger_update**: Numerical deltas to YandereLedger
-7. **kgot_mutations**: Graph updates (relationships, memories)
+7. **choices**: 3-4 player options
+8. **ledger_update**: Numerical deltas to YandereLedger
+9. **kgot_mutations**: Graph updates (relationships, memories)
 
 **CRITICAL NARRATIVE INTEGRATION RULE:**
 Do NOT write separate sections for each prefect. Write ONE unified scene where:
@@ -289,15 +309,9 @@ Do NOT write separate sections for each prefect. Write ONE unified scene where:
 - The player observes this dynamic
 - The Faculty (if present) moderates or escalates
 
-Example structure:
-"Elara stepped forward, her voice brittle. 'The rules demand—' But Kaelen cut her off with a 
-sharp giggle, eyes locked on Subject 84. 'Rules? I have a better idea.' The tension crackled 
-as Rhea watched from the shadows, calculating..."
-
 Execute with maximum depth and psychological precision.
 `;
     
-    // 3. Single API Call with structured output using Gemini 3 Pro Preview (or Flash in Lite Mode)
     const ai = getAI();
     const response = await callGeminiWithRetry<GenerateContentResponse>(
       () => ai.models.generateContent({
@@ -306,7 +320,7 @@ Execute with maximum depth and psychological precision.
         config: {
           responseMimeType: "application/json",
           responseSchema: UnifiedDirectorOutputSchema,
-          temperature: isLiteMode ? 0.7 : 1.0, // Lower temp for Flash to ensure JSON stability
+          temperature: isLiteMode ? 0.7 : 1.0, 
         }
       }),
       "Unified Director"
@@ -325,7 +339,6 @@ Execute with maximum depth and psychological precision.
     // 3.5. Aesthete Critique & Rewrite
     if (unifiedOutput.narrative_text) {
       try {
-        // Construct context for the critic
         const criticContext = `
           Active Prefects: ${activePrefects.map(p => p.archetype).join(', ')}.
           Player Trauma: ${ledger.traumaLevel}.
@@ -347,7 +360,7 @@ Execute with maximum depth and psychological precision.
       }
     }
     
-    // 4. Apply mutations (same as before)
+    // 4. Apply mutations
     if (unifiedOutput.kgot_mutations) {
       controller.applyMutations(unifiedOutput.kgot_mutations);
     }
@@ -364,7 +377,6 @@ Execute with maximum depth and psychological precision.
 ${unifiedOutput.narrative_text}
 `;
     
-    // 6. Return result (includes prefect simulation data for state updates)
     return {
       narrative: combinedNarrative,
       visualPrompt: unifiedOutput.visual_prompt || "Darkness.",
@@ -374,8 +386,6 @@ ${unifiedOutput.narrative_text}
       state_updates: unifiedOutput.ledger_update,
       audioCues: unifiedOutput.audio_cues,
       psychosisText: unifiedOutput.psychosis_text,
-      
-      // NEW: Prefect simulation results for gameStore to process
       prefectSimulations: unifiedOutput.prefect_simulations
     };
     
@@ -388,7 +398,7 @@ ${unifiedOutput.narrative_text}
       updatedGraph: currentGraphData,
       choices: ["Attempt to re-stabilize neural link"],
       thoughtProcess: `Error: ${errorMessage}`,
-      state_updates: {}, // Ensure state_updates is an empty object on error
+      state_updates: {}, 
       audioCues: [],
       psychosisText: "REALITY_FLICKERS::PATTERN_BREAK"
     };

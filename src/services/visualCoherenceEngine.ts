@@ -495,8 +495,13 @@ class VisualCoherenceEngine {
 
   private getStyleConsistencyLock(): any {
     return {
-      brushStrokes: 'soft digital oil',
-      colorGrading: 'desaturated crimson/gold/black',
+      // THE MASTER STYLE LOCK 
+      medium: "hyper-detailed 8K ink wash illustration",
+      artist_reference: "Milo Manara, Frank Miller, Artgerm",
+      technique: "clean contour lines, flat cel-shading, heavy negative space",
+      lighting: "Neo-Noir Chiaroscuro (high contrast, single light source)",
+      texture: "wet surfaces, rain-slicked marble, cold glass",
+      prohibited: "3d render, oil painting, cross-hatching, blurry, fuzzy"
     };
   }
 
