@@ -165,10 +165,12 @@ export async function executeUnifiedDirectorTurn(
   playerInput: string,
   history: string[],
   currentGraphData: KnowledgeGraph,
-  activePrefects: PrefectDNA[] // Pass in 2-3 selected prefects
+  activePrefects: PrefectDNA[], // Pass in 2-3 selected prefects
+  isLiteMode: boolean = false // Dynamic Model Switching
 ) {
   try {
-    console.log("⚡ [Unified Director] Starting single-agent turn...");
+    const modelId = isLiteMode ? 'gemini-2.5-flash' : 'gemini-3-pro-preview';
+    console.log(`⚡ [Unified Director] Starting single-agent turn using ${modelId}...`);
     
     // 1. Initialize Systems
     const controller = new KGotController(currentGraphData);
@@ -249,16 +251,16 @@ as Rhea watched from the shadows, calculating..."
 Execute with maximum depth and psychological precision.
 `;
     
-    // 3. Single API Call with structured output using Gemini 3 Pro Preview
+    // 3. Single API Call with structured output using Gemini 3 Pro Preview (or Flash in Lite Mode)
     const ai = getAI();
     const response = await callGeminiWithRetry<GenerateContentResponse>(
       () => ai.models.generateContent({
-        model: 'gemini-3-pro-preview', // Using Pro for complex reasoning as requested
+        model: modelId, 
         contents: [{ role: 'user', parts: [{ text: unifiedPrompt }] }],
         config: {
           responseMimeType: "application/json",
           responseSchema: UnifiedDirectorOutputSchema,
-          temperature: 1.0,
+          temperature: isLiteMode ? 0.7 : 1.0, // Lower temp for Flash to ensure JSON stability
         }
       }),
       "Unified Director"
@@ -290,7 +292,7 @@ ${unifiedOutput.narrative_text}
       visualPrompt: unifiedOutput.visual_prompt || "Darkness.",
       updatedGraph: controller.getGraph(),
       choices: unifiedOutput.choices || ["Endure", "Observe"],
-      thoughtProcess: `Unified: ${unifiedOutput.thought_signature}`,
+      thoughtProcess: `[${isLiteMode ? 'LITE' : 'PRO'}] Unified: ${unifiedOutput.thought_signature}`,
       state_updates: unifiedOutput.ledger_update,
       audioCues: unifiedOutput.audio_cues,
       psychosisText: unifiedOutput.psychosis_text,

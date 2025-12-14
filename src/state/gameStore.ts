@@ -347,13 +347,13 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             2 
           );
           
-          // Note: Text generation still uses cloud LLM unless refactored further. 
-          // Lite Mode currently focuses on Local Media (Images/Audio).
+          // Pass the isLiteMode flag from store to the Director
           const result = await executeUnifiedDirectorTurn(
             input,
             history,
             state.kgot,
-            activePrefects
+            activePrefects,
+            state.isLiteMode
           );
           
           if (result.prefectSimulations && result.prefectSimulations.length > 0) {
@@ -474,7 +474,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                    "INITIALIZE_SIMULATION", 
                    [], 
                    state.kgot,
-                   [] 
+                   [],
+                   isLiteMode // Pass lite mode preference
                );
                get().applyServerState(result);
            } catch (e) {
