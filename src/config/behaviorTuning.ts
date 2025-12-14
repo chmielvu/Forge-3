@@ -37,9 +37,9 @@ export const BEHAVIOR_CONFIG = {
     // How many prefects to simulate per turn
     ACTIVE_PREFECT_COUNT: 2, // Reduced from 3 for faster inference
     
-    // Whether to use gemini-2.5-flash (fast) or gemini-3-pro (slower, higher quality)
-    // Note: Implementation forces Gemini 3 Pro as requested
-    USE_PRO_MODEL: true,
+    // Whether to use gemini-2.5-flash (fast, supports thinking) or gemini-3-pro (slower)
+    // Updated: Defaulting to Flash 2.5 with Thinking for best RPM/Quality balance
+    USE_PRO_MODEL: false, 
     
     // Whether to include full prefect DNA in prompt (verbose but accurate)
     INCLUDE_FULL_CONTEXT: true

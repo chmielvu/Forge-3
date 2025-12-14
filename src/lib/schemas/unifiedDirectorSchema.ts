@@ -8,7 +8,33 @@ import { Type } from "@google/genai";
 export const UnifiedDirectorOutputSchema = {
   type: Type.OBJECT,
   properties: {
-    // === PART 1: PREFECT SIMULATION (Replaces PrefectAgent calls) ===
+    // === PART 1: COGNITIVE GRAPH TRACE (System 2 Deep Think) ===
+    cognitive_graph: {
+      type: Type.OBJECT,
+      description: "Structured trace of the internal reasoning graph nodes (System 2).",
+      properties: {
+        analysis: { 
+            type: Type.STRING, 
+            description: "Node 1: Causal analysis of player input and impact prediction." 
+        },
+        hypotheses: { 
+            type: Type.ARRAY, 
+            description: "Node 2: The three narrative branches (Trauma, Subversion, Novelty).",
+            items: { type: Type.STRING } 
+        },
+        evaluation: { 
+            type: Type.STRING, 
+            description: "Node 3: Scoring and selection logic (Tension/Coherence/Novelty)." 
+        },
+        synthesis_plan: { 
+            type: Type.STRING, 
+            description: "Node 4: Final execution plan based on the selected path." 
+        }
+      },
+      required: ["analysis", "hypotheses", "evaluation", "synthesis_plan"]
+    },
+
+    // === PART 2: PREFECT SIMULATION ===
     prefect_simulations: {
       type: Type.ARRAY,
       description: "Simulated thoughts/actions for all active prefects in the scene",
@@ -18,25 +44,11 @@ export const UnifiedDirectorOutputSchema = {
           prefect_id: { type: Type.STRING },
           prefect_name: { type: Type.STRING },
           
-          // Core outputs (previously from PrefectAgent)
-          current_scene_goal: {
-            type: Type.STRING,
-            description: "The specific short-term goal this agent is pursuing in this turn (e.g. 'Isolate Player', 'Enforce Rule')"
-          },
-          public_action: { 
-            type: Type.STRING,
-            description: "What this prefect does/says openly"
-          },
-          hidden_motivation: { 
-            type: Type.STRING,
-            description: "Their TRUE internal reasoning"
-          },
-          internal_monologue: { 
-            type: Type.STRING,
-            description: "Stream of consciousness"
-          },
+          current_scene_goal: { type: Type.STRING },
+          public_action: { type: Type.STRING },
+          hidden_motivation: { type: Type.STRING },
+          internal_monologue: { type: Type.STRING },
           
-          // Social dynamics
           sabotage_attempt: {
             type: Type.OBJECT,
             properties: {
@@ -55,7 +67,6 @@ export const UnifiedDirectorOutputSchema = {
             nullable: true
           },
           
-          // State updates
           emotional_state: {
             type: Type.OBJECT,
             properties: {
@@ -64,22 +75,28 @@ export const UnifiedDirectorOutputSchema = {
               confidence: { type: Type.NUMBER }
             }
           },
-          secrets_uncovered: { 
-            type: Type.ARRAY, 
-            items: { type: Type.STRING } 
-          },
+          secrets_uncovered: { type: Type.ARRAY, items: { type: Type.STRING } },
           favor_score_delta: { type: Type.NUMBER }
         },
         required: ['prefect_id', 'current_scene_goal', 'public_action', 'hidden_motivation', 'emotional_state']
       }
     },
     
-    // === PART 2: NARRATIVE SYNTHESIS (Director's original role) ===
-    thought_signature: { 
-      type: Type.STRING,
-      description: "The I-MCTS Execution Log. MUST format as: 'BRANCHES: [A: Trauma, B: Subversion, C: Novelty] -> EVALUATION: [Scores] -> SELECTION: [Chosen Branch]'"
+    // === PART 3: NARRATIVE SCRIPT (New) ===
+    script: {
+      type: Type.ARRAY,
+      description: "The scene formatted as a screenplay script. Separate narration from dialogue.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          speaker: { type: Type.STRING, description: "Name of the speaker, or 'Narrator'." },
+          text: { type: Type.STRING, description: "The spoken text or narration." },
+          emotion: { type: Type.STRING, description: "Emotional tone for TTS (e.g., 'Whisper', 'Shout', 'Clinical')." }
+        },
+        required: ["speaker", "text"]
+      }
     },
-    
+
     somatic_state: {
       type: Type.OBJECT,
       description: "Player's internal physiological experience",
@@ -92,12 +109,7 @@ export const UnifiedDirectorOutputSchema = {
     
     narrative_text: { 
       type: Type.STRING,
-      description: "The external observable scene with all prefect actions integrated. Must match the requested 'Abyss Narrator' voice mode."
-    },
-    
-    audio_markup: {
-      type: Type.STRING,
-      description: "The narrative text wrapped in SSML tags indicating emotional direction (e.g. <break time='500ms'/>, <prosody rate='slow'>)."
+      description: "The full combined narrative text for legacy logs."
     },
     
     visual_prompt: { type: Type.STRING },
@@ -131,26 +143,26 @@ export const UnifiedDirectorOutputSchema = {
       nullable: true
     },
     
+    psychosis_text: { type: Type.STRING, nullable: true },
+
     audio_cues: {
       type: Type.ARRAY,
       items: {
         type: Type.OBJECT,
         properties: {
-          mode: { 
-            type: Type.STRING, 
-            enum: ['Mocking Jester', 'Seductive Dominatrix', 'Clinical Analyst', 'Sympathetic Confidante'] 
-          },
-          text_fragment: { type: Type.STRING }
+          mode: { type: Type.STRING, enum: ['Mocking Jester', 'Seductive Dominatrix', 'Clinical Analyst', 'Sympathetic Confidante'] },
+          text_fragment: { type: Type.STRING, description: "The specific text segment to apply this voice mode to." }
         }
       },
       nullable: true
     },
-    
-    psychosis_text: { type: Type.STRING, nullable: true }
+
+    audio_markup: { type: Type.STRING, nullable: true, description: "Narrative text formatted with SSML-like tags for TTS." }
   },
   required: [
+    "cognitive_graph",
     "prefect_simulations",
-    "thought_signature", 
+    "script",
     "narrative_text", 
     "visual_prompt", 
     "choices", 
@@ -160,6 +172,12 @@ export const UnifiedDirectorOutputSchema = {
 
 // Type definition for TypeScript
 export interface UnifiedDirectorOutput {
+  cognitive_graph: {
+    analysis: string;
+    hypotheses: string[];
+    evaluation: string;
+    synthesis_plan: string;
+  };
   prefect_simulations: Array<{
     prefect_id: string;
     prefect_name: string;
@@ -184,13 +202,16 @@ export interface UnifiedDirectorOutput {
     secrets_uncovered: string[];
     favor_score_delta: number;
   }>;
-  thought_signature: string;
+  script: Array<{
+    speaker: string;
+    text: string;
+    emotion?: string;
+  }>;
   somatic_state: {
     impact_sensation: string;
     internal_collapse: string;
   };
   narrative_text: string;
-  audio_markup?: string;
   visual_prompt: string;
   choices: string[];
   ledger_update?: Partial<any>;
@@ -198,9 +219,10 @@ export interface UnifiedDirectorOutput {
     operation: string;
     params?: any;
   }>;
+  psychosis_text?: string;
   audio_cues?: Array<{
     mode: string;
     text_fragment: string;
   }>;
-  psychosis_text?: string;
+  audio_markup?: string;
 }

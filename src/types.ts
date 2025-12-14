@@ -46,10 +46,19 @@ export interface GraphNode {
   ocean?: { O: number; C: number; E: number; A: number; N: number };
 }
 
+// Script Item for dialogue parsing
+export interface ScriptItem {
+  speaker: string;
+  text: string;
+  emotion?: string;
+  audioStart?: number; // Calculated after audio generation
+  audioEnd?: number;
+}
+
 export type LogEntry = 
   | { id: string; type: 'system'; content: string }
   | { id: string; type: 'thought'; content: string }
-  | { id: string; type: 'narrative'; content: string; visualContext?: string }
+  | { id: string; type: 'narrative'; content: string; visualContext?: string; script?: ScriptItem[] }
   | { id: string; type: 'psychosis'; content: string };
 
 export enum MediaStatus {
@@ -64,6 +73,7 @@ export interface MultimodalTurn {
   id: string;
   turnIndex: number;
   text: string;
+  script?: ScriptItem[]; // The structured play script
   visualPrompt: string;
   imageStatus: MediaStatus;
   imageData?: string;
@@ -71,6 +81,7 @@ export interface MultimodalTurn {
   audioStatus: MediaStatus;
   audioUrl?: string;
   audioDuration?: number;
+  audioAlignment?: Array<{ index: number; start: number; end: number; speaker: string }>; // For syncing text highlights
   audioError?: string;
   videoStatus: MediaStatus;
   videoUrl?: string;
@@ -91,6 +102,7 @@ export interface MediaQueueItem {
   type: 'image' | 'audio' | 'video';
   prompt: string;
   narrativeText?: string;
+  script?: ScriptItem[]; // Optional structured script for dramatic audio
   target?: string | PrefectDNA;
   previousTurn?: MultimodalTurn;
   addedAt?: number;
@@ -124,7 +136,7 @@ export interface MultimodalSliceExports {
     autoAdvance: boolean;
     hasUserInteraction: boolean;
   };
-  registerTurn: (text: string, visualPrompt: string, audioMarkup?: string, metadata?: any) => MultimodalTurn;
+  registerTurn: (text: string, visualPrompt: string, audioMarkup?: string, metadata?: any, script?: ScriptItem[]) => MultimodalTurn;
   setCurrentTurn: (turnId: string) => void;
   goToNextTurn: () => void;
   goToPreviousTurn: () => void;
@@ -133,7 +145,7 @@ export interface MultimodalSliceExports {
   pruneOldTurns: (keepCount: number) => void;
   enqueueMediaForTurn: (item: MediaQueueItem) => void;
   markMediaPending: (item: MediaQueueItem) => void;
-  markMediaReady: (turnId: string, type: 'image' | 'audio' | 'video', dataUrl: string, duration?: number) => void;
+  markMediaReady: (turnId: string, type: 'image' | 'audio' | 'video', dataUrl: string, duration?: number, alignment?: any[]) => void;
   markMediaError: (turnId: string, type: 'image' | 'audio' | 'video', errorMessage: string) => void;
   removeMediaFromQueue: (item: MediaQueueItem) => void;
   retryFailedMedia: (turnId: string, type?: 'image' | 'audio' | 'video') => void;

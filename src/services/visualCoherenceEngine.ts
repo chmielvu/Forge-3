@@ -1,12 +1,85 @@
 
-import { YandereLedger, PrefectDNA, CharacterId, MultimodalTurn, CharacterVisualState, EnvironmentState, VisualMemory, VisualTurnSnapshot } from '../types';
+import { YandereLedger, PrefectDNA, CharacterId, MultimodalTurn, CharacterVisualState, EnvironmentState, VisualMemory } from '../types';
 import { VISUAL_PROFILES } from '../constants';
-import { VISUAL_MANDATE, LIGHTING_PRESETS } from '../config/visualMandate';
-import { FORGE_MOTIFS, ARCHETYPE_VISUAL_MAP } from '../data/motifs';
+import { LIGHTING_PRESETS } from '../config/visualMandate';
+import { CHARACTER_VOICE_MAP } from '../config/voices';
 
 /**
- * COHERENCE ENGINE V2.7 (Psych-Somatic & Relational Mapping)
- * Ensures visual continuity and maps internal psychological conflict to external visual tells.
+ * AudioCoherenceEngine v2
+ * Leverages Gemini 2.5 TTS multi-speaker + style control
+ */
+class AudioCoherenceEngine {
+  private baseStyle = "deep measured clinical tone with bored inevitability, slow deliberate pacing";
+
+  public buildTTSPrompt(narrativeText: string, ledger: YandereLedger): string {
+    const styleAdditions: string[] = [this.baseStyle];
+
+    if (ledger.traumaLevel > 80 || ledger.shamePainAbyssLevel > 70) {
+      styleAdditions.push("subtle voice cracks on intense words, breath catches during somatic peaks");
+    }
+    if (ledger.phase === 'gamma') {
+      styleAdditions.push("distant echoing quality with layered whispers beneath primary voice");
+    }
+
+    // Detect dialogue for multi-speaker
+    const hasDialogue = [...narrativeText.matchAll(/“[^”]+”/g)].length > 1;
+
+    if (hasDialogue) {
+      // Format as multi-speaker (Gemini accepts Speaker tags or simple lines)
+      let multiSpeakerText = "";
+      let lastSpeaker = "Narrator";
+
+      // Split by newlines to process paragraphs
+      narrativeText.split('\n').forEach(line => {
+        // Match standard dialogue format: “Quote” — Speaker
+        // Or variations like: Speaker: “Quote”
+        const standardMatch = line.match(/“([^”]+)”\s*[—–-]\s*([A-Za-z\s]+)/);
+        const colonMatch = line.match(/^([A-Za-z]+):\s*“([^”]+)”/);
+        
+        if (standardMatch) {
+          const quote = standardMatch[1];
+          const speakerName = standardMatch[2].trim();
+          const voiceId = this.resolveVoice(speakerName);
+          multiSpeakerText += `${speakerName} (${voiceId} voice): ${quote}\n`;
+          lastSpeaker = speakerName;
+        } else if (colonMatch) {
+          const speakerName = colonMatch[1].trim();
+          const quote = colonMatch[2];
+          const voiceId = this.resolveVoice(speakerName);
+          multiSpeakerText += `${speakerName} (${voiceId} voice): ${quote}\n`;
+          lastSpeaker = speakerName;
+        } else if (line.trim()) {
+          // Narration
+          if (!line.startsWith('“')) {
+             multiSpeakerText += `Narrator (Charon voice): ${line.trim()}\n`;
+          } else {
+             // Unattributed dialogue, assume last speaker or Narrator
+             multiSpeakerText += `${lastSpeaker} continues: ${line.trim()}\n`;
+          }
+        }
+      });
+
+      return `Generate multi-speaker audio with character voice consistency. Style: ${styleAdditions.join("; ")}. Text:\n${multiSpeakerText}`;
+    }
+
+    // Single-speaker fallback
+    return `Speak as primary narrator (Zephyr voice) with style: ${styleAdditions.join("; ")}. Text: ${narrativeText}`;
+  }
+
+  private resolveVoice(name: string): string {
+      const upper = name.toUpperCase();
+      for (const [key, val] of Object.entries(CHARACTER_VOICE_MAP)) {
+          if (key.includes(upper) || upper.includes(key.toUpperCase())) return val;
+      }
+      if (upper.includes("SELENE")) return 'Zephyr';
+      return 'Puck';
+  }
+}
+
+export const audioCoherenceEngine = new AudioCoherenceEngine();
+
+/**
+ * VisualCoherenceEngine v3.1 – Narrative Lighting + Multi-Speaker TTS
  */
 class VisualCoherenceEngine {
   private memory: VisualMemory;
@@ -26,6 +99,89 @@ class VisualCoherenceEngine {
     };
   }
 
+  private calculateCameraDynamics(ledger: YandereLedger, narrativeText: string): string {
+    const dirs: string[] = [];
+    const lowerText = narrativeText.toLowerCase();
+
+    if (ledger.phase === 'gamma') {
+      dirs.push("anamorphic lens flares with horizontal streaks, crushed blacks, pulsating breathing vignette, heavy film grain, 35mm anamorphic look");
+    }
+
+    if (ledger.shamePainAbyssLevel > 80 || ledger.traumaLevel > 90) {
+      dirs.push("violent handheld camera shake, extreme macro 100mm lens intruding into personal space, shallow depth f/1.2, aggressive 30° Dutch tilt, erratic breathing focus pulls");
+    } else if (ledger.shamePainAbyssLevel > 70 || ledger.traumaLevel > 80) {
+      dirs.push("unstable handheld macro 100mm lens, shallow depth f/1.4, 25° Dutch tilt, subtle but persistent camera shake and breathing focus oscillation");
+    } else if (ledger.shamePainAbyssLevel > 50 || ledger.traumaLevel > 60) {
+      dirs.push("Dutch angle 18–22°, slight handheld tremor, low-angle worm's eye view emphasizing towering authority figures");
+    }
+
+    if ((ledger.arousalLevel || 0) + (ledger.prostateSensitivity || 0) > 140) {
+      dirs.push("slow predatory macro push-in on throat, collarbone, and flushed skin details, lingering clinical gaze, extreme shallow depth isolating somatic response");
+    } else if ((ledger.arousalLevel || 0) + (ledger.prostateSensitivity || 0) > 100) {
+      dirs.push("gradual creeping push-in on trembling throat and flushed skin, macro lens revealing unwilling physiological betrayal");
+    }
+
+    if ((ledger.complianceScore || 0) < 30) {
+      dirs.push("chaotic fractured framing, rapid whip pans and focus whips between subject and multiple prefects, visual disruption mirroring resistance");
+    } else if ((ledger.complianceScore || 0) > 80) {
+      dirs.push("perfectly locked-off symmetrical composition, static clinical framing, absolute order restored");
+    }
+
+    if ((ledger.hopeLevel || 0) < 20) {
+      dirs.push("pronounced fish-eye barrel distortion at frame edges, warped reality, claustrophobic perspective");
+    }
+
+    if (lowerText.includes("close-up") || lowerText.includes("face") || lowerText.includes("eyes")) {
+      dirs.unshift("extreme close-up on eyes and mouth, shallow depth isolating facial micro-expressions");
+    }
+    if (lowerText.includes("wide") || lowerText.includes("room") || lowerText.includes("chamber")) {
+      dirs.unshift("wide establishing shot 24mm lens, subject dwarfed by oppressive architecture");
+    }
+
+    return dirs.length ? dirs.join("; ") : "medium close-up 50mm lens, static clinical framing, high contrast chiaroscuro";
+  }
+
+  private calculateLightingDynamics(ledger: YandereLedger): string {
+    if (ledger.phase === 'gamma') {
+      return "conflicting practical sources: flickering overhead fluorescents mixed with pulsing crimson emergency strips, anamorphic flares, crushed blacks with blooming highlights";
+    }
+    if (ledger.shamePainAbyssLevel > 70 || ledger.traumaLevel > 80) {
+      return "dual conflicting sources: harsh cold overhead clinical light vs warm crimson rim from side, creating visual fracture and internal conflict, deep shadows with nervous edge highlights";
+    }
+    if (ledger.traumaLevel > 50) {
+      return "single dramatic crimson rim light from above, extreme chiaroscuro, deep crushed blacks, subtle volumetric dust rays cutting through haze";
+    }
+    return "cold clinical overhead fluorescent, flat even illumination with minimal shadows, sterile observation";
+  }
+
+  private inferSomaticDetails(ledger: YandereLedger, narrativeText: string): string[] {
+    const details: string[] = [];
+    const lower = narrativeText.toLowerCase();
+
+    if (ledger.traumaLevel > 40) details.push("sweat-beaded forehead, pale complexion");
+    if (ledger.shamePainAbyssLevel > 60) details.push("tear tracks, averted gaze");
+    if ((ledger.arousalLevel || 0) > 60) details.push("flushed skin and dilated pupils from unwilling somatic distress");
+    if (ledger.prostateSensitivity > 40) details.push("rigid posture from cremasteric tension");
+
+    if (lower.match(/pain|hurt|ache|throb|burn/)) details.push("visible wince, clenched jaw");
+    if (lower.match(/trembl|shiver|shak|quiver/)) details.push("uncontrollable fine trembling");
+    if (lower.match(/sweat|perspir|bead/)) details.push("glistening sweat on exposed skin");
+    if (lower.match(/flush|red|blush|hot/)) details.push("deep flush spreading across chest and neck");
+    if (lower.match(/tear|cry|sob|weep/)) details.push("fresh tear trails, red-rimmed eyes");
+
+    return details;
+  }
+
+  private buildSubjectDescription(target: PrefectDNA | CharacterId | string, ledger: YandereLedger, narrativeText: string): string {
+    const base = typeof target === 'string' 
+      ? VISUAL_PROFILES[target as CharacterId] || `${target}: vulnerable figure in tattered academy uniform`
+      : `${target.displayName} (${target.archetype}): ${VISUAL_PROFILES[target.id as CharacterId] || 'detailed prefect figure'}`;
+
+    const somatic = this.inferSomaticDetails(ledger, narrativeText);
+
+    return `${base}${somatic.length ? ', ' + somatic.join(', ') : ''}, under cold clinical gaze`;
+  }
+
   public buildCoherentPrompt(
     target: PrefectDNA | CharacterId | string,
     sceneContext: string,
@@ -33,161 +189,30 @@ class VisualCoherenceEngine {
     narrativeText: string,
     previousTurn?: MultimodalTurn,
     directorVisualInstruction?: string
-  ): string {
-    this.updateCharacterStates(target, ledger, narrativeText);
-    this.inferEnvironmentFromContext(sceneContext, ledger); 
-    
-    // Calculate dynamics
-    const cameraDynamics = this.calculateCameraDynamics(target, ledger, narrativeText);
-    const subjectDesc = this.constructSubjectDescription(target, narrativeText, ledger);
-    
-    // Construct strict JSON Prompt for Gemini 2.5 Flash-Image
-    const promptJson = {
+  ): { imagePrompt: string; ttsPrompt: string } {
+    const camera = this.calculateCameraDynamics(ledger, narrativeText);
+    const lighting = this.calculateLightingDynamics(ledger);
+    const subject = directorVisualInstruction || this.buildSubjectDescription(target, ledger, narrativeText);
+
+    const env = this.memory.environmentState;
+
+    const imageJson = {
       task: "generate_image",
-      style: "photorealistic cinematic dark academia horror, soft digital oil painting with precise anatomical detail",
-      camera: cameraDynamics.description,
-      lighting: "extreme chiaroscuro, single crimson rim light from above, deep crushed blacks, volumetric dust god rays",
-      subject: directorVisualInstruction || subjectDesc,
-      environment: `${this.memory.environmentState.location}, ${this.memory.environmentState.atmosphericEffects.join(', ')}, dominant colors #050505 #881337 #facc15`,
-      mood: "bored clinical inevitability | ontological exposure | somatic collapse under cold gaze",
-      technical: "high resolution, sharp focus on eyes and skin texture, subtle film grain, 16:9 wide cinematic aspect ratio, no text overlays"
+      style: "photorealistic cinematic dark academia psychological horror, soft digital oil painting with precise anatomical detail",
+      camera,
+      lighting,
+      subject,
+      environment: `${env.location}, sweating ancient stone, ${env.atmosphericEffects.join(', ')}, dominant colors #050505 #881337 #facc15`,
+      mood: "bored clinical inevitability | ontological exposure under scrutinizing gaze | somatic vulnerability",
+      technical: "high resolution, sharp focus on eyes and skin texture, subtle film grain, 16:9 wide cinematic aspect ratio, no text or overlays"
     };
 
-    // SOTA Wrapper: Force model to use structured keys as anchors
-    return `Generate image strictly adhering to this JSON structure: ${JSON.stringify(promptJson)}`;
-  }
-
-  /**
-   * Calculates the camera angle based on the "Dominance Hierarchy"
-   */
-  private calculateCameraDynamics(
-    target: PrefectDNA | CharacterId | string,
-    ledger: YandereLedger,
-    text: string
-  ): any {
-    const complianceFactor = ledger.complianceScore / 100;
-    const traumaFactor = ledger.traumaLevel / 100;
-    const playerDominance = Math.max(0, 1.0 - (complianceFactor * 0.6 + traumaFactor * 0.4));
-
-    let agentDominance = 1.0; 
-    let agentAmbition = 0.5;
-
-    if (typeof target !== 'string') {
-        const dna = target as PrefectDNA;
-        const favorFactor = dna.favorScore / 100;
-        agentAmbition = dna.traitVector.ambition;
-        agentDominance = (favorFactor * 0.5) + (agentAmbition * 0.5);
-    }
-
-    // Narrative Overrides
-    const lowerText = text.toLowerCase();
-    if (lowerText.includes("kneel") || lowerText.includes("floor") || lowerText.includes("crawling") || lowerText.includes("bow")) agentDominance += 0.4;
-    if (lowerText.includes("looking down") || lowerText.includes("towering") || lowerText.includes("looms")) agentDominance += 0.3;
-    
-    const dominanceDelta = agentDominance - playerDominance;
-
-    let angle = "eye_level_confrontational";
-    if (dominanceDelta > 0.6) angle = "extreme_low_angle_worm_eye_view"; 
-    else if (dominanceDelta > 0.3) angle = "low_angle_heroic_power"; 
-    else if (dominanceDelta < -0.2) angle = "high_angle_looking_down"; 
+    const ttsPrompt = audioCoherenceEngine.buildTTSPrompt(narrativeText, ledger);
 
     return {
-        description: `Camera ${angle.replace(/_/g, " ")}, focus on face and eyes, shallow depth of field.`
+      imagePrompt: `Generate image strictly adhering to this JSON structure: ${JSON.stringify(imageJson)}`,
+      ttsPrompt
     };
-  }
-
-  private constructSubjectDescription(
-    target: PrefectDNA | CharacterId | string,
-    narrativeText: string,
-    ledger: YandereLedger
-  ): string {
-    const characterId = typeof target === 'string' ? target : target.id;
-    const visualState = this.memory.lastCharacterAppearances.get(characterId);
-    
-    let desc = "";
-    
-    if (typeof target === 'string') {
-        desc = VISUAL_PROFILES[target as CharacterId] || target;
-    } else {
-        const dna = target as PrefectDNA;
-        desc = `${dna.displayName} (${dna.archetype}), ${dna.traitVector.cruelty > 0.7 ? 'predatory expression' : 'calm expression'}`;
-    }
-
-    if (visualState?.clothingState) desc += `, clothing ${visualState.clothingState}`;
-    if (ledger.arousalLevel > 60) desc += ", flushed skin, dilated pupils from somatic distress";
-    if (ledger.traumaLevel > 70) desc += ", trembling hands, pale complexion";
-    
-    return desc;
-  }
-
-  private updateCharacterStates(
-    target: PrefectDNA | CharacterId | string,
-    ledger: YandereLedger,
-    text: string
-  ): void {
-    const characterId = typeof target === 'string' ? target : target.id;
-    const currentState: CharacterVisualState = {
-      characterId,
-      lastSeenTurn: this.memory.turnHistory.length,
-      clothingState: this.inferClothingState(ledger, text),
-      emotionalState: this.inferEmotionalState(ledger, text),
-      injuries: [],
-      dominancePosture: 0.5
-    };
-    this.memory.lastCharacterAppearances.set(characterId, currentState);
-  }
-
-  private inferClothingState(ledger: YandereLedger, text: string): CharacterVisualState['clothingState'] {
-    const lower = text.toLowerCase();
-    if (lower.match(/tear|rip|shred|cut/)) return 'torn';
-    if (lower.match(/mess|dishevel|wild|loose/)) return 'disheveled';
-    if (lower.match(/blood|bleed|stain|red/)) return 'bloodstained';
-    return 'pristine';
-  }
-
-  private inferEmotionalState(ledger: YandereLedger, text: string): CharacterVisualState['emotionalState'] {
-    const lower = text.toLowerCase();
-    if (lower.match(/cry|weep|sob/)) return 'broken';
-    if (lower.match(/laugh|grin|smile/)) return 'ecstatic';
-    if (lower.match(/shiver|tremble|shake/)) return 'terrified';
-    return 'composed';
-  }
-
-  private inferEnvironmentFromContext(context: string, ledger: YandereLedger): void {
-    const lower = context.toLowerCase();
-    let { location, lightingScheme, atmosphericEffects, dominantColors } = this.memory.environmentState;
-    
-    if (lower.includes("calibration") || lower.includes("slab")) {
-        location = "The Calibration Chamber, black basalt";
-        lightingScheme = LIGHTING_PRESETS.Harsh;
-    } else if (lower.includes("office") || lower.includes("selene")) {
-        location = "Provost's study, velvet curtains";
-        lightingScheme = LIGHTING_PRESETS.Intimate;
-    }
-
-    if (ledger.traumaLevel > 80) atmosphericEffects = ["suffocating humidity", "red-tinted vision"];
-    
-    this.memory.environmentState = { location, lightingScheme, atmosphericEffects, dominantColors };
-  }
-
-  private generateContinuityDirectives(previousTurn?: MultimodalTurn): any {
-    return { rule: "Maintain character consistency." };
-  }
-
-  private getStyleConsistencyLock(): any {
-    return {
-      medium: "hyper-detailed 8K ink wash illustration",
-      artist_reference: "Milo Manara, Frank Miller, Artgerm",
-      technique: "clean contour lines, flat cel-shading, heavy negative space",
-      lighting: "Neo-Noir Chiaroscuro (high contrast, single light source)",
-      texture: "wet surfaces, rain-slicked marble, cold glass",
-      prohibited: "3d render, oil painting, cross-hatching, blurry, fuzzy"
-    };
-  }
-
-  public recordTurn(turn: MultimodalTurn): void {}
-  public reset(): void {
-    this.memory.lastCharacterAppearances.clear();
   }
 }
 

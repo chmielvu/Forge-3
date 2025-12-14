@@ -269,7 +269,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                     ledgerSnapshot: result.state_updates ? { ...get().gameState.ledger, ...result.state_updates } : get().gameState.ledger,
                     directorDebug: result.thoughtProcess,
                     activeCharacters: typeof primaryActor !== 'string' ? [primaryActor.id] : [primaryActor]
-                  }
+                  },
+                  result.script // NEW: Pass the script to the turn registration
               );
               newTurnId = newTurn.id;
               
@@ -293,7 +294,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                   id: newTurnId || `narrative-${Date.now()}`, 
                   type: 'narrative', 
                   content: result.narrative, 
-                  visualContext: result.visualPrompt 
+                  visualContext: result.visualPrompt,
+                  script: result.script // Pass script for structured rendering in Log
               });
           }
 

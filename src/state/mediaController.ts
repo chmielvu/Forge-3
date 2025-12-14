@@ -1,6 +1,6 @@
 
 import { useGameStore } from './gameStore';
-import { generateNarrativeImage, generateSpeech, animateImageWithVeo, buildVisualPrompt } from '../services/mediaService';
+import { generateNarrativeImage, generateSpeech, buildVisualPrompt, generateDramaticAudio } from '../services/mediaService';
 import { MediaQueueItem, MediaStatus, MultimodalTurn, CharacterId, YandereLedger, PrefectDNA } from '../types';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
 import { INITIAL_LEDGER } from '../constants';
@@ -8,7 +8,7 @@ import { selectNarratorMode, NARRATOR_VOICES } from '../services/narratorEngine'
 
 // Use number for browser-compatible timer type
 let mediaProcessingTimeout: number | null = null;
-const MEDIA_PROCESSING_DELAY_MS = 3000; // Delay increased to 3s to reduce RPM
+const MEDIA_PROCESSING_DELAY_MS = 4000; // Delay increased to 4s to smooth out RPM bursts
 const MAX_CONCURRENT_MEDIA_GENERATION = 1; // Strict sequential processing to avoid 429s
 
 /**
@@ -37,6 +37,7 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
   try {
     let dataUrl: string | undefined = undefined;
     let duration: number | undefined = undefined;
+    let alignment: any[] | undefined = undefined;
 
     switch (item.type) {
       case 'image':
@@ -53,45 +54,59 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
         break;
       case 'audio':
         if (BEHAVIOR_CONFIG.ANIMATION.ENABLE_TTS && BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableAudio) {
-          // Determine voice ID based on ledger state
-          const ledger = turn.metadata?.ledgerSnapshot || INITIAL_LEDGER;
-          const mode = selectNarratorMode(ledger);
-          const voiceId = NARRATOR_VOICES[mode]?.voiceId || 'Zephyr';
+          
+          // CASE 1: Structured Script Available (High Quality Dramatic Audio)
+          if (item.script && item.script.length > 0) {
+              const dramaticResult = await generateDramaticAudio(item.script);
+              if (dramaticResult) {
+                  dataUrl = dramaticResult.audioData;
+                  duration = dramaticResult.duration;
+                  alignment = dramaticResult.alignment;
+              }
+          } 
+          
+          // CASE 2: Fallback to Coherence Engine (Single Speaker / Raw Text)
+          if (!dataUrl) {
+              const ledger = turn.metadata?.ledgerSnapshot || INITIAL_LEDGER;
+              
+              // Use VisualCoherenceEngine (which includes AudioCoherenceEngine logic) to generate
+              // the enhanced TTS prompt if available
+              const coherence = buildVisualPrompt(
+                  item.target || CharacterId.PLAYER,
+                  turn.text,
+                  ledger,
+                  item.narrativeText || turn.text,
+                  item.previousTurn,
+                  item.prompt
+              );
 
-          const result = await generateSpeech(
-             item.narrativeText || item.prompt, 
-             voiceId
-          );
+              // Prioritize the coherence engine's ttsPrompt, fallback to raw text
+              const ttsPrompt = coherence.ttsPrompt || item.narrativeText || item.prompt;
+              const mode = selectNarratorMode(ledger);
+              const voiceId = NARRATOR_VOICES[mode]?.voiceId || 'Zephyr';
 
-          if (result && typeof result !== 'string') {
-             dataUrl = result.audioData;
-             duration = result.duration;
-          } else if (typeof result === 'string') {
-             dataUrl = result;
+              const result = await generateSpeech(
+                 ttsPrompt, 
+                 voiceId
+              );
+
+              if (result && typeof result !== 'string') {
+                 dataUrl = result.audioData;
+                 duration = result.duration;
+              } else if (typeof result === 'string') {
+                 dataUrl = result;
+              }
           }
         } else {
           if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.warn("[MediaController] Audio generation disabled by config.");
         }
         break;
-      case 'video':
-        if (BEHAVIOR_CONFIG.ANIMATION.ENABLE_VEO && BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableVideo) {
-          const imageData = multimodalTimeline.find(t => t.id === item.turnId)?.imageData;
-          if (imageData) {
-            // Use the coherent prompt stored in item.prompt (built at enqueue time) for video consistency
-            dataUrl = await animateImageWithVeo(imageData, item.prompt);
-          } else {
-            if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.warn(`[MediaController] Cannot generate video for turn ${item.turnId}: image data not available.`);
-          }
-        } else {
-          if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.warn("[MediaController] Video generation disabled by config.");
-        }
-        break;
       default:
-        console.warn(`[MediaController] Unknown media type: ${item.type}`);
+        console.warn(`[MediaController] Unknown or unsupported media type: ${item.type}`);
     }
 
     if (dataUrl) {
-      markMediaReady(item.turnId, item.type, dataUrl, duration);
+      markMediaReady(item.turnId, item.type, dataUrl, duration, alignment);
       if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] Successfully generated ${item.type} for turn ${item.turnId}.`);
     } else {
       // Audio can be undefined if disabled or empty, handle gracefully if not error
@@ -99,7 +114,11 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
           removeMediaFromQueue(item);
           return;
       }
-      throw new Error(`Generated ${item.type} data is empty.`);
+      if (item.type !== 'video') { // Don't throw error for removed video type
+          throw new Error(`Generated ${item.type} data is empty.`);
+      } else {
+          removeMediaFromQueue(item);
+      }
     }
   } catch (error: any) {
     console.error(`[MediaController] Failed to generate ${item.type} for turn ${item.turnId}:`, error);
@@ -112,7 +131,7 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
     // Check retry limits and schedule backoff
     if (failedItem && (failedItem.retries || 0) < BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.MAX_MEDIA_QUEUE_RETRIES) {
       const isQuota = isRateLimitError(error);
-      let delay = 2000; // Default retry delay
+      let delay = 3000; // Default retry delay
 
       if (isQuota) {
         // Exponential backoff for Quota errors: 5s, 10s, 20s...
@@ -231,38 +250,13 @@ export const enqueueTurnForMedia = (
       turnId: turn.id,
       type: 'audio',
       prompt: turn.text,
-      // Priority: SSML Markup > Raw Narrative > Prompt Text
+      // Priority: Script > Audio Markup > Raw Narrative
+      script: turn.script,
       narrativeText: turn.metadata?.audioMarkup || turn.text,
       target: target,
       previousTurn: previousTurn,
     });
     if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] Enqueued audio for turn ${turn.id}`);
-  }
-
-  // Video (conditional)
-  const isHighIntensity = (turn.metadata?.ledgerSnapshot?.traumaLevel || 0) > BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableVideoAboveTrauma ||
-                          (turn.metadata?.ledgerSnapshot?.shamePainAbyssLevel || 0) > BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableVideoAboveShame;
-  
-  if ((turn.videoStatus === MediaStatus.idle || forceEnqueue) && BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableVideo && isHighIntensity) {
-    // For video, we might want a slightly more stable prompt or the same one
-    const coherentVideoPrompt = buildVisualPrompt(
-        target, 
-        turn.text, 
-        ledger, 
-        turn.text, 
-        previousTurn,
-        directorVisualPrompt // Use same visual base
-    );
-
-    store.enqueueMediaForTurn({
-      turnId: turn.id,
-      type: 'video',
-      prompt: coherentVideoPrompt, // Video uses pre-built coherent prompt
-      narrativeText: turn.text,
-      target: target,
-      previousTurn: previousTurn,
-    });
-    if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] Enqueued video for turn ${turn.id} (high intensity)`);
   }
 
   if (!mediaProcessingTimeout) {
@@ -286,7 +280,6 @@ export const regenerateMediaForTurn = async (turnId: string, type?: 'image' | 'a
   const previousTurn = previousTurnIndex >= 0 ? store.multimodalTimeline[previousTurnIndex] : undefined;
   
   // Try to find the specific active character from metadata, or fallback to player
-  // This improves targeting for re-generations
   let target: string | PrefectDNA = CharacterId.PLAYER;
   if (turn.metadata?.activeCharacters && turn.metadata.activeCharacters.length > 0) {
       // Find matching prefect object if available in store
@@ -298,7 +291,7 @@ export const regenerateMediaForTurn = async (turnId: string, type?: 'image' | 'a
   const itemsToRemove: MediaQueueItem[] = [];
   if (!type || type === 'image') itemsToRemove.push({ turnId, type: 'image', prompt: '' });
   if (!type || type === 'audio') itemsToRemove.push({ turnId, type: 'audio', prompt: '' });
-  if (!type || type === 'video') itemsToRemove.push({ turnId, type: 'video', prompt: '' });
+  // Video removed
 
   itemsToRemove.forEach(item => store.removeMediaFromQueue(item));
 
@@ -308,7 +301,6 @@ export const regenerateMediaForTurn = async (turnId: string, type?: 'image' | 'a
         const updatedTurn = { ...t };
         if (!type || type === 'image') updatedTurn.imageStatus = MediaStatus.idle;
         if (!type || type === 'audio') updatedTurn.audioStatus = MediaStatus.idle;
-        if (!type || type === 'video') updatedTurn.videoStatus = MediaStatus.idle;
         return updatedTurn;
       }
       return t;

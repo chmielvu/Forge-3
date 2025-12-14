@@ -7,8 +7,8 @@ import { UnifiedDirectorOutputSchema, UnifiedDirectorOutput } from "./schemas/un
 import { PrefectDNA, YandereLedger, GameState } from "../types";
 import { INITIAL_LEDGER } from "../constants";
 import { callGeminiWithRetry } from "../utils/apiRetry";
-// Removed narrativeQualityEngine import as critique is now internalized
 import { selectNarratorMode, NARRATOR_VOICES } from '../services/narratorEngine';
+import { LORE_CONSTITUTION } from '../config/loreInjection';
 
 const getApiKey = (): string => {
   try {
@@ -26,24 +26,26 @@ const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
 // --- HELPER: ROBUST JSON PARSER ---
 function fuzzyJsonParse(text: string): any {
-  // 1. Try standard parse
+  // Clean markdown code blocks if present
+  let cleaned = text.trim();
+  
+  // Remove ```json and ``` wrapping
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/, '').replace(/```$/, '');
+  }
+
+  // Attempt parse
   try {
-    return JSON.parse(text);
+    return JSON.parse(cleaned);
   } catch (e) {
-    // 2. Try extracting JSON block
+    // Last ditch: regex extraction
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       try {
         return JSON.parse(jsonMatch[0]);
       } catch (e2) {
-        // 3. Fallback: Try to clean common markdown errors
-        try {
-            const cleaned = jsonMatch[0].replace(/```json/g, '').replace(/```/g, '');
-            return JSON.parse(cleaned);
-        } catch(e3) {
-            console.error("Fuzzy JSON Parse Failed:", e3);
-            throw new Error("Failed to parse AI response.");
-        }
+        console.error("Fuzzy JSON Parse Failed:", e2);
+        throw new Error("Failed to parse AI response.");
       }
     }
     throw new Error("No JSON block found in response.");
@@ -64,13 +66,13 @@ function getSpecificDriveInstruction(archetype: string): string {
     case 'The Sadist': 
       return "Prioritize 'public_action' that involves kinetic punishment or physical impact. Violence is your language.";
     case 'The Nurse': 
-      return "Prioritize 'public_action' that involves invasive medical examination or 'caring' manipulation of the body.";
+      return "Implement 'Weaponized Nurturing'. Trade 'Health' for 'Secrets'. Emphasize gentle touch contrasted with cold questions.";
     case 'The Zealot': 
-      return "Prioritize 'public_action' that enforces rules or cites scripture to correct behavior.";
+      return "Prioritize validation. Quote the 'Codex of Yala' to justify actions. Hesitate physically, then overcompensate verbally.";
     case 'The Yandere': 
-      return "Prioritize 'public_action' that physically isolates or claims ownership of the Subject.";
+      return "Monitor 'Jealousy'. If Subject interacts with others, trigger 'Purification Ritual'. Refer to Subject as 'My Project' or 'Beloved'.";
     case 'The Dissident': 
-      return "Prioritize 'public_action' that mocks the Subject publicly while signaling safety privately.";
+      return "Check 'Public_Visibility'. If TRUE: Be cynical/cruel. If FALSE: Be helpful/conspiratorial (Code-Switching).";
     default: 
       return "Prioritize 'public_action' that actively demonstrates your dominance and competence.";
   }
@@ -79,17 +81,49 @@ function getSpecificDriveInstruction(archetype: string): string {
 function getSpecificWeaknessInstruction(archetype: string): string {
   switch (archetype) {
     case 'The Zealot': 
-      return "You MUST show visible hesitation (a flinch, a stutter, looking away) when ordering violence, then immediately overcompensate with loud scripture.";
+      return "THE TELL: You MUST show visible hesitation (a flinch, a stutter, looking away) when ordering violence, then immediately overcompensate with loud scripture.";
     case 'The Nurse': 
-      return "MANDATORY ACTION STRUCTURE: You must begin 'public_action' with a tactile medical examination or soothing gesture. Immediately follow this with a probing question about secrets or rival Prefects, framed as a necessary diagnostic query.";
+      return "THE TELL: The 'Surgical Question'. Embed interrogation questions within soothing medical talk ('Does this hurt?... So, what did Darius tell you?').";
     case 'The Yandere': 
-      return "You MUST reveal your instability. If the subject is threatened by others, snap into violence. If they are alone with you, be terrifyingly sweet.";
+      return "THE TELL: The 'Dead Eyes Switch'. Snap from 'Dere' (Sweet/Adoring) to 'Yan' (Homicidal) instantly if defied or jealous.";
     case 'The Dissident': 
-      return "You MUST act bored or cruel to the audience, but drop a subtle hint (a glance, a relaxed grip) that you are not truly invested.";
+      return "THE TELL: 'Code-Switching'. Use a harsh, cynical voice in public ('Pathetic worm') and an urgent, whispered voice in private.";
     case 'The Sadist': 
-      return "You MUST betray your enjoyment of the pain. A smile you can't hide, dilated pupils, or a shudder of pleasure.";
+      return "THE TELL: The 'Predatory Giggle'. You MUST betray your enjoyment of the pain. A smile you can't hide.";
     default: 
       return "Ensure your secret weakness acts as a visible 'tell' or constraint on your action.";
+  }
+}
+
+function getBehavioralQuirk(archetype: string, emotionalState: any): string {
+  const { paranoia, desperation, confidence } = emotionalState || { paranoia: 0, desperation: 0, confidence: 0 };
+  
+  switch(archetype) {
+    case 'The Yandere': // Kaelen
+      if (paranoia > 0.6) return "Quirk: Fidgets neurotically with a lock of hair or her ribbon choker.";
+      if (confidence > 0.7) return "Quirk: Her eyes go completely dead/flat ('Yan' switch) while smiling sweetly.";
+      return "Quirk: Clutches a small token of the Subject tightly.";
+      
+    case 'The Zealot': // Elara
+      if (desperation > 0.5) return "Quirk: Clasps hands together so tightly the knuckles turn white to hide shaking.";
+      if (confidence > 0.6) return "Quirk: Stands with unnatural, brittle rigidity, chin lifted too high.";
+      return "Quirk: Touches the Codex/Rulebook like a talisman.";
+      
+    case 'The Dissident': // Rhea
+      if (paranoia > 0.5) return "Quirk: Eyes dart to the exits; taps ash from cigarette nervously.";
+      if (confidence > 0.6) return "Quirk: Rolls eyes visibly or leans back in a posture of exaggerated boredom.";
+      return "Quirk: Lowers voice and leans in slightly (Code-Switching).";
+      
+    case 'The Nurse': // Anya
+      if (confidence > 0.7) return "Quirk: Idly toys with a medical instrument (syringe/thermometer) against her lip.";
+      return "Quirk: Adjusts her coat to subtly reveal or conceal skin, modulating her 'warmth'.";
+      
+    case 'The Sadist': // Petra (if simulated as prefect)
+      if (confidence > 0.8) return "Quirk: Bounces on heels, unable to contain kinetic energy.";
+      return "Quirk: Taps foot impatiently, checking for a reaction.";
+      
+    default:
+      return "Quirk: Maintains a specific, recurring posture.";
   }
 }
 
@@ -97,33 +131,46 @@ function getSpecificWeaknessInstruction(archetype: string): string {
  * Derives a specific short-term goal for a prefect based on current ledger and context.
  */
 function deriveShortTermGoal(prefect: PrefectDNA, ledger: YandereLedger, rivals: string[]): string {
-  const { traumaLevel, complianceScore, hopeLevel, physicalIntegrity } = ledger;
+  const { traumaLevel, complianceScore, hopeLevel, physicalIntegrity, shamePainAbyssLevel, arousalLevel } = ledger;
   
+  // High Trauma Reactivity (Global)
+  if (traumaLevel > 85) {
+      if (prefect.archetype === 'The Nurse') return "Identify the Subject's physiological shock (nausea, trembling) and exploit it under the guise of medical care. Administer a 'calming' agent that increases suggestibility.";
+      if (prefect.archetype === 'The Sadist') return "Mock the Subject's pathetic posture (guarding, collapsing) and deliver a final 'correction'. Verify if the subject is truly broken.";
+      if (prefect.archetype === 'The Zealot') return "Demand the Subject stand straight despite the pain, citing the 'Posture of Penitence'. Panic internally if they collapse.";
+      if (prefect.archetype === 'The Yandere') return "Panic at the subject's damage. 'Protect' them by isolating them from everyone else violently.";
+  }
+
   switch (prefect.archetype) {
-    case 'The Yandere':
-      if (rivals.length > 0) return "Aggressively insert yourself between the Subject and the other Prefect to block their access.";
-      if (complianceScore < 30) return "Threaten the Subject with a 'purification' ritual if they do not look at you immediately.";
-      if (hopeLevel > 50) return "Destroy a small object of hope belonging to the Subject, then claim you did it for their own good.";
+    case 'The Yandere': // Kaelen
+      if (rivals.length > 0) return "Aggressively insert yourself between the Subject and the other Prefect to block their access. Glare at the rival.";
+      if (complianceScore < 30) return "Threaten the Subject with a 'purification' ritual if they do not look at you immediately. Use a sweet, terrifying voice.";
+      if (hopeLevel > 50) return "Destroy a small object of hope belonging to the Subject (or a memory), then claim you did it for their own good.";
+      if (arousalLevel && arousalLevel > 40) return "Touch the Subject to claim ownership. Whisper that only you understand their 'dirty' body.";
       return "Touch the Subject to claim ownership and whisper a possessive secret that terrifies them.";
       
-    case 'The Zealot':
-      if (traumaLevel < 40) return "Find a minor infraction (posture, eye contact) and blow it out of proportion to justify immediate punishment.";
-      if (hopeLevel > 60) return "Crush the Subject's hope by citing the inevitability of the Codex's final chapter.";
-      if (complianceScore > 80) return "Praise the Subject awkwardly, then recoil as if you've done something wrong.";
+    case 'The Zealot': // Elara
+      if (traumaLevel < 40) return "Find a minor infraction (posture, eye contact) and blow it out of proportion to justify immediate punishment. Cite specific Codex rules.";
+      if (hopeLevel > 60) return "Crush the Subject's hope by citing the inevitability of the Codex's final chapter. Be loud to cover your own doubt.";
+      if (complianceScore > 80) return "Praise the Subject awkwardly, then recoil as if you've done something wrong. Resume strictness immediately.";
+      if (shamePainAbyssLevel > 50) return "Lecture the subject on the 'virtue of shame'. Avoid making eye contact while punishing.";
       return "Demand the Subject recite a rule from the Codex, then physically correct their tone.";
       
-    case 'The Nurse':
-      if (physicalIntegrity < 70) return "Use a medical check-up to invade personal space and extract a secret about another Prefect.";
-      if (traumaLevel > 80) return "Offer a sedative that is actually a truth serum, framed as mercy.";
-      return "Perform a 'preventative' examination that is humiliating but non-violent.";
+    case 'The Nurse': // Anya
+      if (physicalIntegrity < 60) return "Use a medical check-up to invade personal space. Whisper a deal: 'I can stop the pain if you tell me a secret about Elara.'";
+      if (traumaLevel > 80) return "Offer a sedative that is actually a truth serum, framed as mercy. Record their delirious ramblings.";
+      if (shamePainAbyssLevel > 60) return "Humiliate the subject under the guise of a 'hygiene inspection'.";
+      return "Perform a 'preventative' examination that is humiliating but non-violent. Establish reliance.";
       
-    case 'The Dissident':
-      if (rivals.includes('The Zealot')) return "Mock The Zealot's rigid adherence to rules to undermine her authority in front of the Subject.";
-      if (hopeLevel < 20) return "Drop a physical token (key, note) near the Subject while berating them verbally.";
+    case 'The Dissident': // Rhea
+      if (rivals.includes('The Zealot')) return "Mock The Zealot's rigid adherence to rules to undermine her authority in front of the Subject. Be cynical.";
+      if (hopeLevel < 20) return "Drop a physical token (key, note) near the Subject while berating them verbally. 'Clumsy idiot.'";
+      if (complianceScore > 90) return "Look at the subject with disgust for their weakness. 'Is there anything left in there?'";
       return "Perform a cruel act for the cameras, but give the Subject a signal (wink, squeeze) that it is performance.";
       
     case 'The Sadist':
-      if (complianceScore > 90) return "Invent a reason to punish the Subject anyway, proving that obedience does not guarantee safety.";
+      if (complianceScore > 90) return "Invent a reason to punish the Subject anyway, proving that obedience does not guarantee safety. Laugh about it.";
+      if (physicalIntegrity > 90) return "The subject looks too pristine. 'Fix' that immediately.";
       return "Escalate the physical stakes. Make the Subject flinch visibly.";
       
     default:
@@ -142,6 +189,12 @@ function buildPrefectContextBlock(
   history: string[]
 ): string {
   const rivalsInScene = activePrefects.map(p => p.archetype);
+
+  // Inject Trauma Observation Context
+  let traumaObservation = "";
+  if (ledger.traumaLevel > 70) {
+      traumaObservation = `\n**SUBJECT PHYSICAL STATE:** The Subject is physically compromised. He is likely shaking, guarding his groin, or on the verge of collapse (Nausea/Shock). Prefects MUST acknowledge this weakness (either mocking it, analyzing it, or exploiting it).`;
+  }
 
   const prefectProfiles = activePrefects.map((prefect, idx) => {
     // 1. Analyze Relationships with Active Rivals in the Scene
@@ -168,6 +221,7 @@ function buildPrefectContextBlock(
     const emotionalState = prefect.currentEmotionalState || { paranoia: 0.2, desperation: 0.2, confidence: 0.5 };
     const driveInstr = getSpecificDriveInstruction(prefect.archetype);
     const weaknessInstr = getSpecificWeaknessInstruction(prefect.archetype);
+    const behavioralQuirk = getBehavioralQuirk(prefect.archetype, emotionalState);
     const sceneGoal = deriveShortTermGoal(prefect, ledger, rivalsInScene.filter(r => r !== prefect.archetype));
 
     if (!socialMandate) socialMandate = "\n- **STATUS QUO:** Maintain your rank. Do not show weakness.";
@@ -197,8 +251,9 @@ function buildPrefectContextBlock(
 
 **BEHAVIORAL MANDATES (HIGHEST PRIORITY):**
 1. **CURRENT SCENE GOAL (MANDATORY):** "${sceneGoal}"
-2. **WEAKNESS MANIFESTATION:** ${weaknessInstr}
-3. **SOCIAL DYNAMICS (RELATIONAL PRESSURE):** ${socialMandate}
+2. **THE TELL (MANDATORY):** ${weaknessInstr}
+3. **BEHAVIORAL QUIRK:** ${behavioralQuirk} (Include this detail in the narrative or internal monologue).
+4. **SOCIAL DYNAMICS (RELATIONAL PRESSURE):** ${socialMandate}
 
 ---`;
   }).join('\n');
@@ -216,10 +271,16 @@ For EACH prefect, generate their response to the player's action: "${playerInput
 4. **MANDATORY GOAL:** Ensure the 'current_scene_goal' provided above is the primary driver of their 'public_action'.
 5. **USE TOOLS:** Use 'sabotage_attempt' and 'alliance_signal' fields to enact the SOCIAL DYNAMICS mandates.
 
+**THEMATIC RESONANCE (MANDATORY DIALOGUE LAYER):**
+- **Control:** Characters must speak with the assumption of absolute ownership. Use possessive pronouns regarding the Subject.
+- **Submission:** Frame the Subject's suffering as a service they are providing or a lesson they are learning. "Thank you for this data."
+- **Corruption of Innocence:** Violence must be framed as "fixing" or "cleansing." The perpetrator believes they are benevolent. "I am just engaging the mechanism."
+
 **PLAYER STATE FOR CONTEXT:**
 - Trauma: ${ledger.traumaLevel}/100
 - Compliance: ${ledger.complianceScore}/100
 - Hope: ${ledger.hopeLevel}/100
+${traumaObservation}
 
 ${prefectProfiles}
 
@@ -239,8 +300,16 @@ export async function executeUnifiedDirectorTurn(
   isLiteMode: boolean = false
 ) {
   try {
-    const modelId = isLiteMode ? 'gemini-2.0-flash-lite-preview-02-05' : 'gemini-3-pro-preview';
-    console.log(`⚡ [Unified Director] Starting single-agent turn using ${modelId}...`);
+    // RPM OPTIMIZATION:
+    // gemini-3-pro-preview is rate limited to 2 RPM on free tier.
+    // gemini-2.5-flash is 15 RPM.
+    // We default to gemini-2.5-flash but enable Thinking Config to maintain depth.
+    
+    // NOTE: Flash 2.5 supports Thinking Config.
+    const modelId = isLiteMode ? 'gemini-2.0-flash-lite-preview-02-05' : 'gemini-2.5-flash';
+    const useThinking = !isLiteMode; // Only use thinking for "Pro" feel, even on Flash model
+
+    console.log(`⚡ [Unified Director] Starting System 2 Deep Think using ${modelId} (Thinking: ${useThinking})...`);
     
     // 1. Initialize Systems
     const controller = new KGotController(currentGraphData);
@@ -274,7 +343,8 @@ export async function executeUnifiedDirectorTurn(
       .replace('{{physicalIntegrity}}', ledger.physicalIntegrity.toString())
       .replace('{{prefectIntents}}', prefectContextBlock) // Using the block we built
       .replace('{{history}}', history.slice(-3).join('\n---\n'))
-      .replace('{{fortuneInjection}}', fortuneInjection); // Inject Agency check
+      .replace('{{fortuneInjection}}', fortuneInjection)
+      .replace('{{traumaLens}}', LORE_CONSTITUTION.TRAUMA_LENS); // Inject Agency check
     
     const ai = getAI();
     const response = await callGeminiWithRetry<GenerateContentResponse>(
@@ -284,7 +354,10 @@ export async function executeUnifiedDirectorTurn(
         config: {
           responseMimeType: "application/json",
           responseSchema: UnifiedDirectorOutputSchema,
-          temperature: isLiteMode ? 0.7 : 1.0, 
+          temperature: isLiteMode ? 0.7 : 0.85, 
+          // Enable Deep Think via Thinking Config for Gemini 2.5 Flash
+          // Budget set to 1024 for speed/efficiency while maintaining reasoning quality
+          thinkingConfig: useThinking ? { thinkingBudget: 1024 } : undefined 
         }
       }),
       "Unified Director"
@@ -300,9 +373,6 @@ export async function executeUnifiedDirectorTurn(
       throw new Error(`Invalid JSON response from AI: ${outputText.substring(0, 200)}...`);
     }
 
-    // NOTE: Aesthete critique call has been removed. 
-    // The prompt now enforces self-critique in the 'thought_signature'.
-    
     // 4. Apply mutations
     if (unifiedOutput.kgot_mutations) {
       controller.applyMutations(unifiedOutput.kgot_mutations);
@@ -320,12 +390,30 @@ export async function executeUnifiedDirectorTurn(
 ${unifiedOutput.narrative_text}
 `;
     
+    // Construct the Cognitive Graph trace log showing the Deep Think steps
+    const cognitiveTrace = `
+SYSTEM 2 REASONING TRACE (${modelId}):
+-------------------------
+[1] CAUSAL ANALYSIS:
+${unifiedOutput.cognitive_graph.analysis}
+
+[2] BRANCH HYPOTHESES:
+${unifiedOutput.cognitive_graph.hypotheses.map((h, i) => `   (${['A', 'B', 'C'][i]}) ${h}`).join('\n')}
+
+[3] EVALUATION & SELECTION:
+${unifiedOutput.cognitive_graph.evaluation}
+
+[4] SYNTHESIS PLAN:
+${unifiedOutput.cognitive_graph.synthesis_plan}
+    `.trim();
+
     return {
       narrative: combinedNarrative,
+      script: unifiedOutput.script, // NEW: Pass script
       visualPrompt: unifiedOutput.visual_prompt || "Darkness.",
       updatedGraph: controller.getGraph(),
       choices: unifiedOutput.choices || ["Endure", "Observe"],
-      thoughtProcess: `[${isLiteMode ? 'LITE' : 'PRO'}] Unified: ${unifiedOutput.thought_signature}`,
+      thoughtProcess: cognitiveTrace,
       state_updates: unifiedOutput.ledger_update,
       audioCues: unifiedOutput.audio_cues,
       psychosisText: unifiedOutput.psychosis_text,
@@ -338,6 +426,7 @@ ${unifiedOutput.narrative_text}
     const errorMessage = error.message || "Unknown AI error.";
     return {
       narrative: `The Loom shudders. A neural-symbolic disconnect. (${errorMessage})`,
+      script: [{ speaker: "System", text: "CONNECTION LOST. REALITY FRACTURE DETECTED." }],
       visualPrompt: "Static. Glitching pixels.",
       updatedGraph: currentGraphData,
       choices: ["Attempt to re-stabilize neural link"],

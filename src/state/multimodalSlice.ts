@@ -6,6 +6,7 @@ import {
   MediaQueueItem,
   CombinedGameStoreState,
   MultimodalSliceExports,
+  ScriptItem
 } from '../types';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
 import { INITIAL_LEDGER } from '../constants';
@@ -36,7 +37,7 @@ export const createMultimodalSlice: StateCreator<
     hasUserInteraction: false, // Must be true for browser autoplay
   },
 
-  registerTurn: (text, visualPrompt, audioMarkup, metadata) => {
+  registerTurn: (text, visualPrompt, audioMarkup, metadata, script) => {
     // Access root state and safely drill down to gameState
     const state = get(); 
     // Fallback to INITIAL_LEDGER if ledger is not yet ready to prevent undefined access
@@ -48,6 +49,7 @@ export const createMultimodalSlice: StateCreator<
       id: generateId(),
       turnIndex: newTurnIndex,
       text,
+      script, // NEW: Store the script
       visualPrompt,
       // Updated to use strict MediaStatus enum members
       imageStatus: MediaStatus.idle,
@@ -162,7 +164,7 @@ export const createMultimodalSlice: StateCreator<
     }));
   },
 
-  markMediaReady: (turnId, type, dataUrl, duration) => {
+  markMediaReady: (turnId, type, dataUrl, duration, alignment) => {
     set((state) => ({
       mediaQueue: {
         ...state.mediaQueue,
@@ -177,6 +179,7 @@ export const createMultimodalSlice: StateCreator<
           if (type === 'audio') {
             update.audioUrl = dataUrl;
             update.audioDuration = duration;
+            if (alignment) update.audioAlignment = alignment;
           }
           if (type === 'video') update.videoUrl = dataUrl;
           return { ...turn, ...update };
@@ -261,7 +264,7 @@ export const createMultimodalSlice: StateCreator<
   },
 
   playTurn: async (turnId) => {
-    const { multimodalTimeline, audioPlayback, setHasUserInteraction } = get();
+    const { multimodalTimeline, setHasUserInteraction } = get();
     const turn = multimodalTimeline.find((t) => t.id === turnId);
 
     if (!turn || turn.audioStatus !== MediaStatus.ready || !turn.audioUrl) {
@@ -271,24 +274,20 @@ export const createMultimodalSlice: StateCreator<
 
     setHasUserInteraction();
 
-    // Update state to indicate playing
     set((state) => ({
       audioPlayback: { ...state.audioPlayback, isPlaying: true, currentPlayingTurnId: turnId },
     }));
 
-    // Delegate playback to AudioService
     await audioService.play(
       turn.audioUrl,
       get().audioPlayback.volume,
       get().audioPlayback.playbackRate,
       () => {
-        // onEnded callback
         const { audioPlayback: ap, multimodalTimeline: currentTimeline } = get();
         if (ap.autoAdvance) {
           const currentIndex = currentTimeline.findIndex(t => t.id === turnId);
           if (currentIndex !== -1 && currentIndex < currentTimeline.length - 1) {
             const nextTurn = currentTimeline[currentIndex + 1];
-            // Small delay to allow state to settle
             window.setTimeout(() => {
               get().setCurrentTurn(nextTurn.id);
               get().playTurn(nextTurn.id);
@@ -296,7 +295,6 @@ export const createMultimodalSlice: StateCreator<
             return;
           }
         }
-        // If not auto-advancing or end of timeline, reset playing state
         set((state) => ({
           audioPlayback: { ...state.audioPlayback, isPlaying: false },
         }));
@@ -312,9 +310,6 @@ export const createMultimodalSlice: StateCreator<
   },
 
   resumeAudio: () => {
-    // Note: AudioService.play supports resume via start offset, but here we generally replay or let user click play.
-    // If we wanted resume, we'd need to track paused state better in Service or just re-call play with offset.
-    // For simplicity given the current structure, we treat resume as play.
     const { currentPlayingTurnId } = get().audioPlayback;
     if (currentPlayingTurnId) {
         get().playTurn(currentPlayingTurnId);
@@ -370,7 +365,7 @@ export const createMultimodalSlice: StateCreator<
     const hasAudio = turn.audioStatus === MediaStatus.ready && !!turn.audioUrl;
     const hasVideo = turn.videoStatus === MediaStatus.ready && !!turn.videoUrl;
 
-    const totalModalities = 4; // text, image, audio, video
+    const totalModalities = 4;
     let loadedModalities = 0;
     if (hasText) loadedModalities++;
     if (hasImage) loadedModalities++;
@@ -393,7 +388,7 @@ export const createMultimodalSlice: StateCreator<
   },
 
   resetMultimodalState: () => {
-    // Stop any playing audio before reset
+    // Explicitly stop audio service to prevent ghosts
     audioService.stop();
 
     set({

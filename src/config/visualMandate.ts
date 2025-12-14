@@ -1,3 +1,4 @@
+
 /**
  * @file src/config/visualMandate.ts
  * @description The immutable aesthetic constitution for The Forge's Loom.
@@ -6,10 +7,10 @@
 
 export const VISUAL_MANDATE = {
   // The immutable header injected into every image prompt
-  ZERO_DRIFT_HEADER: "((MASTER STYLE LOCK)): hyper-detailed 8K oil painting texture, soft digital brushwork, expressive linework, ((Milo Manara sensual elegance, Bruce Timm angular minimalism fusion)), dramatic Rembrandt Caravaggio lighting, shallow depth of field, clean sharp focus. (Technical Lock: intimate 85mm portrait lens, rim lighting on sweat-glistened skin). NO TEXT/WATERMARKS.",
+  ZERO_DRIFT_HEADER: "((MASTER STYLE LOCK)): Milo Manara style (clean ink lines, fluid contours, impossible elegance, feline eyes, cruel half-smile, teasing cruelty, liquid strands, languid dominance), high-contrast Neo-Noir, erotic dark academia, Eroticized Distress, Systemic Emasculation, Bored God Complex. Art by Milo Manara, J. Scott Campbell, Artgerm, Greg Rutkowski, Frank Frazetta for high-fidelity erotic realism. Clinical line, unforgiving precision, negative space isolation, wet surfaces, Art Deco geometry, smoke haze, clinical chiaroscuro, venetian blind shadows, Yves Saint Laurent tailoring, NO TEXT/WATERMARKS, NO GRADIENTS, NO CROSS-HATCHING, NO MUDDY TEXTURES.",
 
   // Core aesthetic definitions
-  STYLE: "grounded dark erotic academia + baroque brutalism + vampire noir + intimate psychological tension + rembrandt caravaggio lighting + painterly anime-fusion gothic overlays. masterpiece, oil painting texture with soft digital brushwork, hyper-detailed fabrics and hair textures.",
+  STYLE: "Erotic Dark Academia + Neo-Noir + Milo Manara synthesis. Clean lines, high-fashion brutality, dreamlike eroticism, atmospheric density. From search: photorealistic painting, very short skirt, passionate kiss, heavy-lidded eyes, glossy strands.",
   
   TECHNICAL: {
     camera: "intimate 50mm or 85mm close-up, shallow depth of field, bokeh background",
@@ -20,14 +21,10 @@ export const VISUAL_MANDATE = {
   MOOD: "predatory intimacy, clinical amusement, suffocating desire, weaponized sexuality, voyeuristic, non-consensual fear, unwilling arousal, languid dominance.",
 
   // Strict negative prompt to prevent style drift
-  NEGATIVE_PROMPT: [
-    "bright colors", "cheerful", "modern architecture", "soft focus", "natural daylight", 
-    "anime exaggeration", "cartoon", "3d render", "low res", "flat lighting", 
-    "muddy textures", "fantasy armor", "capes", "lightning", "gore", "blood", 
-    "screaming", "supernatural elements", "monsters", "ghosts", "ugly", 
-    "deformed", "extra limbs", "blurry", "overexposed", "watermark", "text"
-  ]
-};
+  NEGATIVE_PROMPT: "oil painting texture, Renaissance Brutalism, gothic decay, warm candlelight, heavy robes, feral hair, dusty motes, fungal bloom, ancient stone, gradients, cross-hatching, pixel-dense textures",
+  
+  RESOLUTION: "1024x1024"
+} as const;
 
 export const VIDEO_MANDATE = {
   STYLE: "Cinematic slow motion, psychological horror, atmospheric.",
