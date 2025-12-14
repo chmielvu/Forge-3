@@ -8,8 +8,16 @@ import { selectNarratorMode, NARRATOR_VOICES } from '../services/narratorEngine'
 
 // Use number for browser-compatible timer type
 let mediaProcessingTimeout: number | null = null;
-const MEDIA_PROCESSING_DELAY_MS = 500; // Delay between processing queue items
-const MAX_CONCURRENT_MEDIA_GENERATION = 3; // Process up to N media items in parallel
+const MEDIA_PROCESSING_DELAY_MS = 3000; // Delay increased to 3s to reduce RPM
+const MAX_CONCURRENT_MEDIA_GENERATION = 1; // Strict sequential processing to avoid 429s
+
+/**
+ * Helper to detect Rate Limit / Quota errors
+ */
+const isRateLimitError = (error: any): boolean => {
+  const msg = (error.message || '').toLowerCase();
+  return msg.includes('429') || msg.includes('quota') || msg.includes('resource exhausted') || msg.includes('rate limit');
+};
 
 /**
  * Processes a single media item from the queue.
@@ -84,17 +92,43 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
       markMediaReady(item.turnId, item.type, dataUrl, duration);
       if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] Successfully generated ${item.type} for turn ${item.turnId}.`);
     } else {
+      // Audio can be undefined if disabled or empty, handle gracefully if not error
+      if (item.type === 'audio' && !BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableAudio) {
+          removeMediaFromQueue(item);
+          return;
+      }
       throw new Error(`Generated ${item.type} data is empty.`);
     }
   } catch (error: any) {
     console.error(`[MediaController] Failed to generate ${item.type} for turn ${item.turnId}:`, error);
     markMediaError(item.turnId, item.type, error.message || 'Unknown media generation error');
     
-    // Check if max retries reached after marking as error
-    const failedItem = store.mediaQueue.failed.find((q) => q.turnId === item.turnId && q.type === item.type);
+    // Refresh state to get the failed item record with updated status
+    const updatedStore = useGameStore.getState();
+    const failedItem = updatedStore.mediaQueue.failed.find((q) => q.turnId === item.turnId && q.type === item.type);
+    
+    // Check retry limits and schedule backoff
     if (failedItem && (failedItem.retries || 0) < BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.MAX_MEDIA_QUEUE_RETRIES) {
-      if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] Retrying ${item.type} for turn ${item.turnId}. Attempt ${(failedItem.retries || 0) + 1}`);
-      retryFailedMedia(item.turnId, item.type); // Enqueue for retry
+      const isQuota = isRateLimitError(error);
+      let delay = 2000; // Default retry delay
+
+      if (isQuota) {
+        // Exponential backoff for Quota errors: 5s, 10s, 20s...
+        delay = 5000 * Math.pow(2, failedItem.retries || 0);
+        if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) {
+            console.warn(`[MediaController] 🛑 Rate limit detected for ${item.type}. Backing off for ${delay/1000}s.`);
+        }
+      } else {
+         if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) {
+            console.log(`[MediaController] Retrying ${item.type} for turn ${item.turnId}. Attempt ${(failedItem.retries || 0) + 1} in ${delay}ms`);
+         }
+      }
+
+      // Schedule the retry
+      setTimeout(() => {
+        useGameStore.getState().retryFailedMedia(item.turnId, item.type);
+      }, delay);
+
     } else {
       if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.warn(`[MediaController] Max retries reached for ${item.type} on turn ${item.turnId}. Item remains in failed queue.`);
     }
@@ -126,7 +160,7 @@ const processMediaQueue = async (): Promise<void> => {
 
   if (availableSlots <= 0 && pending.length > 0) {
     // Already processing max concurrent items, and more are pending. Reschedule check.
-    if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] Max concurrent items (${MAX_CONCURRENT_MEDIA_GENERATION}) in progress, rescheduling queue check.`);
+    // if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] Max concurrent items (${MAX_CONCURRENT_MEDIA_GENERATION}) in progress, rescheduling queue check.`);
     if (mediaProcessingTimeout) window.clearTimeout(mediaProcessingTimeout);
     mediaProcessingTimeout = window.setTimeout(processMediaQueue, MEDIA_PROCESSING_DELAY_MS);
     return;
@@ -134,7 +168,7 @@ const processMediaQueue = async (): Promise<void> => {
 
   if (pending.length === 0 && inProgress.length === 0) {
     // Queue is entirely empty
-    if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log("[MediaController] Media queue is empty.");
+    // if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log("[MediaController] Media queue is empty.");
     mediaProcessingTimeout = null; // Clear timeout when queue is truly empty
     return;
   }

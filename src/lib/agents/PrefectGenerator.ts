@@ -201,7 +201,8 @@ export const CANON_PREFECTS: Record<string, PrefectDNA> = {
     drive: "Prove ideological purity to secure TA position and validate the Forge's mission",
     secretWeakness: "Secretly horrified by the violence she orders - flinches at impact, then overcompensates with zealous justifications",
     favorScore: 65,
-    relationships: {}
+    relationships: {},
+    knowledge: [] // Initialize empty knowledge
   },
   'KAELEN': {
     id: 'PREFECT_OBSESSIVE',
@@ -212,7 +213,8 @@ export const CANON_PREFECTS: Record<string, PrefectDNA> = {
     drive: "Become TA to gain unrestricted access to Subject 84 for 'purification rituals'",
     secretWeakness: "Manic possession makes her unpredictable - Faculty sees her as unstable liability",
     favorScore: 45,
-    relationships: {}
+    relationships: {},
+    knowledge: [] // Initialize empty knowledge
   },
   'RHEA': {
     id: 'PREFECT_DISSIDENT',
@@ -223,7 +225,8 @@ export const CANON_PREFECTS: Record<string, PrefectDNA> = {
     drive: "Become TA to undermine Faculty from position of power and avenge her brother",
     secretWeakness: "Her public cruelty is a performance - if caught helping Subjects, she's executed",
     favorScore: 55,
-    relationships: {}
+    relationships: {},
+    knowledge: [] // Initialize empty knowledge
   },
   'ANYA': {
     id: 'PREFECT_NURSE',
@@ -234,7 +237,8 @@ export const CANON_PREFECTS: Record<string, PrefectDNA> = {
     drive: "Become TA to access advanced medical research and secure family's influence",
     secretWeakness: "Her empathy is entirely performative - Subjects who discover this lose all hope",
     favorScore: 70,
-    relationships: {}
+    relationships: {},
+    knowledge: [] // Initialize empty knowledge
   }
 };
 
@@ -275,7 +279,8 @@ function generateRandomPrefect(seed: number, index: number): PrefectDNA {
     drive,
     secretWeakness: weakness,
     favorScore: 50, // Standard starting score
-    relationships: {}
+    relationships: {},
+    knowledge: [] // Initialize empty knowledge
   };
 }
 

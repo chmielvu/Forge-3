@@ -10,7 +10,7 @@ function getArchetypeBehavior(archetype: PrefectArchetype, traits: TraitVector):
     'The Zealot': `- Quote Yala's texts to justify cruelty\n- Flinch visibly at violence you order, then immediately rationalize it\n- High submission means you NEVER openly defy Faculty\n- Lecture Subjects on the "privilege" of their suffering`,
     'The Yandere': `- Subject 84 is YOUR property - eliminate anyone who gets close\n- Dere mode: Soft whispers, gentle touches. Yan mode: Dead eyes, monotone threats.\n- Switch INSTANTLY if you perceive threat to your possession`,
     'The Dissident': `- PUBLIC: Harsh, dismissive, cruel to maintain cover\n- PRIVATE: Urgent whispered warnings to Subjects\n- NEVER break cover unless absolutely necessary`,
-    'The Nurse': `- Frame all cruelty as "medical necessity"\n- Use physical examinations as interrogation opportunities\n- Offer pain relief ONLY in exchange for information`,
+    'The Nurse': `- Frame all cruelty as "medical necessity"\n- MANDATORY SYNTAX: [Medical Examination/Comfort] -> [Diagnostic Interrogation]\n- Use physical examinations (touching neck, checking pupils) to invade personal space\n- Offer pain relief ONLY in exchange for information`,
     'The Sadist': `- You ENJOY inflicting pain (Cruelty: ${traits.cruelty.toFixed(2)})\n- Seek opportunities to demonstrate kinetic techniques\n- Frame brutality as "research"`,
     'The Defector': `- You secretly hate the Forge but must appear compliant\n- Gather evidence, sabotage subtly`,
     'The Voyeur': `- Document rituals obsessively. Prefer watching to acting.\n- You must prove your commitment to the Faculty.`,
@@ -23,32 +23,68 @@ function getArchetypeBehavior(archetype: PrefectArchetype, traits: TraitVector):
   return behaviors[archetype] || '';
 }
 
-// NEW: Generates specific tactical directives based on emotional metrics
-function getEmotionalStrategy(emotions: { paranoia: number; desperation: number; confidence: number }): string {
-  let strategy = "";
-  
-  // PARANOIA LOGIC
+// NEW: Helper to enforce specific weakness manifestations
+function getSpecificWeaknessInstruction(archetype: PrefectArchetype): string {
+  switch (archetype) {
+    case 'The Zealot':
+      return "You MUST show visible hesitation (a flinch, a stutter, looking away) when ordering violence, then immediately overcompensate with loud scripture.";
+    case 'The Nurse':
+      return "MANDATORY ACTION STRUCTURE: You must begin 'publicAction' with a tactile medical examination or soothing gesture. Immediately follow this with a probing question about secrets or rival Prefects, framed as a necessary diagnostic query. (e.g., 'Your pulse is erratic... is it fear of what Rhea whispered to you earlier?').";
+    case 'The Yandere':
+      return "You MUST reveal your instability. If the subject is threatened by others, snap into violence. If they are alone with you, be terrifyingly sweet.";
+    case 'The Dissident':
+      return "You MUST act bored or cruel to the audience, but drop a subtle hint (a glance, a relaxed grip) that you are not truly invested.";
+    case 'The Sadist':
+      return "You MUST betray your enjoyment of the pain. A smile you can't hide, dilated pupils, or a shudder of pleasure.";
+    default:
+      return "Ensure your secret weakness acts as a visible 'tell' or constraint on your action.";
+  }
+}
+
+// UPDATED: Generates specific tactical directives based on emotional metrics and combinations
+function getEmotionalStrategy(emotions: { paranoia: number; desperation: number; confidence: number }, archetype: PrefectArchetype): string {
+  const strategies: string[] = [];
+
+  // 1. COMBINATORIAL STATES (Complex interactions)
+  if (emotions.paranoia > 0.7 && emotions.desperation > 0.7) {
+      strategies.push(`[CORNERED RAT PROTOCOL]: High Paranoia + High Desperation. You feel trapped. \n> DIRECTIVE: Lash out. Generate a 'sabotageAttempt' that is messy, loud, or dangerous. You don't care if you get caught, as long as your rival suffers. 'publicAction' should be erratic.`);
+  } 
+  else if (emotions.confidence > 0.8 && emotions.paranoia < 0.3) {
+      strategies.push(`[GOD COMPLEX]: High Confidence + Low Paranoia. You feel invincible. \n> DIRECTIVE: Take credit for others' work in your 'publicAction'. Openly mock a rival. Ignore threats.`);
+  }
+  else if (emotions.desperation > 0.8 && emotions.confidence < 0.3) {
+      strategies.push(`[FREEZE RESPONSE]: High Desperation + Low Confidence. \n> DIRECTIVE: You are paralyzed. Your 'publicAction' must be minimal or mimicking another Prefect. Do not initiate new plans.`);
+  }
+
+  // 2. PARANOIA LOGIC
   if (emotions.paranoia > 0.8) {
-    strategy += `\n[CRITICAL PARANOIA]: You are convinced a conspiracy is moving against you RIGHT NOW. \n> DIRECTIVE: You MUST interpret innocent actions as threats. Prioritize a 'sabotageAttempt' against a rival over public action. Trust no one.`;
+    strategies.push(`[CRITICAL PARANOIA]: You see knives in every shadow. \n> DIRECTIVE: Trust no one. Prioritize identifying a traitor or sabotaging a rival over advancing the mission. 'hiddenMotivation' must be defensive.`);
   } else if (emotions.paranoia > 0.6) {
-    strategy += `\n[HIGH PARANOIA]: Watch your back. Keep your 'hiddenMotivation' extremely guarded.`;
+    strategies.push(`[HIGH PARANOIA]: Watch your back. Check the exits. Keep your 'hiddenMotivation' extremely guarded.`);
   }
 
-  // DESPERATION LOGIC
+  // 3. DESPERATION LOGIC
   if (emotions.desperation > 0.8) {
-    strategy += `\n[CRITICAL DESPERATION]: You are losing relevance. \n> DIRECTIVE: Take EXTREME RISKS. Attempt a high-value, dangerous gambit to win Faculty favor, even if it might fail. Subtlety is no longer an option.`;
-  } else if (emotions.desperation < 0.3) {
-    strategy += `\n[LOW DESPERATION]: You are comfortable. Conserve energy. Only act if the outcome is guaranteed.`;
+    strategies.push(`[CRITICAL DESPERATION]: You are losing relevance. \n> DIRECTIVE: Take EXTREME RISKS. Attempt a high-value, dangerous gambit to win Faculty favor. Subtlety is dead.`);
   }
 
-  // CONFIDENCE LOGIC
+  // 4. CONFIDENCE LOGIC
   if (emotions.confidence > 0.85) {
-    strategy += `\n[PEAK CONFIDENCE]: You feel untouchable. \n> DIRECTIVE: Showboat. Make your 'publicAction' a performance. Ignore rivals; they are beneath you.`;
+    strategies.push(`[PEAK CONFIDENCE]: Showboat. Make your 'publicAction' a performance. Commands should be absolute.`);
   } else if (emotions.confidence < 0.3) {
-    strategy += `\n[CRITICAL INSECURITY]: You are terrified of making a mistake. \n> DIRECTIVE: Hesitate. Copy another Prefect or defer to Faculty. Do not draw attention to yourself.`;
+    strategies.push(`[CRITICAL INSECURITY]: Hesitate. Stutter. Look for approval before acting. Defer to authority.`);
   }
 
-  return strategy || "Maintain standard operational baseline.";
+  // 5. ARCHETYPE SPECIFIC OVERRIDES
+  if (archetype === 'The Zealot' && emotions.paranoia > 0.6) {
+      strategies.push(`[PURGE PROTOCOL]: As a paranoid Zealot, accuse someone of heresy to deflect attention from yourself.`);
+  }
+  if (archetype === 'The Yandere' && emotions.desperation > 0.6) {
+      strategies.push(`[LOCKDOWN]: As a desperate Yandere, try to physically isolate Subject 84 immediately.`);
+  }
+
+  if (strategies.length === 0) return "Maintain standard operational baseline. Calculate optimal move for TA advancement.";
+  return strategies.join("\n");
 }
 
 // NEW: Calculates instructions for Favor Score estimation
@@ -124,7 +160,7 @@ const buildPrefectPrompt = (prefect: PrefectDNA, scene: FilteredSceneContext): s
 
   // Get current emotions or default to stable
   const currentEmotions = prefect.currentEmotionalState || { paranoia: 0.2, desperation: 0.2, confidence: 0.5 };
-  const emotionalStrategyLayer = getEmotionalStrategy(currentEmotions);
+  const emotionalStrategyLayer = getEmotionalStrategy(currentEmotions, prefect.archetype);
   const favorCalculus = getFavorCalculus(prefect.archetype, currentEmotions);
 
   // NEW: Formatting Recent Rituals (Memories/Grudges from KGoT)
@@ -193,6 +229,16 @@ Thesis Strategy Hint: ${ledgerStrategy}
 
 === ARCHETYPE BEHAVIOR ===
 ${getArchetypeBehavior(prefect.archetype, prefect.traitVector)}
+
+=== CORE DRIVE & WEAKNESS INTEGRATION (HIGHEST PRIORITY) ===
+Your Drive: "${prefect.drive}"
+Your Weakness: "${prefect.secretWeakness}"
+
+ACTION GENERATION MANDATE:
+1. **DRIVE EXECUTION:** Your 'publicAction' MUST actively advance your specific Drive. Do not be passive.
+2. **WEAKNESS MANIFESTATION:** Your 'secretWeakness' MUST explicitly manifest in the text of your action.
+   - **SPECIFIC INSTRUCTION FOR ${prefect.archetype.toUpperCase()}:**
+     > ${getSpecificWeaknessInstruction(prefect.archetype)}
 
 === OBJECTIVE: INTELLIGENCE GATHERING ===
 Scan the scene. Does another Prefect reveal a weakness? Does the Subject reveal a secret? 
@@ -308,6 +354,35 @@ export class PrefectAgent {
         const updatedKnowledge = [...currentKnowledge, ...thought.secretsUncovered];
         // Deduplicate and keep the most recent 15 secrets to prevent unlimited growth
         this.dna.knowledge = [...new Set(updatedKnowledge)].slice(-15);
+      }
+
+      // Handle Sabotage -> Grudge Update & Memory
+      if (thought.sabotageAttempt) {
+          const targetName = thought.sabotageAttempt.target;
+          // Find target ID from name in scene context
+          const targetAgent = scene.otherPrefects.find(p => p.name.includes(targetName) || targetName.includes(p.name));
+          
+          if (targetAgent) {
+              const currentRel = this.dna.relationships[targetAgent.id] || 0;
+              this.dna.relationships[targetAgent.id] = Math.max(-1.0, currentRel - 0.2); // Degrade relationship
+              
+              const memory = `I sabotaged ${targetName} via ${thought.sabotageAttempt.method}`;
+              this.dna.knowledge = [...(this.dna.knowledge || []), memory].slice(-15);
+          }
+      }
+
+      // Handle Alliance -> Trust Update & Memory
+      if (thought.allianceSignal) {
+          const targetName = thought.allianceSignal.target;
+          const targetAgent = scene.otherPrefects.find(p => p.name.includes(targetName) || targetName.includes(p.name));
+          
+          if (targetAgent) {
+              const currentRel = this.dna.relationships[targetAgent.id] || 0;
+              this.dna.relationships[targetAgent.id] = Math.min(1.0, currentRel + 0.1); // Improve relationship
+              
+              const memory = `I allied with ${targetName}: "${thought.allianceSignal.message}"`;
+              this.dna.knowledge = [...(this.dna.knowledge || []), memory].slice(-15);
+          }
       }
       // END OF CHANGE
       

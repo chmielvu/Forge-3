@@ -181,17 +181,27 @@ export function generateChoiceAnnotation(
 export function injectNarratorCommentary(
   narrative: string,
   mode: NarratorMode,
-  context?: any
+  ledger: YandereLedger
 ): string {
   // Avoid injecting on system messages or very short texts to prevent clutter
   if (narrative.length < 30) return narrative;
 
   // Use a deterministic hash of the content to decide if/what to inject.
-  // This prevents the commentary from flickering or changing on every React re-render.
   const hash = narrative.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   
-  // 30% chance to inject commentary on any given narrative block
-  const shouldInject = hash % 10 < 3; 
+  // CALCULATE PROBABILITY BASED ON LEDGER STATE
+  let injectionChance = 3; // Base 30%
+  const trauma = ledger.traumaLevel || 0;
+  const shame = ledger.shamePainAbyssLevel || 0;
+
+  // As the subject breaks, the "Abyss Narrator" becomes more intrusive
+  if (trauma > 80 || shame > 80) {
+      injectionChance = 8; // 80% chance - High instability
+  } else if (trauma > 50 || shame > 50) {
+      injectionChance = 5; // 50% chance
+  }
+  
+  const shouldInject = (hash % 10) < injectionChance; 
   
   if (!shouldInject) return narrative;
 
@@ -201,7 +211,10 @@ export function injectNarratorCommentary(
   // Check triggers
   const hitTrigger = voice.triggerKeywords.some(kw => lower.includes(kw));
   
-  if (hitTrigger) {
+  // If probability check passed, but no keywords found, we might force a comment if trauma is critical
+  const forceInject = (trauma > 85) && !hitTrigger;
+
+  if (hitTrigger || forceInject) {
      // Pick a deterministic response based on the hash
      const responseIndex = hash % voice.responses.length;
      const response = voice.responses[responseIndex];

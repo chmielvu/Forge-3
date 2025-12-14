@@ -107,7 +107,7 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
           {logs.map((log) => {
             // Apply commentary only if it's a narrative log
             const enhancedContent = log.type === 'narrative' 
-              ? injectNarratorCommentary(log.content, narratorMode, { traumaLevel: ledger.traumaLevel })
+              ? injectNarratorCommentary(log.content, narratorMode, ledger)
               : log.content;
 
             const isPsychosis = log.type === 'psychosis' || (log.type === 'narrative' && ledger.traumaLevel > 80);

@@ -21,14 +21,14 @@ const getApiKey = (): string => {
 
 const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
-// --- RATE LIMITING QUEUE ---
+// --- RATE LIMITING QUEUE WITH CIRCUIT BREAKER ---
 class RequestQueue {
-    // Queue now holds explicit resolve/reject handlers to allow external Promise management
     private queue: { operation: () => Promise<any>; resolve: (value: any) => void; reject: (reason: any) => void }[] = [];
     private processing = false;
     private lastRequestTime = 0;
-    // Conservative throttle to prevent 429s (1 request every 4.1s -> ~14 RPM to stay under 15 RPM limit)
-    private minDelay = 4100; 
+    // Conservative throttle: 4500ms min delay (approx 13 requests/min) to stay within safe bounds
+    private minDelay = 4500; 
+    private pausedUntil = 0;
 
     async add<T>(operation: () => Promise<T>): Promise<T> {
         return new Promise((resolve, reject) => {
@@ -37,19 +37,43 @@ class RequestQueue {
         });
     }
 
+    /**
+     * Pauses the queue for a specified duration (e.g., when a 429 occurs).
+     */
+    pause(duration: number) {
+        if (Date.now() + duration > this.pausedUntil) {
+            console.warn(`[GeminiMediaService] 🛑 Circuit Breaker: Pausing queue for ${duration/1000}s due to Rate Limit.`);
+            this.pausedUntil = Date.now() + duration;
+            // Schedule resumption
+            setTimeout(() => this.process(), duration + 100);
+        }
+    }
+
     async process() {
         if (this.processing || this.queue.length === 0) return;
-        this.processing = true;
 
         const now = Date.now();
-        const timeSinceLast = now - this.lastRequestTime;
         
-        // Enforce rate limit delay
-        if (timeSinceLast < this.minDelay) {
-            await new Promise(r => setTimeout(r, this.minDelay - timeSinceLast));
+        // 1. Check Circuit Breaker
+        if (now < this.pausedUntil) {
+            const wait = this.pausedUntil - now;
+            setTimeout(() => this.process(), wait + 100);
+            return;
         }
 
+        // 2. Check Rate Limit Throttle
+        const timeSinceLast = now - this.lastRequestTime;
+        if (timeSinceLast < this.minDelay) {
+            this.processing = true;
+            await new Promise(r => setTimeout(r, this.minDelay - timeSinceLast));
+            this.processing = false;
+            // Re-check state after wait
+            return this.process();
+        }
+
+        this.processing = true;
         const task = this.queue.shift();
+        
         if (task) {
             this.lastRequestTime = Date.now();
             try {
@@ -72,8 +96,8 @@ class RequestQueue {
 
 const mediaQueue = new RequestQueue();
 
-const MAX_RETRIES = 3; 
-const BASE_DELAY = 2000; // Increased base delay for stability
+const MAX_RETRIES = 5; // Increased retries
+const BASE_DELAY = 4000; // Increased base delay
 
 export class MediaGenerationError extends Error {
     constructor(public type: 'SAFETY' | 'NETWORK' | 'QUOTA' | 'UNKNOWN' | 'AUTH', message: string) {
@@ -81,9 +105,25 @@ export class MediaGenerationError extends Error {
     }
 }
 
+/**
+ * Robustly detects if an error is a Quota/Rate Limit error.
+ * Handles various shapes of error objects from Google SDKs and Fetch.
+ */
+function isQuotaError(error: any): boolean {
+    if (!error) return false;
+    
+    // 1. Status Code checks
+    if (error.status === 429 || error.code === 429) return true;
+    
+    // 2. Nested Error Object checks
+    if (error.error?.code === 429 || error.error?.status === 'RESOURCE_EXHAUSTED') return true;
+    
+    // 3. String matching in message
+    const msg = (error.message || JSON.stringify(error)).toLowerCase();
+    return msg.includes('429') || msg.includes('resource_exhausted') || msg.includes('quota') || msg.includes('rate limit');
+}
+
 // Helper for exponential backoff retries
-// CRITICAL: withRetry wraps the queueing logic, not the other way around. 
-// This prevents deadlock where a retrying task blocks the queue processing loop.
 async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
   try {
       // Submit operation to the rate-limited queue
@@ -92,11 +132,11 @@ async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES):
     // Categorize Error
     let type: MediaGenerationError['type'] = 'UNKNOWN';
     
-    // Check for specific error types passed from operation
+    // Check for specific error types
     if (error instanceof MediaGenerationError) {
          type = error.type;
     } else {
-         if (error.status === 429) type = 'QUOTA';
+         if (isQuotaError(error)) type = 'QUOTA';
          else if (error.message?.includes('SAFETY') || error.response?.promptFeedback?.blockReason) type = 'SAFETY';
          else if (error.message?.includes('API key')) type = 'AUTH';
          else if (error.message?.includes('fetch failed')) type = 'NETWORK';
@@ -113,11 +153,16 @@ async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES):
     }
 
     if (retries > 0) {
-         // Exponential Backoff: 2s, 4s, 8s
+         // Special handling for QUOTA errors: Trip the circuit breaker
+         if (type === 'QUOTA') {
+             mediaQueue.pause(10000); // Pause globally for 10 seconds
+         }
+
+         // Exponential Backoff: 4s, 8s, 16s...
          const attempt = MAX_RETRIES - retries + 1;
          const delay = BASE_DELAY * Math.pow(2, attempt - 1);
          
-         console.warn(`[GeminiMediaService] Operation failed (${type}), retrying in ${delay}ms... (Attempts left: ${retries})`);
+         console.warn(`[GeminiMediaService] ⚠️ Operation failed (${type}), retrying in ${delay}ms... (Attempts left: ${retries})`);
          
          // Wait for the delay *outside* the queue lock
          await new Promise(resolve => setTimeout(resolve, delay));

@@ -4,10 +4,12 @@ import { KnowledgeGraph } from "./types/kgot";
 import { KGotController } from "../controllers/KGotController";
 import { VISUAL_MANDATE } from "../config/visualMandate";
 import { selectNarratorMode, NARRATOR_VOICES } from "../services/narratorEngine";
-import { PrefectDecision, YandereLedger } from "../types";
-import { SYSTEM_INSTRUCTION_ROOT, LORE_CONSTITUTION } from "../config/loreInjection";
+import { PrefectDecision, YandereLedger, GameState } from "../types";
+import { DIRECTOR_MASTER_PROMPT_TEMPLATE, DIRECTOR_CORE_IDENTITY } from "../config/directorCore";
 import { MagellanController } from "./magellan";
 import { INITIAL_LEDGER } from "../constants";
+import { narrativeQualityEngine } from "../services/narrativeQualityEngine";
+import { callGeminiWithRetry } from "../utils/apiRetry";
 
 // ==================== CONFIGURATION ====================
 
@@ -32,7 +34,6 @@ const DirectorOutputSchema = {
   properties: {
     thought_signature: { type: Type.STRING, description: "I-MCTS Result: The chosen narrative path (Trauma, Subversion, or Novelty) and why." },
     
-    // STRUCTURED NARRATIVE: The Somatic Cascade (Grammar of Suffering)
     somatic_state: {
       type: Type.OBJECT,
       description: "The internal physiological experience of the subject.",
@@ -66,7 +67,7 @@ const DirectorOutputSchema = {
       items: {
         type: Type.OBJECT,
         properties: {
-          operation: { type: Type.STRING, enum: ['add_edge', 'update_node', 'add_memory', 'update_grudge'] },
+          operation: { type: Type.STRING, enum: ['add_edge', 'update_node', 'add_memory', 'update_grudge', 'add_trauma_bond', 'update_ledger'] },
           params: { 
             type: Type.OBJECT,
             properties: {
@@ -82,7 +83,9 @@ const DirectorOutputSchema = {
                 emotional_imprint: { type: Type.STRING, nullable: true },
                 involved_entities: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
                 manara_gaze: { type: Type.STRING, nullable: true },
-                description_abyss: { type: Type.STRING, nullable: true }
+                description_abyss: { type: Type.STRING, nullable: true },
+                intensity: { type: Type.NUMBER, nullable: true },
+                bond_type: { type: Type.STRING, nullable: true }
             },
             nullable: true
           } 
@@ -144,93 +147,60 @@ export async function executeDirectorTurn(
           }).join('\n')
         : "> No active Prefect interventions this turn. Focus on Environmental/Faculty pressure.";
 
-    // 5. Dynamic Thematic Selection (State-Dependent)
-    let styleConstraint = "Standard Baroque Brutalism.";
-    let thematicFocus = "Weaponization of Vulnerability"; // Default Theme
+    // 5. Construct the Master System Prompt (v3.7 Enhanced)
+    const prompt = DIRECTOR_MASTER_PROMPT_TEMPLATE
+      .replace('{{playerInput}}', playerInput)
+      .replace('{{turn}}', graphSnapshot.global_state.turn_count.toString())
+      .replace('{{location}}', graphSnapshot.nodes['Subject_84']?.attributes?.currentLocation || "The Calibration Chamber")
+      .replace('{{traumaLevel}}', ledger.traumaLevel.toString())
+      .replace('{{complianceScore}}', ledger.complianceScore.toString())
+      .replace('{{hopeLevel}}', ledger.hopeLevel.toString())
+      .replace('{{shamePainAbyssLevel}}', ledger.shamePainAbyssLevel.toString())
+      .replace('{{physicalIntegrity}}', ledger.physicalIntegrity.toString())
+      .replace('{{prefectIntents}}', prefectContext)
+      .replace('{{history}}', history.slice(-3).join('\n---\n'));
 
-    if (ledger.traumaLevel > 80) {
-        styleConstraint = "CRITICAL TRAUMA STATE: Use fragmented syntax. Short, gasping sentences. Focus on sensory overload (blur, ring, whiteout). The subject is dissociating.";
-        thematicFocus = "The Somatic Cascade (Nova -> Void). Describe the biological collapse.";
-    } else if (ledger.complianceScore > 80) {
-        styleConstraint = "HIGH COMPLIANCE STATE: Use orderly, rhythmic, almost hypnotic syntax. The subject finds peace in the structure. Describe the beauty of the Faculty.";
-        thematicFocus = "Scientific Sadism. The pain is a 'calibration'.";
-    } else if (ledger.arousalLevel > 60) {
-        styleConstraint = "EROTICIZED DISTRESS STATE: Conflate pain keywords with desire keywords. Focus on heat, flush, and unwanted sensitivity.";
-        thematicFocus = "Perverse Nurturing / Weaponized Beauty. The Hand that Strikes is the Hand you Crave.";
-    } else if (ledger.hopeLevel < 20) {
-        thematicFocus = "Illusion of Agency. The House Always Wins.";
-    }
-
-    // 6. Construct the Master System Prompt (v3.7 Enhanced)
-    const prompt = `
-    ${SYSTEM_INSTRUCTION_ROOT}
-
-    *** THEMATIC ENGINE ACTIVATION ***
-    Current Focus: ${thematicFocus}
-    Constraint: Ensure the narrative reinforces '${thematicFocus}' above all else. Use the 'Grammar of Suffering'.
-
-    *** CURRENT WORLD STATE (NEURO-SYMBOLIC MATRIX) ***
-    - Player Input: "${playerInput}"
-    - Turn: ${graphSnapshot.global_state.turn_count}
-    - Location: ${graphSnapshot.nodes['Subject_84']?.attributes?.currentLocation || "Unknown"}
-    
-    *** PSYCHOMETRIC LEDGER (THE SOUL) ***
-    - Trauma: ${ledger.traumaLevel}/100 (Threshold for Psychosis: 80)
-    - Hope: ${ledger.hopeLevel}/100
-    - Compliance: ${ledger.complianceScore}/100
-    - Arousal: ${ledger.arousalLevel}/100 (Eroticized Distress)
-    - Physical Integrity: ${ledger.physicalIntegrity}/100
-    
-    *** ACTIVE AGENT INTENTS (MANDATORY INTEGRATION) ***
-    ${prefectContext}
-    INSTRUCTION: The Prefects are your enforcers. You MUST enact their 'Action' and hint at their 'Hidden Motive'. 
-    If a Prefect action conflicts with Player Input, resolve via 'The House Always Wins' (Player loses agency, but gains insight/trauma).
-
-    *** MAGELLAN INJECTION ***
-    ${magellanDirective || "Status: Nominal. Proceed with core loop."}
-
-    *** ABYSS NARRATOR PROFILE ***
-    Mode: ${narratorMode}
-    Tone: ${narratorVoice.tone}
-    Mandate: Use the "Grammar of Suffering" (Nova -> Void -> Shock -> Echo).
-    
-    *** DYNAMIC STYLISTIC CONSTRAINTS ***
-    ${styleConstraint}
-    
-    *** EXECUTION INSTRUCTION (I-MCTS) ***
-    1. **THEMATIC ALIGNMENT:** Review the 'Current Focus' (${thematicFocus}). 
-    2. **CONFLICT RESOLUTION:** Compare Player Input vs. Prefect Intents.
-       - If Player defies and Prefect punishes -> "The Subverted Gladiator" (No glory, only ruin).
-       - If Player submits and Prefect comforts -> "Perverse Nurturing" (The Trap).
-    3. **SOMATIC MAPPING (Grammar of Suffering):** 
-       - Describe the 'Impact Sensation' (The Nova).
-       - Describe the 'Internal Collapse' (The Void).
-    4. **OUTPUT GENERATION:**
-       - 'narrative_text': Weave the Prefect's specific action into the prose. Do not summarize; dramatize. Use precise anatomical/industrial vocabulary.
-       - 'somatic_state': Precise physiological mapping.
-       - 'visual_prompt': Strict adherence to the Visual Mandate.
-
-    *** VISUAL DIRECTIVE ***
-    Construct a visual_prompt JSON strictly adhering to:
-    ${VISUAL_MANDATE.ZERO_DRIFT_HEADER}
-    `;
-
-    // 7. Execution (Gemini 2.5 Flash for System 2 simulation)
+    // 6. Execution (Gemini 2.5 Flash for System 2 simulation)
     const ai = getAI();
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-preview-09-2025', 
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: DirectorOutputSchema,
-        temperature: 1.0, 
-      }
-    });
+    const response = await callGeminiWithRetry(
+      () => ai.models.generateContent({
+        model: 'gemini-2.5-flash-preview-09-2025', 
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: DirectorOutputSchema,
+          temperature: 1.0, 
+        }
+      }),
+      "Director AI"
+    );
 
     const outputText = response.text || "{}";
     const directorOutput = JSON.parse(outputText);
 
-    // 8. Apply Mutations
+    // --- THE AESTHETE: Chain of Draft Critique ---
+    // Only run critque 50% of time or if high trauma to save latency, 
+    // or always run it if "Aesthete" mode is requested. We run it always for quality.
+    
+    console.log("🎨 [The Aesthete] Critiquing Director Output...");
+    const critique = await narrativeQualityEngine.critiqueWithAesthete(
+        directorOutput.narrative_text, 
+        `Subject Trauma: ${ledger.traumaLevel}. Input: ${playerInput}`
+    );
+
+    if (critique.score < 80 && critique.rewrite_suggestion) {
+        console.warn(`[The Aesthete] REJECTED (Score ${critique.score}). Rewriting...`);
+        console.warn(`[Violations] ${critique.violations.join(', ')}`);
+        
+        // Apply the Rewrite
+        directorOutput.narrative_text = critique.rewrite_suggestion;
+        directorOutput.thought_signature += ` [AESTHETE INTERVENTION: ${critique.violations.join(', ')}]`;
+    } else {
+        console.log(`[The Aesthete] APPROVED (Score ${critique.score}).`);
+    }
+    // --------------------------------------------
+
+    // 7. Apply Mutations
     if (directorOutput.kgot_mutations) {
         const mutations = directorOutput.kgot_mutations.map((m: any) => {
             if (m.operation === 'update_node' && m.params) {
@@ -251,7 +221,6 @@ export async function executeDirectorTurn(
     }
 
     // Combine Somatic + Narrative for the log
-    // We explicitly format the "Somatic Cascade" at the start of the log entry
     const combinedNarrative = `
     <span class="somatic-nova">${directorOutput.somatic_state?.impact_sensation || ""}</span>
     
@@ -260,13 +229,13 @@ export async function executeDirectorTurn(
     ${directorOutput.narrative_text}
     `;
 
-    // 9. Return Result
+    // 8. Return Result
     return {
       narrative: combinedNarrative, 
       visualPrompt: directorOutput.visual_prompt || "Darkness.",
       updatedGraph: controller.getGraph(),
       choices: directorOutput.choices || ["Endure", "Observe"],
-      thoughtProcess: `I-MCTS: ${directorOutput.thought_signature} | Mode: ${narratorMode} | Theme: ${thematicFocus}`,
+      thoughtProcess: `I-MCTS: ${directorOutput.thought_signature} | Mode: ${narratorMode}`,
       state_updates: directorOutput.ledger_update,
       audioCues: directorOutput.audio_cues,
       psychosisText: directorOutput.psychosis_text

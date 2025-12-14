@@ -11,6 +11,7 @@ import { LogEntry, CombinedGameStoreState, CharacterId, PrefectDNA, PrefectDecis
 import { KGotController } from '../controllers/KGotController';
 import { enqueueTurnForMedia } from './mediaController';
 import { prefectManager } from '../services/prefectManager';
+import { createIndexedDBStorage } from '../utils/indexedDBStorage';
 
 // Initialize the Controller to get the canonical graph structure
 const controller = new KGotController({ 
@@ -150,7 +151,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           });
       },
 
-      applyDirectorUpdates: (response) => {
+      applyDirectorUpdates: (response: any) => {
         // Legacy compat
         console.warn("Using legacy applyDirectorUpdates - migrate to applyServerState");
       },
@@ -160,7 +161,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         set({ isThinking: true });
         
         // 1. Trigger Subject Reactions (Sync Logic)
-        // Detect action type from input string
         let actionType: 'COMPLY' | 'DEFY' | 'OBSERVE' | 'SPEAK' = 'OBSERVE';
         const lower = input.toLowerCase();
         if (lower.includes('submit') || lower.includes('yes') || lower.includes('bow')) actionType = 'COMPLY';
@@ -173,8 +173,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             const history = state.logs.filter(l => l.type === 'narrative').map(l => l.content);
             
             // 2. Initialize or Hydrate Prefect Manager
-            // If the manager is empty but we have persisted state, load it to preserve relationships/emotions.
-            // If both are empty, initialize fresh from seed.
             if (prefectManager.getPrefects().length === 0) {
                  if (state.prefects.length > 0) {
                      prefectManager.loadState(state.prefects);
@@ -188,7 +186,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                 state.gameState, 
                 history, 
                 input,
-                state.kgot
+                state.kgot,
+                get().addLog // Pass logger for error reporting
             );
             
             // Update store with new DNA (persisting emotional shifts)
@@ -196,7 +195,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
 
             // 4. Map Thoughts to Decisions for Director
             const prefectDecisions: PrefectDecision[] = thoughts.map(t => {
-                // Enrich action detail with hidden context for the Director to weave into narrative
                 let detailedAction = t.publicAction;
                 if (t.sabotageAttempt) {
                     detailedAction += ` [INTERNAL SUBROUTINE: SABOTAGE Attempt against ${t.sabotageAttempt.target} via ${t.sabotageAttempt.method}]`;
@@ -234,7 +232,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                     content: `PREFECT SIMULATION :: ${agentLog}`
                 });
                 
-                // Store log for Dev Overlay
                 set({ lastSimulationLog: `PREFECT SIMULATION :: ${agentLog}` });
             }
 
@@ -285,7 +282,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         
         // Initialize Prefects
         if (prefectManager.getPrefects().length === 0) {
-            // Correctly hydrate from store if available, else init fresh
             if (state.prefects.length > 0) {
                 prefectManager.loadState(state.prefects);
             } else {
@@ -327,12 +323,12 @@ export const useGameStore = create<GameStoreWithPrefects>()(
     }),
     {
       name: 'forge-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => createIndexedDBStorage()),
       partialize: (state) => ({
         gameState: state.gameState,
         kgot: state.kgot,
         prefects: state.prefects,
-        subjects: state.subjects, // Persist Subjects
+        subjects: state.subjects,
       }),
     }
   )
