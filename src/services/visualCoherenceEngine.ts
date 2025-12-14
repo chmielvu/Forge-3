@@ -3,7 +3,7 @@ import { YandereLedger, PrefectDNA, CharacterId, MultimodalTurn, CharacterVisual
 import { VISUAL_PROFILES } from '../constants';
 import { LIGHTING_PRESETS } from '../config/visualMandate';
 import { CHARACTER_VOICE_MAP } from '../config/voices';
-import { FORGE_MOTIFS } from '../data/motifs'; // NEW: Import motifs
+import { FORGE_MOTIFS, ARCHETYPE_VISUAL_MAP } from '../data/motifs'; // NEW: Import ARCHETYPE_VISUAL_MAP
 
 /**
  * AudioCoherenceEngine v2
@@ -228,16 +228,38 @@ class VisualCoherenceEngine {
   }
 
   private buildSubjectDescription(target: PrefectDNA | CharacterId | string, ledger: YandereLedger, narrativeText: string): string {
-    const base = typeof target === 'string' 
-      ? VISUAL_PROFILES[target as CharacterId] || `${target}: vulnerable figure in tattered academy uniform`
-      : `${target.displayName} (${target.archetype}): ${VISUAL_PROFILES[target.id as CharacterId] || 'detailed prefect figure'}`;
+    let base = "";
+    
+    // Attempt to resolve base description from Archetype Map or Visual Profiles
+    if (typeof target === 'object' && 'archetype' in target) {
+        // It's a PrefectDNA
+        const archData = ARCHETYPE_VISUAL_MAP[target.archetype];
+        if (archData) {
+            base = `${target.displayName} (${target.archetype}): ${archData.physique}, ${archData.face}, wearing ${archData.attire}. Mood: ${archData.mood}`;
+        } else {
+            // Fallback
+             base = `${target.displayName} (${target.archetype}): detailed prefect figure`;
+        }
+    } else if (typeof target === 'string') {
+        // Check if it's a CharacterId
+        if (VISUAL_PROFILES[target as CharacterId]) {
+            base = VISUAL_PROFILES[target as CharacterId];
+        } 
+        // Check if it's an archetype key
+        else if (ARCHETYPE_VISUAL_MAP[target]) {
+             const archData = ARCHETYPE_VISUAL_MAP[target];
+             base = `${target}: ${archData.physique}, ${archData.face}, wearing ${archData.attire}`;
+        } else {
+            base = `${target}: vulnerable figure in tattered academy uniform`;
+        }
+    }
 
     const somatic = this.inferSomaticDetails(ledger, narrativeText);
-    const dynamicMotifs = this._selectMotifs(ledger, narrativeText); // NEW
+    const dynamicMotifs = this._selectMotifs(ledger, narrativeText); 
 
-    const combinedDetails = [...somatic, ...dynamicMotifs]; // Combine somatic and dynamic motifs
+    const combinedDetails = Array.from(new Set([...somatic, ...dynamicMotifs]));
 
-    return `${base}${combinedDetails.length ? ', ' + combinedDetails.join(', ') : ''}, under cold clinical gaze`;
+    return `${base}${combinedDetails.length ? '. Visible details: ' + combinedDetails.join(', ') : ''}, under cold clinical gaze`;
   }
 
   public buildCoherentPrompt(

@@ -128,11 +128,14 @@ ${DIRECTOR_REASONING_FRAMEWORK}
 
 # === CURRENT SIMULATION STATE ===
 
-**Current ledger**: {{ledger_snapshot}}
-**KGOT state**: {{kgot_snapshot}}
-**Active prefects**: {{active_prefects}}
-**Previous narrative**: {{history}}
-**Player choice**: {{playerInput}}
+**NARRATIVE BEAT:** {{narrative_beat}}
+**DIRECTOR INSTRUCTION:** {{beat_instruction}}
+
+**Current Ledger**: {{ledger}}
+**Narrative Spotlight**: {{narrative_spotlight}}
+**Active Prefects**: {{active_prefects}}
+**Previous Narrative**: {{history}}
+**Player Choice**: {{player_input}}
 
 Decompose:
 1. Analyze causal impacts on ledger/subjects/prefects.

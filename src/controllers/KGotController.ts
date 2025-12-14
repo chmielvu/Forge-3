@@ -1,5 +1,4 @@
 
-
 import Graph from 'graphology';
 import { z } from 'zod';
 import { KnowledgeGraph, KGotNode, KGotEdge, NodeType, Memory } from '../lib/types/kgot';
@@ -78,7 +77,7 @@ const MutationSchemas = {
     severity: z.number().optional(),
     grammar_phase: z.string().optional()
   }),
-  add_subject_secret: z.object({ // NEW: Schema for adding subject secrets
+  add_subject_secret: z.object({
     subject_id: z.string().min(1),
     secret_name: z.string().min(1),
     secret_description: z.string().min(1),
@@ -93,6 +92,33 @@ const MutationSchemas = {
 export class KGotController {
   private graph: Graph;
   private globalState: KnowledgeGraph['global_state'];
+
+  // Strict Entity Map for O(1) Resolution
+  private readonly ENTITY_MAP: Record<string, string> = {
+    "selene": "FACULTY_SELENE",
+    "provost": "FACULTY_SELENE",
+    "magistra": "FACULTY_SELENE",
+    "petra": "FACULTY_PETRA",
+    "inquisitor": "FACULTY_PETRA",
+    "lysandra": "FACULTY_LOGICIAN",
+    "logician": "FACULTY_LOGICIAN",
+    "calista": "FACULTY_CONFESSOR",
+    "confessor": "FACULTY_CONFESSOR",
+    "astra": "FACULTY_ASTRA",
+    "elara": "PREFECT_LOYALIST",
+    "kaelen": "PREFECT_OBSESSIVE",
+    "rhea": "PREFECT_DISSIDENT",
+    "anya": "PREFECT_NURSE",
+    "nico": "Subject_Nico",
+    "darius": "Subject_Darius",
+    "silas": "Subject_Silas",
+    "theo": "Subject_Theo",
+    "subject": "Subject_84",
+    "player": "Subject_84",
+    "me": "Subject_84",
+    "infirmary": "loc_infirmary",
+    "clinic": "loc_infirmary"
+  };
 
   constructor(initialGraph: KnowledgeGraph) {
     // Initialize directed multi-graph (allows multiple edges between same nodes)
@@ -162,6 +188,74 @@ export class KGotController {
     };
   }
 
+  // --- NARRATIVE SPOTLIGHT (Context Optimization) ---
+  
+  /**
+   * Returns a culled subgraph containing only nodes and edges relevant 
+   * to the current scene context. Drastically reduces token usage.
+   */
+  public getNarrativeSpotlight(
+    subjectId: string, 
+    locationId: string, 
+    activePrefectIds: string[]
+  ): object {
+    const spotlightNodes = new Set<string>([subjectId, locationId, ...activePrefectIds]);
+    const spotlightEdges: any[] = [];
+
+    const safeAddNode = (id: string) => {
+        if (this.graph.hasNode(id)) spotlightNodes.add(id);
+    };
+
+    // 1. Add 1st-degree connections of the Subject (Memories, Injuries, Grudges)
+    if (this.graph.hasNode(subjectId)) {
+        this.graph.forEachNeighbor(subjectId, (neighbor, attr) => {
+            const edges = this.graph.edges(subjectId, neighbor);
+            edges.forEach(edgeId => {
+                const edgeAttrs = this.graph.getEdgeAttributes(edgeId);
+                // Filter: Only relevant edges (High intensity OR Recent)
+                const weight = (edgeAttrs.weight as number) || 0;
+                // Note: We don't track 'last_active_turn' on edges by default in graphology unless we set it
+                // Assuming high weight or specific types
+                if (weight > 0.3 || edgeAttrs.type === 'INJURY_LINK' || edgeAttrs.type === 'GRUDGE') {
+                    safeAddNode(neighbor);
+                    spotlightEdges.push({ source: subjectId, target: neighbor, ...edgeAttrs });
+                }
+            });
+        });
+    }
+
+    // 2. Add relationships between active NPCs in the scene (e.g., Elara vs Rhea)
+    activePrefectIds.forEach(idA => {
+        activePrefectIds.forEach(idB => {
+            if (idA === idB) return;
+            if (this.graph.hasNode(idA) && this.graph.hasNode(idB)) {
+                 const edges = this.graph.edges(idA, idB);
+                 edges.forEach(edgeId => {
+                     spotlightEdges.push({ 
+                         source: idA, 
+                         target: idB, 
+                         ...this.graph.getEdgeAttributes(edgeId) 
+                     });
+                 });
+            }
+        });
+    });
+
+    // 3. Serialize only the spotlighted subgraph
+    const nodes: Record<string, any> = {};
+    spotlightNodes.forEach(id => {
+        if (this.graph.hasNode(id)) {
+            nodes[id] = this.graph.getNodeAttributes(id);
+        }
+    });
+
+    return {
+        global_state: this.globalState,
+        spotlight_nodes: nodes,
+        spotlight_edges: spotlightEdges
+    };
+  }
+
   // --- Canonical Initialization ---
 
   public initializeCanonicalNodes(): void {
@@ -179,8 +273,8 @@ export class KGotController {
                     voice_id: "Charon" 
                 },
                 ledger: INITIAL_LEDGER,
-                currentLocation: "The Calibration Chamber", // Added currentLocation
-                secrets: [] // Initialize empty secrets array
+                currentLocation: "The Calibration Chamber",
+                secrets: [] 
             } 
         },
 
@@ -200,14 +294,14 @@ export class KGotController {
         // --- LOCATIONS ---
         { id: "loc_calibration", type: "LOCATION", label: "The Calibration Chamber", attributes: { noir_lighting_state: "Clinical_Spotlight", architectural_oppression: 0.95 } },
         { id: "loc_confessional", type: "LOCATION", label: "The Velvet Confessional", attributes: { noir_lighting_state: "Venetian_Blind_Amber", architectural_oppression: 0.4 } },
-        { id: "loc_infirmary", type: "LOCATION", label: "The Infirmary", attributes: { noir_lighting_state: "Sterile_Fluorescent", architectural_oppression: 0.6 } } // NEW
+        { id: "loc_infirmary", type: "LOCATION", label: "The Infirmary", attributes: { noir_lighting_state: "Sterile_Fluorescent", architectural_oppression: 0.6 } } 
     ];
 
     this.batchAddNodes(canonicalNodes);
 
     this.addEdge("FACULTY_SELENE", "Subject_84", "dominance", 1.0, { trope: "owns_soul" });
     this.addEdge("PREFECT_OBSESSIVE", "Subject_84", "obsession", 1.0, { trope: "yandere_possession" });
-    this.addEdge("PREFECT_NURSE", "loc_infirmary", "works_in", 0.8, { type: "SPATIAL" }); // NEW
+    this.addEdge("PREFECT_NURSE", "loc_infirmary", "works_in", 0.8, { type: "SPATIAL" });
   }
 
   // --- Graph Operations (Robust Error Handling) ---
@@ -332,11 +426,9 @@ export class KGotController {
     // 1. Calculate Centrality to protect key nodes (e.g. The Provost)
     let scores: Record<string, number> = {};
     try {
-        scores = pagerank(this.graph) as Record<string, number>; // Explicitly cast to Record<string, number>
-        // Use scores for weighting, but do not return early
+        scores = pagerank(this.graph) as Record<string, number>; 
     } catch (e) {
         console.warn("PageRank failed:", e);
-        // Continue execution even if PageRank fails
     }
 
     const edgesToRemove: string[] = [];
@@ -348,8 +440,6 @@ export class KGotController {
         const importance = (scores[source] || 0) + (scores[target] || 0);
         
         // Dynamic threshold: Important nodes keep weaker edges longer
-        // If importance is high (e.g. 0.1), threshold effectively becomes lower.
-        // e.g., if importance is 0.1, threshold = 0.1 * (1 - 0.5) = 0.05.
         const effectiveThreshold = weightThreshold * (1.0 - Math.min(importance * 5, 0.8));
         
         if (w < effectiveThreshold) {
@@ -377,7 +467,11 @@ export class KGotController {
             try { valid = MutationSchemas.add_edge.parse(params); } 
             catch(e) { console.warn(`[KGot] Mutation ${idx} (add_edge) invalid params:`, e); return; }
             
-            this.addEdge(valid.source, valid.target, valid.relation || valid.label || 'RELATIONSHIP', valid.weight, valid.meta);
+            const src = this.resolveTargetId(valid.source);
+            const tgt = this.resolveTargetId(valid.target);
+            if (src && tgt) {
+                this.addEdge(src, tgt, valid.relation || valid.label || 'RELATIONSHIP', valid.weight, valid.meta);
+            }
             break;
           }
           
@@ -386,7 +480,9 @@ export class KGotController {
             try { valid = MutationSchemas.remove_edge.parse(params); }
             catch(e) { console.warn(`[KGot] Mutation ${idx} (remove_edge) invalid params:`, e); return; }
             
-            this.removeEdge(valid.source, valid.target);
+            const src = this.resolveTargetId(valid.source);
+            const tgt = this.resolveTargetId(valid.target);
+            if (src && tgt) this.removeEdge(src, tgt);
             break;
           }
           
@@ -395,18 +491,18 @@ export class KGotController {
             try { valid = MutationSchemas.update_node.parse(params); }
             catch(e) { console.warn(`[KGot] Mutation ${idx} (update_node) invalid params:`, e); return; }
 
-            if (this.graph.hasNode(valid.id)) {
-               const currentAttrs = this.graph.getNodeAttributes(valid.id);
-               this.graph.mergeNodeAttributes(valid.id, {
+            const id = this.resolveTargetId(valid.id);
+            if (id && this.graph.hasNode(id)) {
+               const currentAttrs = this.graph.getNodeAttributes(id);
+               this.graph.mergeNodeAttributes(id, {
                    attributes: { ...currentAttrs.attributes, ...valid.attributes }
                });
-            } else {
-                console.warn(`[KGot] Mutation ${idx}: Node ${valid.id} not found for update.`);
             }
             break;
           }
 
           case 'add_node': {
+            // ... (Add node is usually for new entities, direct ID usage is fine or resolved manually)
             let valid;
             try { valid = MutationSchemas.add_node.parse(params); }
             catch(e) { console.warn(`[KGot] Mutation ${idx} (add_node) invalid params:`, e); return; }
@@ -425,13 +521,16 @@ export class KGotController {
               try { valid = MutationSchemas.add_memory.parse(params); }
               catch(e) { console.warn(`[KGot] Mutation ${idx} (add_memory) invalid params:`, e); return; }
 
-              this.addMemory(valid.id, {
-                  id: `mem_${Date.now()}_${Math.random().toString(36).substr(2,9)}`,
-                  description: valid.description,
-                  emotional_imprint: valid.emotional_imprint || 'Neutral',
-                  involved_entities: valid.involved_entities || [],
-                  timestamp: this.globalState.turn_count
-              });
+              const id = this.resolveTargetId(valid.id);
+              if (id) {
+                  this.addMemory(id, {
+                      id: `mem_${Date.now()}_${Math.random().toString(36).substr(2,9)}`,
+                      description: valid.description,
+                      emotional_imprint: valid.emotional_imprint || 'Neutral',
+                      involved_entities: valid.involved_entities || [],
+                      timestamp: this.globalState.turn_count
+                  });
+              }
               break;
           }
 
@@ -440,7 +539,9 @@ export class KGotController {
               try { valid = MutationSchemas.update_grudge.parse(params); }
               catch(e) { console.warn(`[KGot] Mutation ${idx} (update_grudge) invalid params:`, e); return; }
 
-              this.updateGrudge(valid.source, valid.target, valid.delta);
+              const src = this.resolveTargetId(valid.source);
+              const tgt = this.resolveTargetId(valid.target);
+              if (src && tgt) this.updateGrudge(src, tgt, valid.delta);
               break;
           }
               
@@ -449,12 +550,16 @@ export class KGotController {
               try { valid = MutationSchemas.add_trauma_bond.parse(params); }
               catch(e) { console.warn(`[KGot] Mutation ${idx} (add_trauma_bond) invalid params:`, e); return; }
 
-              this.addEdge(valid.source, valid.target, 'TRAUMA_BOND', valid.intensity || 0.5, {
-                  type: "trauma_bond",
-                  bond_type: valid.bond_type || "dependency",
-                  intensity: valid.intensity,
-                  timestamp: new Date().toISOString()
-              });
+              const src = this.resolveTargetId(valid.source);
+              const tgt = this.resolveTargetId(valid.target);
+              if (src && tgt) {
+                  this.addEdge(src, tgt, 'TRAUMA_BOND', valid.intensity || 0.5, {
+                      type: "trauma_bond",
+                      bond_type: valid.bond_type || "dependency",
+                      intensity: valid.intensity,
+                      timestamp: new Date().toISOString()
+                  });
+              }
               break;
           }
 
@@ -463,9 +568,14 @@ export class KGotController {
               try { valid = MutationSchemas.add_injury.parse(params); }
               catch(e) { console.warn(`[KGot] Mutation ${idx} (add_injury) invalid params:`, e); return; }
 
-              const targetId = this.resolveTargetId(valid.target_id) || valid.target_id;
-              const sourceId = this.resolveTargetId(valid.source_id) || valid.source_id;
+              const targetId = this.resolveTargetId(valid.target_id);
+              const sourceId = this.resolveTargetId(valid.source_id);
               
+              if (!targetId || !sourceId) {
+                  console.warn(`[KGot] Invalid target/source for injury: ${valid.target_id} -> ${valid.source_id}`);
+                  return;
+              }
+
               // DETERMINISTIC ID: Enables updating existing injuries instead of duplicating
               const normalizedInjuryName = valid.injury_name.trim().replace(/\s+/g, '_').toUpperCase();
               const injuryNodeId = `INJURY_${targetId}_${normalizedInjuryName}`;
@@ -511,32 +621,39 @@ export class KGotController {
               break;
           }
 
-          case 'add_subject_secret': { // NEW: Handle add_subject_secret mutation
+          case 'add_subject_secret': {
             let valid;
             try { valid = MutationSchemas.add_subject_secret.parse(params); }
             catch(e) { console.warn(`[KGot] Mutation ${idx} (add_subject_secret) invalid params:`, e); return; }
-            this.addSubjectSecret(valid.subject_id, {
-                name: valid.secret_name,
-                description: valid.secret_description,
-                discoveredBy: valid.discovered_by,
-                turn: this.globalState.turn_count
-            });
-            // Also add an edge between the discoverer and the secret
-            if (valid.discovered_by && this.graph.hasNode(valid.discovered_by)) {
-                const secretNodeId = `SECRET_${Date.now()}_${valid.secret_name.replace(/\s+/g, '_').toUpperCase()}`;
-                this.addNode({ // Add the secret as a node itself for traceability
-                    id: secretNodeId,
-                    type: 'SECRET',
-                    label: valid.secret_name,
-                    attributes: {
-                        description: valid.secret_description,
-                        discoveredBy: valid.discovered_by,
-                        turnDiscovered: this.globalState.turn_count,
-                        aboutSubject: valid.subject_id
-                    }
+            
+            const subId = this.resolveTargetId(valid.subject_id);
+            const discBy = this.resolveTargetId(valid.discovered_by);
+
+            if (subId) {
+                this.addSubjectSecret(subId, {
+                    name: valid.secret_name,
+                    description: valid.secret_description,
+                    discoveredBy: valid.discovered_by,
+                    turn: this.globalState.turn_count
                 });
-                this.addEdge(valid.discovered_by, secretNodeId, 'DISCOVERED', 1.0, { type: 'KNOWLEDGE_ACQUISITION' });
-                this.addEdge(secretNodeId, valid.subject_id, 'ABOUT', 1.0, { type: 'SECRET_RELATION' });
+                
+                // Also add an edge between the discoverer and the secret
+                if (discBy && this.graph.hasNode(discBy)) {
+                    const secretNodeId = `SECRET_${Date.now()}_${valid.secret_name.replace(/\s+/g, '_').toUpperCase()}`;
+                    this.addNode({ // Add the secret as a node itself for traceability
+                        id: secretNodeId,
+                        type: 'SECRET',
+                        label: valid.secret_name,
+                        attributes: {
+                            description: valid.secret_description,
+                            discoveredBy: valid.discovered_by,
+                            turnDiscovered: this.globalState.turn_count,
+                            aboutSubject: valid.subject_id
+                        }
+                    });
+                    this.addEdge(discBy, secretNodeId, 'DISCOVERED', 1.0, { type: 'KNOWLEDGE_ACQUISITION' });
+                    this.addEdge(secretNodeId, subId, 'ABOUT', 1.0, { type: 'SECRET_RELATION' });
+                }
             }
             break;
           }
@@ -814,24 +931,25 @@ export class KGotController {
     return "Calculated";
   }
 
-  private resolveTargetId(nameOrId: string): string | null {
+  /**
+   * Resolves fuzzy names/aliases to canonical KGot IDs using Strict Entity Map
+   * UPDATED: Removed fuzzy string matching to prevent ID collisions.
+   */
+  private resolveTargetId(nameOrId: string | undefined): string | null {
+    if (!nameOrId) return null;
+    
+    // 1. Exact Match (Already a valid ID in the graph)
     if (this.graph.hasNode(nameOrId)) return nameOrId;
-    let foundId = null;
-    const search = nameOrId.toUpperCase();
-    this.graph.forEachNode((id, nodeAttrs) => { // Renamed 'attrs' to 'nodeAttrs'
-        const label = (nodeAttrs.label || "").toUpperCase();
-        if (label.includes(search) || id.includes(search)) foundId = id;
-        if (nodeAttrs.attributes?.agent_state?.archetype?.toUpperCase() === search) foundId = id;
-    });
-    if (!foundId) {
-        if (search.includes("PLAYER") || search.includes("SUBJECT")) return "Subject_84";
-        if (search.includes("SELENE")) return "FACULTY_SELENE";
-        if (search.includes("PETRA")) return "FACULTY_PETRA";
-        if (search.includes("ELARA")) return "PREFECT_LOYALIST";
-        if (search.includes("KAELEN")) return "PREFECT_OBSESSIVE";
-        if (search.includes("RHEA")) return "PREFECT_DISSIDENT";
-        if (search.includes("ANYA")) return "PREFECT_NURSE";
+    
+    const lower = nameOrId.toLowerCase().trim();
+    
+    // 2. Direct Map Lookup (Strict Alias Resolution)
+    if (this.ENTITY_MAP[lower]) {
+        return this.ENTITY_MAP[lower];
     }
-    return foundId;
+
+    // 3. No Fuzzy Fallback
+    // We strictly fail if not found in the map or graph to preserve data integrity.
+    return null;
   }
 }

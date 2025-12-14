@@ -12,28 +12,28 @@ export const UnifiedDirectorOutputSchema = {
     // === PART 1: COGNITIVE GRAPH TRACE (System 2 Deep Think) ===
     reasoning_trace: { // Renamed from cognitive_graph
       type: Type.OBJECT,
-      description: "Structured trace of the internal reasoning process (System 2).",
+      description: "MANDATORY: Structured trace of the internal reasoning process (System 2) BEFORE generation.",
       properties: {
         analysis: { 
             type: Type.STRING, 
-            description: "Node 1: Causal analysis of player input and impact prediction." 
+            description: "Node 1: Input Analysis. Deconstruct player intent, current narrative beat, and causal impact." 
         },
         hypotheses: { 
             type: Type.ARRAY, 
-            description: "Node 2: The three narrative branches (Trauma, Subversion, Novelty).",
+            description: "Node 2: Generate 3 distinct narrative branch hypotheses (Trauma, Subversion, Novelty).",
             items: { type: Type.STRING } 
         },
         evaluation: { 
             type: Type.STRING, 
-            description: "Node 3: Scoring and selection logic (Tension/Coherence/Novelty)." 
+            description: "Node 3: Evaluation & Scoring. Select optimal path based on Tension/Coherence/Novelty." 
         },
-        self_critique: { // NEW: Self-critique field
+        self_critique: { 
           type: Type.STRING,
-          description: "Node 4: Internal critique of hypotheses for coherence and psychological accuracy."
+          description: "Node 4: Self-Critique. Check for Tone/Aesthetic adherence (No banned words like 'pain')."
         },
-        selected_path: { // NEW: Selected path field
+        selected_path: { 
           type: Type.STRING,
-          description: "Node 5: Final execution plan based on the selected path."
+          description: "Node 5: Final Execution Plan. Outline the scene beats."
         }
       },
       required: ["analysis", "hypotheses", "evaluation", "self_critique", "selected_path"]
@@ -104,7 +104,7 @@ export const UnifiedDirectorOutputSchema = {
 
     somatic_state: {
       type: Type.OBJECT,
-      description: "Player's internal physiological experience",
+      description: "Player's internal physiological experience (e.g. 'Abdominal Void', 'Systemic Shock').",
       properties: {
         impact_sensation: { type: Type.STRING },
         internal_collapse: { type: Type.STRING }
@@ -165,7 +165,7 @@ export const UnifiedDirectorOutputSchema = {
     audio_markup: { type: Type.STRING, nullable: true, description: "Narrative text formatted with SSML-like tags for TTS." }
   },
   required: [
-    "reasoning_trace", // Renamed from cognitive_graph
+    "reasoning_trace", 
     "prefect_simulations",
     "script",
     "narrative_text", 

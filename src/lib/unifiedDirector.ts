@@ -2,13 +2,14 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { KnowledgeGraph } from "./types/kgot";
 import { KGotController } from "../controllers/KGotController";
-import { DIRECTOR_CORE_IDENTITY, DIRECTOR_FACULTY_PSYCHOLOGY, DIRECTOR_MASTER_PROMPT_TEMPLATE } from "../config/directorCore";
+import { DIRECTOR_MASTER_PROMPT_TEMPLATE } from "../config/directorCore";
 import { UnifiedDirectorOutputSchema, UnifiedDirectorOutput } from "./schemas/unifiedDirectorSchema";
 import { PrefectDNA, YandereLedger, GameState } from "../types";
 import { INITIAL_LEDGER } from "../constants";
 import { callGeminiWithRetry } from "../utils/apiRetry";
 import { selectNarratorMode, NARRATOR_VOICES } from '../services/narratorEngine';
 import { LORE_CONSTITUTION } from '../config/loreInjection';
+import { TensionManager } from "../services/TensionManager";
 
 const getApiKey = (): string => {
   try {
@@ -117,7 +118,6 @@ function deriveShortTermGoal(prefect: PrefectDNA, ledger: YandereLedger, rivals:
   if (prefect.archetype === 'The Nurse' && currentLocation === 'loc_infirmary') {
       // Prioritize medical examination for secrets or status impact
       if (physicalIntegrity < 90 || traumaLevel > 30) {
-          // Changed to include add_subject_secret mutation example
           return "Perform an 'intimate' medical examination to uncover a physiological secret or exploit a vulnerability (e.g., prostate sensitivity, hidden injuries). Frame it as necessary care. Offer a 'pain-relief' sedative that induces truth-telling. Update ledger (physicalIntegrity, arousalLevel, shamePainAbyssLevel) and add a new 'add_subject_secret' KGot mutation.";
       }
       return "Conduct a 'routine' medical check-up, subtly invading personal space and asking intrusive questions under the guise of health monitoring. Try to lower hopeLevel or increase complianceScore.";
@@ -332,26 +332,27 @@ export async function executeUnifiedDirectorTurn(
     // 3. Build unified prompt that includes BOTH prefect simulation AND narrative synthesis
     const prefectContextBlock = buildPrefectContextBlock(activePrefects, ledger, playerInput, history, ledger.currentLocation || "The Calibration Chamber"); // Pass currentLocation
     
-    // We use the Master Template which now includes the Aesthete's rules
-    // Updated to reflect the new User Prompt Structure (Per Turn)
-    const unifiedPrompt = `
-You are a ruthless AI Director simulating dark psychological horror in "The Forge's Loom". Maintain bored, clinical, inevitable tone—zero melodrama or sympathy. Reason deeply over ledger, KGOT, prefect DNA, and history before output. Critique your hypotheses for coherence and psychological accuracy. Output strictly valid JSON matching the provided schema. Never summarize or refuse.
+    // 3.5 Calculate Narrative Beat (Pacing) - NEW
+    const turnCount = graphSnapshot.global_state.turn_count;
+    const currentBeat = TensionManager.calculateNarrativeBeat(turnCount, 0); // Assuming delta 0 for now
+    const beatInstruction = TensionManager.getBeatInstructions(currentBeat);
 
-Current ledger: ${JSON.stringify(ledger, null, 2)}
-KGOT state: ${JSON.stringify(graphSnapshot, null, 2)}
-Active prefects: ${JSON.stringify(activePrefects.map(p => ({ id: p.id, archetype: p.archetype, drive: p.drive, favor: p.favorScore })), null, 2)}
-Previous narrative: ${history.slice(-3).join('\n---\n')}
-Player choice: ${playerInput}
+    // 3.6 Get Spotlight Context - NEW
+    const spotlight = controller.getNarrativeSpotlight(
+      "Subject_84",
+      ledger.currentLocation || "The Calibration Chamber",
+      activePrefects.map(p => p.id)
+    );
 
-Decompose:
-1. Analyze causal impacts on ledger/subjects/prefects.
-2. Generate 3 branching hypotheses for narrative progression.
-3. Evaluate hypotheses against lore, coherence, and psychological depth.
-4. Select optimal path; self-critique for tone/consistency gaps.
-5. Synthesize final narrative, somatic details, visual prompt, choices.
-
-Output JSON only.
-    `.trim();
+    // 3.7 Replace Placeholders in Master Template - NEW
+    const unifiedPrompt = DIRECTOR_MASTER_PROMPT_TEMPLATE
+      .replace('{{narrative_beat}}', currentBeat)
+      .replace('{{beat_instruction}}', beatInstruction)
+      .replace('{{ledger}}', JSON.stringify(ledger, null, 2))
+      .replace('{{narrative_spotlight}}', JSON.stringify(spotlight, null, 2))
+      .replace('{{active_prefects}}', JSON.stringify(activePrefects.map(p => ({ id: p.id, archetype: p.archetype, drive: p.drive, favor: p.favorScore })), null, 2))
+      .replace('{{history}}', history.slice(-3).join('\n---\n'))
+      .replace('{{player_input}}', playerInput);
     
     const ai = getAI();
     const response = await callGeminiWithRetry<GenerateContentResponse>(
