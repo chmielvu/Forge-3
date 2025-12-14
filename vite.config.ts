@@ -17,9 +17,12 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        'buffer': 'buffer',
-        'long': 'long'
+        // Removing explicit 'buffer' and 'long' aliases to allow standard node module resolution
+        // via optimizeDeps or installed packages.
       },
+    },
+    optimizeDeps: {
+      include: ['buffer', 'long']
     },
     define: {
       // Expose API_KEY specifically to process.env.API_KEY to satisfy usage requirements

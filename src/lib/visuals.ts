@@ -77,7 +77,13 @@ export async function generateSceneVisual(promptJSON: string): Promise<{ success
         contents: { parts: [{ text: `GENERATE IMAGE FROM JSON ACP: ${JSON.stringify(parsedPrompt)}` }] }
     });
     
-    return { success: true, image_url: response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data };
+    // Correctly find the image part by iterating, as per guidelines
+    const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (imagePart?.inlineData?.data) {
+        return { success: true, image_url: imagePart.inlineData.data };
+    }
+    
+    return { success: false, error: "No image generated" };
     
   } catch (error: any) {
     console.error('Visual Generation Error:', error);

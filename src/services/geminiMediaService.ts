@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { VISUAL_MANDATE, VIDEO_MANDATE } from '../config/visualMandate';
 import { useGameStore } from '../state/gameStore'; 
@@ -131,7 +130,7 @@ function isQuotaError(error: any): boolean {
     
     // 3. String matching in message
     const msg = (error.message || JSON.stringify(error)).toLowerCase();
-    return msg.includes('429') || msg.includes('resource_exhausted') || msg.includes('quota') || msg.includes('rate limit');
+    return msg.includes('429') || msg.includes('resource_exceeded') || msg.includes('quota') || msg.includes('rate limit');
 }
 
 // Helper for exponential backoff retries
@@ -303,7 +302,7 @@ export async function generateVideoAction(
   }
 
   const apiKey = getApiKey();
-  if (!apiKey) return undefined;
+  if (!apiKey) throw new MediaGenerationError('AUTH', "API key is missing.");
 
   try {
     const ai = getAI();
@@ -372,9 +371,9 @@ export async function generateVideoAction(
       });
     }
     return undefined;
-  } catch (e) {
+  } catch (e: any) {
     console.error("[GeminiMediaService] Veo Generation Failed:", e);
-    return undefined; 
+    throw new MediaGenerationError(e.type || 'UNKNOWN', e.message || 'Video generation failed'); 
   }
 }
 
@@ -388,7 +387,7 @@ export async function distortImageAction(imageB64: string, instruction: string):
   }
 
   const apiKey = getApiKey();
-  if (!apiKey) return undefined;
+  if (!apiKey) throw new MediaGenerationError('AUTH', "API key is missing.");
 
   return withRetry(async () => {
       const ai = getAI();
@@ -414,11 +413,15 @@ export async function distortImageAction(imageB64: string, instruction: string):
       });
 
       const candidate = response.candidates?.[0];
-      const data = candidate?.content?.parts?.[0]?.inlineData?.data;
+      // Fix: iterate parts to find image, do not assume index 0
+      const imagePart = candidate?.content?.parts?.find(p => p.inlineData);
+      const data = imagePart?.inlineData?.data;
       
       if (!data) {
-          const text = candidate?.content?.parts?.[0]?.text;
-          if (text) throw new MediaGenerationError('SAFETY', `Distortion Refused: ${text}`);
+          const textPart = candidate?.content?.parts?.find(p => p.text);
+          const text = textPart?.text;
+          // Capture and re-throw model text refusal as a specific error type
+          if (text) throw new MediaGenerationError('SAFETY', `Distortion Refusal: ${text}`);
           throw new Error("No distortion data returned.");
       }
       return data;

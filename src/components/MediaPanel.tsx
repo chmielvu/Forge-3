@@ -109,7 +109,18 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
 
   // Initial State: Waiting for Narrative
   if (!currentTurn) {
-    if (variant === 'background') return <div className={`bg-stone-950 ${className}`} />; // Silent background
+    if (variant === 'background') {
+        return (
+            <div className={`relative w-full h-full bg-[#0c0a09] overflow-hidden ${className}`}>
+                {/* Abstract Atmospheric Background for Start Screen */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#292524_0%,#0c0a09_100%)] opacity-60" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] rounded-full border border-[#78350f]/10 animate-[spin_60s_linear_infinite]" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60%] h-[60%] rounded-full border border-[#991b1b]/10 animate-[spin_45s_linear_infinite_reverse]" />
+                {/* Subtle Grid */}
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(120,53,15,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(120,53,15,0.03)_1px,transparent_1px)] bg-[size:40px_40px] opacity-30"></div>
+            </div>
+        );
+    }
     
     return (
       <div className="w-full h-full flex flex-col gap-4 items-center justify-center bg-stone-950 text-stone-500 font-mono text-xs uppercase p-8 text-center border-b border-stone-800">
@@ -234,3 +245,4 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
 };
 
 export default MediaPanel;
+    

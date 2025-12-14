@@ -19,6 +19,10 @@ export const UnifiedDirectorOutputSchema = {
           prefect_name: { type: Type.STRING },
           
           // Core outputs (previously from PrefectAgent)
+          current_scene_goal: {
+            type: Type.STRING,
+            description: "The specific short-term goal this agent is pursuing in this turn (e.g. 'Isolate Player', 'Enforce Rule')"
+          },
           public_action: { 
             type: Type.STRING,
             description: "What this prefect does/says openly"
@@ -66,7 +70,7 @@ export const UnifiedDirectorOutputSchema = {
           },
           favor_score_delta: { type: Type.NUMBER }
         },
-        required: ['prefect_id', 'public_action', 'hidden_motivation', 'emotional_state']
+        required: ['prefect_id', 'current_scene_goal', 'public_action', 'hidden_motivation', 'emotional_state']
       }
     },
     
@@ -154,6 +158,7 @@ export interface UnifiedDirectorOutput {
   prefect_simulations: Array<{
     prefect_id: string;
     prefect_name: string;
+    current_scene_goal: string;
     public_action: string;
     hidden_motivation: string;
     internal_monologue: string;

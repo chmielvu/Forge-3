@@ -59,6 +59,44 @@ function getSpecificWeaknessInstruction(archetype: string): string {
 }
 
 /**
+ * Derives a specific short-term goal for a prefect based on current ledger and context.
+ */
+function deriveShortTermGoal(prefect: PrefectDNA, ledger: YandereLedger, rivals: string[]): string {
+  const { traumaLevel, complianceScore, hopeLevel, physicalIntegrity } = ledger;
+  
+  switch (prefect.archetype) {
+    case 'The Yandere':
+      if (rivals.length > 0) return "Aggressively insert yourself between the Subject and the other Prefect to block their access.";
+      if (complianceScore < 30) return "Threaten the Subject with a 'purification' ritual if they do not look at you immediately.";
+      if (hopeLevel > 50) return "Destroy a small object of hope belonging to the Subject, then claim you did it for their own good.";
+      return "Touch the Subject to claim ownership and whisper a possessive secret that terrifies them.";
+      
+    case 'The Zealot':
+      if (traumaLevel < 40) return "Find a minor infraction (posture, eye contact) and blow it out of proportion to justify immediate punishment.";
+      if (hopeLevel > 60) return "Crush the Subject's hope by citing the inevitability of the Codex's final chapter.";
+      if (complianceScore > 80) return "Praise the Subject awkwardly, then recoil as if you've done something wrong.";
+      return "Demand the Subject recite a rule from the Codex, then physically correct their tone.";
+      
+    case 'The Nurse':
+      if (physicalIntegrity < 70) return "Use a medical check-up to invade personal space and extract a secret about another Prefect.";
+      if (traumaLevel > 80) return "Offer a sedative that is actually a truth serum, framed as mercy.";
+      return "Perform a 'preventative' examination that is humiliating but non-violent.";
+      
+    case 'The Dissident':
+      if (rivals.includes('The Zealot')) return "Mock The Zealot's rigid adherence to rules to undermine her authority in front of the Subject.";
+      if (hopeLevel < 20) return "Drop a physical token (key, note) near the Subject while berating them verbally.";
+      return "Perform a cruel act for the cameras, but give the Subject a signal (wink, squeeze) that it is performance.";
+      
+    case 'The Sadist':
+      if (complianceScore > 90) return "Invent a reason to punish the Subject anyway, proving that obedience does not guarantee safety.";
+      return "Escalate the physical stakes. Make the Subject flinch visibly.";
+      
+    default:
+      return "Assert dominance over the scene and force the Subject to acknowledge your rank.";
+  }
+}
+
+/**
  * Builds the context block for active prefects
  * This replaces the individual FilteredSceneContext for each agent
  */
@@ -68,6 +106,8 @@ function buildPrefectContextBlock(
   playerInput: string,
   history: string[]
 ): string {
+  const rivalsInScene = activePrefects.map(p => p.archetype);
+
   const prefectProfiles = activePrefects.map((prefect, idx) => {
     const relationships = Object.entries(prefect.relationships)
       .map(([targetId, score]) => {
@@ -82,9 +122,9 @@ function buildPrefectContextBlock(
     // Archetype-specific logic integration
     const driveInstr = getSpecificDriveInstruction(prefect.archetype);
     const weaknessInstr = getSpecificWeaknessInstruction(prefect.archetype);
+    const sceneGoal = deriveShortTermGoal(prefect, ledger, rivalsInScene.filter(r => r !== prefect.archetype));
 
     // Identify active rivals in the scene to inject specific conflict triggers
-    const rivalsInScene = activePrefects.filter(p => p.id !== prefect.id).map(p => p.archetype);
     let conflictTrigger = "";
     
     if (prefect.archetype === 'The Zealot' && rivalsInScene.includes('The Yandere')) {
@@ -120,12 +160,9 @@ function buildPrefectContextBlock(
 
 **RELATIONSHIPS:** ${relationships || "None established"}
 
-**RECENT ACTION:** ${prefect.lastPublicAction || "First appearance"}
-
-**KNOWLEDGE/SECRETS:** ${(prefect.knowledge || []).join('; ') || "None yet"}
-
 **BEHAVIORAL MANDATES (HIGHEST PRIORITY):**
-1. **DRIVE ADVANCEMENT:** ${driveInstr}
+1. **CURRENT SCENE GOAL (MANDATORY):** "${sceneGoal}"
+   (You MUST attempt to achieve this specific goal in the current turn).
 2. **WEAKNESS MANIFESTATION:** ${weaknessInstr}
    (The weakness MUST appear in the 'public_action' text as a physical or tonal tell).
 3. **${conflictTrigger || "MAINTAIN STATUS QUO"}**
@@ -143,8 +180,7 @@ For EACH prefect, generate their response to the player's action: "${playerInput
 1. Each prefect acts INDEPENDENTLY based on their unique personality, not as a hive mind
 2. Prefects can CONTRADICT each other (e.g., Elara wants compliance, Rhea secretly signals resistance)
 3. Apply the EMOTIONAL STRATEGY LAYER: If a prefect has high paranoia, they should be defensive/suspicious
-4. FAVOR SCORE LOGIC: Prefects with low favor (<40) are desperate and take risks
-5. **DRIVE & WEAKNESS:** Ensure the specific behavioral mandates for each prefect are executed in their 'public_action'.
+4. **MANDATORY GOAL:** Ensure the 'current_scene_goal' provided above is the primary driver of their 'public_action'.
 
 **PLAYER STATE FOR CONTEXT:**
 - Trauma: ${ledger.traumaLevel}/100
@@ -217,7 +253,7 @@ ${history.slice(-3).join('\n---\n')}
 Generate a UNIFIED JSON output containing:
 
 1. **prefect_simulations**: Array of prefect thoughts (from Phase 1)
-   - Each prefect's public_action, hidden_motivation, emotional_state, etc.
+   - Include the 'current_scene_goal' you are pursuing.
    - Ensure they CONTRADICT and CONFLICT where appropriate
    
 2. **narrative_text**: The integrated scene (from Phase 2)
@@ -267,7 +303,14 @@ Execute with maximum depth and psychological precision.
     );
     
     const outputText = response.text || "{}";
-    const unifiedOutput: UnifiedDirectorOutput = JSON.parse(outputText);
+    let unifiedOutput: UnifiedDirectorOutput;
+
+    try {
+      unifiedOutput = JSON.parse(outputText);
+    } catch (parseError) {
+      console.error("Failed to parse Unified Director output JSON:", parseError);
+      throw new Error(`Invalid JSON response from AI: ${outputText.substring(0, 200)}...`);
+    }
     
     // 4. Apply mutations (same as before)
     if (unifiedOutput.kgot_mutations) {
@@ -301,18 +344,18 @@ ${unifiedOutput.narrative_text}
       prefectSimulations: unifiedOutput.prefect_simulations
     };
     
-  } catch (error) {
+  } catch (error: any) {
     console.error("Unified Director Failed:", error);
+    const errorMessage = error.message || "Unknown AI error.";
     return {
-      narrative: "The Loom shudders. The simulation has de-synced. (AI Error)",
-      visualPrompt: "Static.",
+      narrative: `The Loom shudders. A neural-symbolic disconnect. (${errorMessage})`,
+      visualPrompt: "Static. Glitching pixels.",
       updatedGraph: currentGraphData,
-      choices: ["Retry"],
-      thoughtProcess: "Error",
-      state_updates: {},
+      choices: ["Attempt to re-stabilize neural link"],
+      thoughtProcess: `Error: ${errorMessage}`,
+      state_updates: {}, // Ensure state_updates is an empty object on error
       audioCues: [],
-      psychosisText: "...",
-      prefectSimulations: []
+      psychosisText: "REALITY_FLICKERS::PATTERN_BREAK"
     };
   }
 }

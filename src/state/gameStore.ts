@@ -419,13 +419,13 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           
           get().applyServerState(result);
           
-        } catch (e) {
+        } catch (e: any) {
           console.error("Unified Director Error:", e);
-          set({ isThinking: false });
+          set({ isThinking: false }); // Ensure UI is no longer stuck in thinking state
           get().addLog({
             id: `error-${Date.now()}`,
             type: 'system',
-            content: 'ERROR: Neuro-Symbolic disconnect. Retrying...'
+            content: `ERROR: Neuro-Symbolic disconnect. (${e.message || 'Unknown error'})`
           });
         }
       },
@@ -478,9 +478,14 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                    isLiteMode // Pass lite mode preference
                );
                get().applyServerState(result);
-           } catch (e) {
+           } catch (e: any) {
                console.error("Failed to bootstrap session:", e);
-               set({ isThinking: false });
+               set({ isThinking: false }); // Ensure UI is no longer stuck in thinking state
+               get().addLog({
+                 id: `error-boot-${Date.now()}`,
+                 type: 'system',
+                 content: `ERROR: Failed to initialize session. (${e.message || 'Unknown error'})`
+               });
            }
         }
         

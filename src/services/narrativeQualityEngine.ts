@@ -1,4 +1,3 @@
-
 import { YandereLedger, GameState, PrefectDNA, PrefectArchetype } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -98,7 +97,8 @@ export class NarrativeQualityEngine {
             }
         });
 
-        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        // Correct way to extract text from response per guidelines
+        const text = result.text;
         if (!text) return { score: 100, critique: "Pass", violations: [] };
         
         return JSON.parse(text) as AestheteCritique;

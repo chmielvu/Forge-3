@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { KnowledgeGraph, KGotNode, KGotEdge, NodeType, Memory } from '../lib/types/kgot';
 import { YandereLedger } from '../types';
 import { UnifiedDirectorOutput } from '../lib/schemas/unifiedDirectorSchema';
+import { INITIAL_LEDGER } from '../constants';
 
 // Graphology Algorithms
 import pagerank from 'graphology-metrics/centrality/pagerank';
@@ -13,7 +14,6 @@ import louvain from 'graphology-communities-louvain';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
 
 // --- VALIDATION SCHEMAS ---
-// Simplified schema to avoid deep object validation issues in some environments
 const NodeSchema = z.object({
   id: z.string().min(1),
   type: z.string(), // Flexible enum handling
@@ -74,13 +74,7 @@ const MutationSchemas = {
 
 /**
  * The Forge's Loom: Knowledge Graph of Thoughts (KGoT) Engine
- * Graphology Implementation (v4.1 - Audited)
- * 
- * Features:
- * - Robust Zod Validation
- * - Batch Operations
- * - GraphSAGE/Node2Vec Embeddings (TensorFlow.js)
- * - Error Resilience & Memory Safeguards
+ * Graphology Implementation (v4.2 - Resilient)
  */
 export class KGotController {
   private graph: Graph;
@@ -116,15 +110,9 @@ export class KGotController {
     // Load Edges
     if (kg.edges) {
         kg.edges.forEach(edge => {
-            // Generate a deterministic key if missing to avoid dupes on reload
             const key = edge.key || `${edge.source}_${edge.target}_${edge.type}`;
-            if (!this.graph.hasEdge(key)) {
-                try {
-                    this.addEdge(edge.source, edge.target, edge.label, edge.weight, edge.meta);
-                } catch (e) {
-                    console.warn(`[KGot] Failed to add edge ${key}:`, e);
-                }
-            }
+            // Use internal addEdge logic which now has robust error handling
+            this.addEdge(edge.source, edge.target, edge.label, edge.weight, edge.meta);
         });
     }
   }
@@ -164,6 +152,23 @@ export class KGotController {
 
   public initializeCanonicalNodes(): void {
     const canonicalNodes: KGotNode[] = [
+        // --- SUBJECT ---
+        { 
+            id: "Subject_84", 
+            type: "SUBJECT", 
+            label: "Subject 84", 
+            attributes: { 
+                agent_state: { 
+                    archetype: "The Subject", 
+                    current_mood: "Fearful", 
+                    dominance_level: 0.1, 
+                    voice_id: "Charon" 
+                },
+                ledger: INITIAL_LEDGER,
+                currentLocation: "The Calibration Chamber"
+            } 
+        },
+
         // --- FACULTY ---
         { id: "FACULTY_SELENE", type: "FACULTY", label: "Provost Selene", attributes: { manara_gaze: "Bored_God_Complex", agent_state: { archetype: "The Corrupted Matriarch", dominance_level: 1.0, boredom_level: 0.8, current_mood: "Bored", voice_id: "Zephyr" }, active_schemes: ["Transmutation of Virility"] } },
         { id: "FACULTY_LOGICIAN", type: "FACULTY", label: "Dr. Lysandra", attributes: { manara_gaze: "Clinical_Observer", agent_state: { archetype: "The Vivisectionist", dominance_level: 0.85, scientific_curiosity: 0.9, current_mood: "Analytical", voice_id: "Charon" }, active_schemes: ["Neural Mapping"] } },
@@ -184,18 +189,22 @@ export class KGotController {
 
     this.batchAddNodes(canonicalNodes);
 
-    // --- EDGES ---
     this.addEdge("FACULTY_SELENE", "Subject_84", "dominance", 1.0, { trope: "owns_soul" });
-    this.addEdge("PREFECT_KAELEN", "Subject_84", "obsession", 1.0, { trope: "yandere_possession" });
+    this.addEdge("PREFECT_OBSESSIVE", "Subject_84", "obsession", 1.0, { trope: "yandere_possession" });
   }
 
-  // --- Graph Operations ---
+  // --- Graph Operations (Robust Error Handling) ---
 
   public addNode(node: KGotNode): void {
+    let parsed;
     try {
-        // Validation
-        const parsed = NodeSchema.parse(node);
-        
+        parsed = NodeSchema.parse(node);
+    } catch (e) {
+        console.warn(`[KGot] Node Schema Validation Failed for ${node.id}:`, e);
+        return;
+    }
+
+    try {
         if (!this.graph.hasNode(parsed.id)) {
             this.graph.addNode(parsed.id, {
                 type: parsed.type,
@@ -204,7 +213,7 @@ export class KGotController {
             });
         }
     } catch (e) {
-        console.error(`[KGot] Invalid Node Data for ${node.id}:`, e);
+        console.error(`[KGot] Graphology Error adding node ${parsed.id}:`, e);
     }
   }
 
@@ -213,21 +222,35 @@ export class KGotController {
   }
 
   public removeNode(nodeId: string): void {
-    if (this.graph.hasNode(nodeId)) {
-      this.graph.dropNode(nodeId);
+    try {
+        if (this.graph.hasNode(nodeId)) {
+            this.graph.dropNode(nodeId);
+        }
+    } catch (e) {
+        console.error(`[KGot] Error removing node ${nodeId}:`, e);
     }
   }
 
   public addEdge(sourceId: string, targetId: string, relation: string, weight: number = 0.5, meta?: any): void {
-    if (!this.graph.hasNode(sourceId) || !this.graph.hasNode(targetId)) return;
+    if (!this.graph.hasNode(sourceId)) {
+        console.warn(`[KGot] addEdge ignored: Source ${sourceId} does not exist.`);
+        return;
+    }
+    if (!this.graph.hasNode(targetId)) {
+        console.warn(`[KGot] addEdge ignored: Target ${targetId} does not exist.`);
+        return;
+    }
 
+    let validParams;
     try {
-        // Validation
-        EdgeSchema.parse({ source: sourceId, target: targetId, label: relation, weight, meta });
+        validParams = EdgeSchema.parse({ source: sourceId, target: targetId, label: relation, weight, meta });
+    } catch(e) {
+        console.warn(`[KGot] Edge Schema Validation Failed (${sourceId}->${targetId}):`, e);
+        return;
+    }
 
-        // Use a composite key to prevent exact duplicates, but allow multi-edges of different types
-        const key = `${sourceId}_${targetId}_${relation}`;
-        
+    const key = `${sourceId}_${targetId}_${relation}`;
+    try {
         if (!this.graph.hasEdge(key)) {
             this.graph.addEdgeWithKey(key, sourceId, targetId, {
                 label: relation,
@@ -236,7 +259,6 @@ export class KGotController {
                 meta: meta || { tension: 0 }
             });
         } else {
-            // Update existing
             this.graph.setEdgeAttribute(key, 'weight', weight);
             if (meta) {
                 const currentMeta = this.graph.getEdgeAttribute(key, 'meta');
@@ -244,23 +266,126 @@ export class KGotController {
             }
         }
     } catch (e) {
-        console.error(`[KGot] Invalid Edge Data:`, e);
+        console.error(`[KGot] Graphology Error adding edge ${key}:`, e);
     }
   }
 
   public removeEdge(sourceId: string, targetId: string): void {
-    // Removes all edges between source and target
-    if (this.graph.hasNode(sourceId) && this.graph.hasNode(targetId)) {
-        const edges = this.graph.edges(sourceId, targetId);
-        edges.forEach(e => this.graph.dropEdge(e));
+    try {
+        if (this.graph.hasNode(sourceId) && this.graph.hasNode(targetId)) {
+            const edges = this.graph.edges(sourceId, targetId);
+            edges.forEach(e => this.graph.dropEdge(e));
+        }
+    } catch (e) {
+        console.error(`[KGot] Error removing edges between ${sourceId} and ${targetId}:`, e);
     }
+  }
+
+  // --- Director-Specific Mutation Handler ---
+  
+  public applyMutations(mutations: Array<{ operation: string, params?: any }>): void {
+    mutations.forEach((mutation, idx) => {
+      const { operation, params = {} } = mutation;
+      
+      try {
+        switch (operation) {
+          case 'add_edge': {
+            let valid;
+            try { valid = MutationSchemas.add_edge.parse(params); } 
+            catch(e) { console.warn(`[KGot] Mutation ${idx} (add_edge) invalid params:`, e); return; }
+            
+            this.addEdge(valid.source, valid.target, valid.relation || valid.label || 'RELATIONSHIP', valid.weight, valid.meta);
+            break;
+          }
+          
+          case 'remove_edge': {
+            let valid;
+            try { valid = MutationSchemas.remove_edge.parse(params); }
+            catch(e) { console.warn(`[KGot] Mutation ${idx} (remove_edge) invalid params:`, e); return; }
+            
+            this.removeEdge(valid.source, valid.target);
+            break;
+          }
+          
+          case 'update_node': {
+            let valid;
+            try { valid = MutationSchemas.update_node.parse(params); }
+            catch(e) { console.warn(`[KGot] Mutation ${idx} (update_node) invalid params:`, e); return; }
+
+            if (this.graph.hasNode(valid.id)) {
+               const currentAttrs = this.graph.getNodeAttributes(valid.id);
+               this.graph.mergeNodeAttributes(valid.id, {
+                   attributes: { ...currentAttrs.attributes, ...valid.attributes }
+               });
+            } else {
+                console.warn(`[KGot] Mutation ${idx}: Node ${valid.id} not found for update.`);
+            }
+            break;
+          }
+
+          case 'add_node': {
+            let valid;
+            try { valid = MutationSchemas.add_node.parse(params); }
+            catch(e) { console.warn(`[KGot] Mutation ${idx} (add_node) invalid params:`, e); return; }
+
+            this.addNode({
+                id: valid.id,
+                type: valid.type || 'ENTITY',
+                label: valid.label || valid.id,
+                attributes: valid.attributes || {}
+            });
+            break;
+          }
+
+          case 'add_memory': {
+              let valid;
+              try { valid = MutationSchemas.add_memory.parse(params); }
+              catch(e) { console.warn(`[KGot] Mutation ${idx} (add_memory) invalid params:`, e); return; }
+
+              this.addMemory(valid.id, {
+                  id: `mem_${Date.now()}_${Math.random().toString(36).substr(2,9)}`,
+                  description: valid.description,
+                  emotional_imprint: valid.emotional_imprint || 'Neutral',
+                  involved_entities: valid.involved_entities || [],
+                  timestamp: this.globalState.turn_count
+              });
+              break;
+          }
+
+          case 'update_grudge': {
+              let valid;
+              try { valid = MutationSchemas.update_grudge.parse(params); }
+              catch(e) { console.warn(`[KGot] Mutation ${idx} (update_grudge) invalid params:`, e); return; }
+
+              this.updateGrudge(valid.source, valid.target, valid.delta);
+              break;
+          }
+              
+          case 'add_trauma_bond': {
+              let valid;
+              try { valid = MutationSchemas.add_trauma_bond.parse(params); }
+              catch(e) { console.warn(`[KGot] Mutation ${idx} (add_trauma_bond) invalid params:`, e); return; }
+
+              this.addEdge(valid.source, valid.target, 'TRAUMA_BOND', valid.intensity || 0.5, {
+                  type: "trauma_bond",
+                  bond_type: valid.bond_type || "dependency",
+                  intensity: valid.intensity,
+                  timestamp: new Date().toISOString()
+              });
+              break;
+          }
+          
+          default:
+            console.warn(`[KGot] Unknown mutation operation: ${operation}`);
+        }
+      } catch (e: any) {
+        console.error(`[KGot] Mutation ${idx} (${operation}) Execution Failed:`, e.message || e);
+      }
+    });
   }
 
   // --- Advanced Analysis (Graphology) ---
 
-  /**
-   * Calculates PageRank to determine social dominance hierarchy.
-   */
   public getSocialHierarchy(): [string, number][] {
     if (this.graph.order === 0) return [];
     try {
@@ -272,21 +397,16 @@ export class KGotController {
     }
   }
 
-  /**
-   * Detects cliques/conspiracies using Louvain community detection.
-   */
   public detectConspiracies(): string[][] {
     if (this.graph.order === 0) return [];
     try {
         const communities = louvain(this.graph);
         const groups: Record<string, string[]> = {};
-        
         Object.entries(communities).forEach(([nodeId, communityId]) => {
-            const key = String(communityId); // Ensure key is a string
+            const key = String(communityId);
             if (!groups[key]) groups[key] = [];
             groups[key].push(nodeId);
         });
-
         return Object.values(groups).filter(g => g.length > 2);
     } catch (e) {
         console.warn("Louvain detection failed:", e);
@@ -294,12 +414,8 @@ export class KGotController {
     }
   }
 
-  /**
-   * Calculates the shortest "Dominance Path" using Dijkstra.
-   */
   public calculateDominancePath(source: string, target: string): string[] | null {
     if (!this.graph.hasNode(source) || !this.graph.hasNode(target)) return null;
-
     try {
         const path = dijkstra.bidirectional(this.graph, source, target, (edge, attr) => {
              return 1.0 - (attr.weight || 0.5);
@@ -310,9 +426,6 @@ export class KGotController {
     }
   }
 
-  /**
-   * Applies ForceAtlas2 layout for visualization coordinates.
-   */
   public applyLayout(iterations = 50): void {
     if (this.graph.order === 0) return;
     try {
@@ -332,44 +445,26 @@ export class KGotController {
 
   // --- EMBEDDING & AI ENHANCEMENTS ---
 
-  /**
-   * Imp1: Knowledge Completion (KC)
-   * Infers missing relationships based on structural proximity (short paths).
-   * E.g., if A connected to B, and B to C, infer A weak-bond C.
-   */
   public knowledgeCompletion(threshold: number = 2): void {
     const nodes = this.graph.nodes();
-    // O(N^2) - only run on small graphs or limit range
     const limit = Math.min(nodes.length, 50); 
     
     for (let i = 0; i < limit; i++) {
         for (let j = i + 1; j < limit; j++) {
             const source = nodes[i];
             const target = nodes[j];
-            
             if (this.graph.hasEdge(source, target)) continue;
-
             try {
-                // Check path length (hops)
                 const path = dijkstra.bidirectional(this.graph, source, target);
                 if (path && path.length > 1 && path.length <= threshold + 1) { 
-                    // Infer bond. Weight decays with distance.
                     const inferredWeight = 0.4 / (path.length - 1); 
-                    this.addEdge(source, target, 'INFERRED_BOND', inferredWeight, {
-                        type: 'LATENT',
-                        is_inferred: true
-                    });
+                    this.addEdge(source, target, 'INFERRED_BOND', inferredWeight, { type: 'LATENT', is_inferred: true });
                 }
-            } catch (e) {
-                // No path
-            }
+            } catch (e) {}
         }
     }
   }
 
-  /**
-   * Imp2: Feature Extraction for Enrichment
-   */
   private getNodeFeatures(node: string, bc: Record<string, number>): number[] {
     const inDeg = this.graph.inDegree(node);
     const outDeg = this.graph.outDegree(node);
@@ -377,42 +472,32 @@ export class KGotController {
     return [inDeg, outDeg, centrality]; 
   }
 
-  /**
-   * Internal Node2Vec Simulation (Random Indexing Approximation)
-   * Generates structural embeddings without requiring a Word2Vec library.
-   */
   private origNode2Vec(dimensions: number = 16, walkLength: number = 10, numWalks: number = 20): Record<string, number[]> {
     const nodes = this.graph.nodes();
     const vectors: Record<string, number[]> = {};
     const contextVectors: Record<string, number[]> = {};
 
-    // 1. Initialize random index vectors (Random Projection)
     nodes.forEach(node => {
         vectors[node] = Array.from({length: dimensions}, () => Math.random() - 0.5);
         contextVectors[node] = Array(dimensions).fill(0);
     });
 
-    // 2. Perform Random Walks
     nodes.forEach(startNode => {
         for (let i = 0; i < numWalks; i++) {
             let curr = startNode;
             for (let step = 0; step < walkLength; step++) {
                 const neighbors = this.graph.neighbors(curr);
                 if (neighbors.length === 0) break;
-                
                 const next = neighbors[Math.floor(Math.random() * neighbors.length)];
-                
                 for (let d = 0; d < dimensions; d++) {
                     contextVectors[curr][d] += vectors[next][d];
                     contextVectors[next][d] += vectors[curr][d];
                 }
-                
                 curr = next;
             }
         }
     });
 
-    // 3. Normalize to Unit Vectors
     nodes.forEach(node => {
         const magnitude = Math.sqrt(contextVectors[node].reduce((sum, val) => sum + val * val, 0)) || 1;
         contextVectors[node] = contextVectors[node].map(v => v / magnitude);
@@ -421,22 +506,11 @@ export class KGotController {
     return contextVectors;
   }
 
-  /**
-   * Imp2: Enriched Node2Vec Public API
-   * Combines Structural Embeddings + Centrality Features.
-   */
   public getNode2VecEmbeddings(dim: number = 16): Record<string, number[]> {
-    // 1. Knowledge Completion
     this.knowledgeCompletion();
-
-    // 2. Pre-calculate centrality map
     let bc = {};
     try { bc = betweennessCentrality(this.graph); } catch (e) {}
-
-    // 3. Get Base Node2Vec Embeddings
     const rawEmbeds = this.origNode2Vec(dim);
-
-    // 4. Enrich
     const enriched: Record<string, number[]> = {};
     this.graph.forEachNode(node => {
         const structuralFeats = this.getNodeFeatures(node, bc as Record<string, number>);
@@ -444,80 +518,55 @@ export class KGotController {
             enriched[node] = rawEmbeds[node].concat(structuralFeats);
         }
     });
-
     return enriched;
   }
 
-  /**
-   * GraphSAGE Implementation (Matrix/Vectorized for TFJS)
-   * Superior to GCN for inductive tasks and narrative prediction.
-   * Uses Mean Aggregator + Concatenation.
-   */
   public async getGraphSAGEEmbeddings(layers = [16, 32, 16], epochs = 50, lr = 0.01): Promise<Record<string, number[]>> {
     const nodes = this.graph.nodes();
     const numNodes = nodes.length;
-    
     if (numNodes === 0) return {};
     if (numNodes > 500) {
-        console.warn(`[KGot] GraphSAGE Warning: Graph size (${numNodes}) may exceed browser memory for dense matrix ops. Falling back to Node2Vec.`);
+        console.warn(`[KGot] GraphSAGE Warning: Graph size too large. Falling back to Node2Vec.`);
         return this.getNode2VecEmbeddings();
     }
 
     try {
         const tf = await import('@tensorflow/tfjs');
-        
         const nodeToIndex: Record<string, number> = {};
         nodes.forEach((n, i) => nodeToIndex[n] = i);
 
-        // Adjacency List to Tensor (Row Normalized)
         const adjBuffer = tf.buffer([numNodes, numNodes]);
         this.graph.forEachEdge((e, a, src, tgt) => {
             const s = nodeToIndex[src];
             const t = nodeToIndex[tgt];
             if (s !== undefined && t !== undefined) {
                 adjBuffer.set(1, s, t);
-                // GraphSAGE often treats edges as undirected for aggregation context
                 adjBuffer.set(1, t, s); 
             }
         });
         
-        // Normalize Neighbors (Mean Aggregation Prep)
         for(let i=0; i<numNodes; i++) {
             let deg = 0;
             for(let j=0; j<numNodes; j++) if(adjBuffer.get(i, j)) deg++;
             deg = deg > 0 ? deg : 1; 
-            
-            // Normalize existing edges
-            for(let j=0; j<numNodes; j++) {
-                if(adjBuffer.get(i, j)) adjBuffer.set(1/deg, i, j);
-            }
+            for(let j=0; j<numNodes; j++) if(adjBuffer.get(i, j)) adjBuffer.set(1/deg, i, j);
         }
         
         const A = adjBuffer.toTensor();
 
         return tf.tidy(() => {
-            // Initialize Features (Random Init implies "Structural Identity")
             const inputDim = layers[0];
             const initialFeatures = tf.randomNormal([numNodes, inputDim]);
-            
-            // Initialize Weights for SAGE Layers
-            // Layer 1: Input [Self(16) + Neigh(16)] -> Output(32)
             const w1 = tf.variable(tf.randomNormal([layers[0] * 2, layers[1]], 0, 0.1));
-            
-            // Layer 2: Input [Self(32) + Neigh(32)] -> Output(16)
             const w2 = tf.variable(tf.randomNormal([layers[1] * 2, layers[2]], 0, 0.1));
-            
             const optimizer = tf.train.adam(lr);
 
-            // Forward Pass Function (Inductive)
             const model = (x: any) => {
-                // Layer 1
-                const neigh1 = tf.matMul(A, x); // Aggregate
-                const concat1 = tf.concat([x, neigh1], 1); // Concat
-                const h1 = tf.relu(tf.matMul(concat1, w1)); // Transform
-                const norm1 = tf.div(h1, tf.norm(h1, 'euclidean', 1, true).add(1e-6)); // Normalize
+                const neigh1 = tf.matMul(A, x);
+                const concat1 = tf.concat([x, neigh1], 1);
+                const h1 = tf.relu(tf.matMul(concat1, w1));
+                const norm1 = tf.div(h1, tf.norm(h1, 'euclidean', 1, true).add(1e-6));
                 
-                // Layer 2
                 const neigh2 = tf.matMul(A, norm1);
                 const concat2 = tf.concat([norm1, neigh2], 1);
                 const h2 = tf.matMul(concat2, w2); 
@@ -526,18 +575,12 @@ export class KGotController {
                 return norm2;
             };
 
-            // Train (Feature/Structure Reconstruction)
             for(let i=0; i<epochs; i++) {
-                optimizer.minimize(() => {
-                    const embeddings = model(initialFeatures);
-                    // Loss: Reconstruction of initial structural signal
-                    return tf.mean(tf.square(tf.sub(embeddings, initialFeatures)));
-                });
+                optimizer.minimize(() => tf.mean(tf.square(tf.sub(model(initialFeatures), initialFeatures))));
             }
 
             const finalEmbeds = model(initialFeatures);
             const data = finalEmbeds.arraySync() as number[][];
-            
             const result: Record<string, number[]> = {};
             nodes.forEach((n, i) => result[n] = data[i]);
             return result;
@@ -545,37 +588,15 @@ export class KGotController {
 
     } catch (e) {
         console.warn("GraphSAGE failed (tfjs likely missing or error):", e);
-        // Fallback to basic Node2Vec if TFJS fails
         return this.getNode2VecEmbeddings();
     }
   }
 
-  // --- Benchmarking ---
-  
-  public benchAlgorithms(): { pagerank: number, node2vec: number } {
-      const startPR = performance.now();
-      this.getSocialHierarchy();
-      const endPR = performance.now();
-
-      const startN2V = performance.now();
-      this.getNode2VecEmbeddings();
-      const endN2V = performance.now();
-
-      return {
-          pagerank: endPR - startPR,
-          node2vec: endN2V - startN2V
-      };
-  }
-
-  // --- Logic Helpers ---
-
   public updateLedger(subjectId: string, deltas: Partial<YandereLedger>): void {
     if (!this.graph.hasNode(subjectId)) return;
-    
     const attrs = this.graph.getNodeAttributes(subjectId);
     // @ts-ignore
     const ledger = attrs.attributes.ledger || {};
-
     Object.keys(deltas).forEach((key) => {
         const k = key as keyof YandereLedger;
         const val = deltas[k];
@@ -587,10 +608,7 @@ export class KGotController {
            ledger[k] = val;
         }
     });
-
-    this.graph.mergeNodeAttributes(subjectId, {
-        attributes: { ...attrs.attributes, ledger }
-    });
+    this.graph.mergeNodeAttributes(subjectId, { attributes: { ...attrs.attributes, ledger } });
   }
 
   public addMemory(nodeId: string, memory: Memory): void {
@@ -600,10 +618,7 @@ export class KGotController {
     const memories = attrs.attributes.memories || [];
     memories.push(memory);
     if (memories.length > 20) memories.shift();
-    
-    this.graph.mergeNodeAttributes(nodeId, {
-        attributes: { ...attrs.attributes, memories }
-    });
+    this.graph.mergeNodeAttributes(nodeId, { attributes: { ...attrs.attributes, memories } });
   }
 
   public updateGrudge(holderId: string, targetId: string, delta: number): void {
@@ -614,118 +629,23 @@ export class KGotController {
     const current = grudges[targetId] || 0;
     const newVal = Math.max(0, Math.min(100, current + delta));
     grudges[targetId] = newVal;
-
-    this.graph.mergeNodeAttributes(holderId, {
-        attributes: { ...attrs.attributes, grudges }
-    });
-
+    this.graph.mergeNodeAttributes(holderId, { attributes: { ...attrs.attributes, grudges } });
     if (newVal > 50) {
-        this.addEdge(holderId, targetId, 'GRUDGE', newVal / 100, {
-            intensity: newVal,
-            trope: 'Burning Hatred'
-        });
+        this.addEdge(holderId, targetId, 'GRUDGE', newVal / 100, { intensity: newVal, trope: 'Burning Hatred' });
     }
   }
 
-  // --- Director-Specific Mutation Handler ---
-  
-  public applyMutations(mutations: Array<{ operation: string, params?: any }>): void {
-    mutations.forEach(mutation => {
-      const { operation, params = {} } = mutation;
-      
-      try {
-        switch (operation) {
-          case 'add_edge': {
-            const valid = MutationSchemas.add_edge.parse(params);
-            this.addEdge(valid.source, valid.target, valid.relation || valid.label || 'RELATIONSHIP', valid.weight, valid.meta);
-            break;
-          }
-          
-          case 'remove_edge': {
-            const valid = MutationSchemas.remove_edge.parse(params);
-            this.removeEdge(valid.source, valid.target);
-            break;
-          }
-          
-          case 'update_node': {
-            const valid = MutationSchemas.update_node.parse(params);
-            if (this.graph.hasNode(valid.id)) {
-               const currentAttrs = this.graph.getNodeAttributes(valid.id);
-               this.graph.mergeNodeAttributes(valid.id, {
-                   attributes: { ...currentAttrs.attributes, ...valid.attributes }
-               });
-            }
-            break;
-          }
-
-          case 'add_node': {
-            const valid = MutationSchemas.add_node.parse(params);
-            this.addNode({
-                id: valid.id,
-                type: valid.type || 'ENTITY',
-                label: valid.label || valid.id,
-                attributes: valid.attributes || {}
-            });
-            break;
-          }
-
-          case 'add_memory': {
-              const valid = MutationSchemas.add_memory.parse(params);
-              this.addMemory(valid.id, {
-                  id: `mem_${Date.now()}_${Math.random().toString(36).substr(2,9)}`,
-                  description: valid.description,
-                  emotional_imprint: valid.emotional_imprint || 'Neutral',
-                  involved_entities: valid.involved_entities || [],
-                  timestamp: this.globalState.turn_count
-              });
-              break;
-          }
-
-          case 'update_grudge': {
-              const valid = MutationSchemas.update_grudge.parse(params);
-              this.updateGrudge(valid.source, valid.target, valid.delta);
-              break;
-          }
-              
-          case 'add_trauma_bond': {
-              const valid = MutationSchemas.add_trauma_bond.parse(params);
-              this.addEdge(valid.source, valid.target, 'TRAUMA_BOND', valid.intensity || 0.5, {
-                  type: "trauma_bond",
-                  bond_type: valid.bond_type || "dependency",
-                  intensity: valid.intensity,
-                  timestamp: new Date().toISOString()
-              });
-              break;
-          }
-          
-          default:
-            console.warn(`[KGot] Unknown mutation operation: ${operation}`);
-        }
-      } catch (e: any) {
-        console.error(`[KGot] Mutation Validation Failed for ${operation}:`, e.message || e);
-      }
-    });
-  }
-
-  /**
-   * Applies complex simulation results from the Unified Director to the graph.
-   * Updates agent state, memories, relationships, and hidden secrets.
-   */
+  // --- Unified Director Logic Bridge ---
   public applyPrefectSimulations(simulations: UnifiedDirectorOutput['prefect_simulations']): void {
     simulations.forEach(sim => {
         if (!this.graph.hasNode(sim.prefect_id)) {
-            // Try resolving by name if ID miss
             const resolved = this.resolveTargetId(sim.prefect_name);
             if (resolved) sim.prefect_id = resolved;
             else return; 
         }
-
-        // 1. Retrieve Current State
         const attrs = this.graph.getNodeAttributes(sim.prefect_id);
         // @ts-ignore
         const agentState = attrs.attributes.agent_state || {};
-        
-        // 2. Update Agent State (Emotion & Motivation)
         const updatedAgentState = {
             ...agentState,
             current_mood: this.deriveMoodFromState(sim.emotional_state),
@@ -733,13 +653,9 @@ export class KGotController {
             last_hidden_motivation: sim.hidden_motivation,
             last_public_action: sim.public_action
         };
-
-        // 3. Update Secrets/Knowledge
         // @ts-ignore
         const currentSecrets = attrs.attributes.secrets || [];
         const newSecrets = [...new Set([...currentSecrets, ...(sim.secrets_uncovered || [])])];
-
-        // 4. Merge Attributes
         this.graph.mergeNodeAttributes(sim.prefect_id, {
             attributes: {
                 ...attrs.attributes,
@@ -747,15 +663,10 @@ export class KGotController {
                 secrets: newSecrets
             }
         });
-
-        // 5. Handle Sabotage (Grudge Edge)
         if (sim.sabotage_attempt) {
              const targetId = this.resolveTargetId(sim.sabotage_attempt.target);
              if (targetId && this.graph.hasNode(targetId)) {
-                 // Increase grudge intensity
                  this.updateGrudge(sim.prefect_id, targetId, 25); 
-                 
-                 // Add explicit edge for the attempt
                  this.addEdge(sim.prefect_id, targetId, 'SABOTAGE_ATTEMPT', 0.9, {
                      method: sim.sabotage_attempt.method,
                      deniability: sim.sabotage_attempt.deniability,
@@ -764,12 +675,9 @@ export class KGotController {
                  });
              }
         }
-
-        // 6. Handle Alliance Signals
         if (sim.alliance_signal) {
             const targetId = this.resolveTargetId(sim.alliance_signal.target);
             if (targetId && this.graph.hasNode(targetId)) {
-                // Add positive edge
                 this.addEdge(sim.prefect_id, targetId, 'ALLIANCE_SIGNAL', 0.6, {
                     message: sim.alliance_signal.message,
                     timestamp: this.globalState.turn_count,
@@ -777,8 +685,6 @@ export class KGotController {
                 });
             }
         }
-
-        // 7. Record Ephemeral Memory of Action
         this.addMemory(sim.prefect_id, {
             id: `mem_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
             description: `Action: ${sim.public_action} | Motivation: ${sim.hidden_motivation}`,
@@ -799,25 +705,15 @@ export class KGotController {
 
   private resolveTargetId(nameOrId: string): string | null {
     if (this.graph.hasNode(nameOrId)) return nameOrId;
-    
     let foundId = null;
-    // Simple fuzzy match on label or ID parts
     const search = nameOrId.toUpperCase();
-    
     this.graph.forEachNode((id, attrs) => {
         // @ts-ignore
         const label = (attrs.label || "").toUpperCase();
-        if (label.includes(search) || id.includes(search)) {
-            foundId = id;
-        }
-        // Archetype match
+        if (label.includes(search) || id.includes(search)) foundId = id;
         // @ts-ignore
-        if (attrs.attributes?.agent_state?.archetype?.toUpperCase() === search) {
-            foundId = id;
-        }
+        if (attrs.attributes?.agent_state?.archetype?.toUpperCase() === search) foundId = id;
     });
-    
-    // Handle common mapping aliases
     if (!foundId) {
         if (search.includes("PLAYER") || search.includes("SUBJECT")) return "Subject_84";
         if (search.includes("SELENE")) return "FACULTY_SELENE";
@@ -827,7 +723,6 @@ export class KGotController {
         if (search.includes("RHEA")) return "PREFECT_DISSIDENT";
         if (search.includes("ANYA")) return "PREFECT_NURSE";
     }
-
     return foundId;
   }
 }

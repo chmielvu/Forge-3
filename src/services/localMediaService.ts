@@ -13,9 +13,99 @@ const getSynthesizer = async () => {
   return ttsSynthesizer;
 };
 
+// --- VISUAL ANALYSIS HELPERS ---
+
+interface VisualParams {
+  baseHue: number;
+  secondaryHue: number;
+  saturation: number;
+  lightness: number;
+  chaos: number; // 0.0 to 1.0 - determines shape irregularity
+  darkness: number; // 0.0 to 1.0 - determines background depth
+  shapes: 'organic' | 'geometric' | 'jagged' | 'void';
+  composition: 'center' | 'bottom-heavy' | 'top-heavy' | 'scattered';
+  texture: 'grain' | 'scratch' | 'liquid' | 'scanline';
+}
+
+function analyzePrompt(prompt: string): VisualParams {
+  const lower = prompt.toLowerCase();
+  
+  // Default: Dark, moody, slight amber tint (The Forge default)
+  const params: VisualParams = {
+    baseHue: 30, // Amber/Orange
+    secondaryHue: 0, // Red
+    saturation: 60,
+    lightness: 20,
+    chaos: 0.3,
+    darkness: 0.8,
+    shapes: 'geometric',
+    composition: 'center',
+    texture: 'grain'
+  };
+
+  // 1. Color Analysis
+  if (lower.match(/blood|pain|rage|red|crimson|flesh|wound/)) {
+    params.baseHue = 350; // Crimson
+    params.secondaryHue = 20;
+    params.saturation = 80;
+    params.chaos += 0.3;
+    params.texture = 'scratch';
+  } else if (lower.match(/cold|clinical|blue|cyan|freeze|ice|sterile|lab/)) {
+    params.baseHue = 200; // Cyan/Blue
+    params.secondaryHue = 240;
+    params.saturation = 40;
+    params.lightness = 30; // Brighter/Sterile
+    params.darkness = 0.4;
+    params.texture = 'scanline';
+  } else if (lower.match(/sick|toxic|green|poison|envy|rot/)) {
+    params.baseHue = 120; // Green
+    params.secondaryHue = 60; // Yellow
+    params.chaos += 0.3;
+    params.texture = 'liquid';
+  } else if (lower.match(/void|shadow|dark|abyss|black|nothing/)) {
+    params.saturation = 10;
+    params.lightness = 10;
+    params.darkness = 0.95;
+    params.secondaryHue = 270; // Purple tint
+    params.shapes = 'void';
+  } else if (lower.match(/flesh|skin|touch|warm|intimate|desire/)) {
+    params.baseHue = 25; // Skin tones/Warmth
+    params.secondaryHue = 340; // Pinkish
+    params.lightness = 40;
+    params.shapes = 'organic';
+    params.texture = 'liquid';
+  }
+
+  // 2. Emotion/Chaos & Shape Analysis
+  if (lower.match(/scream|chaos|fracture|broken|shatter|panic|violence/)) {
+    params.chaos = 0.9;
+    params.shapes = 'jagged';
+    params.texture = 'scratch';
+  } else if (lower.match(/calm|still|quiet|silence|order|perfect/)) {
+    params.chaos = 0.1;
+    params.shapes = 'geometric';
+  } else if (lower.match(/soft|gentle|love|tears|weep|comfort/)) {
+    params.chaos = 0.4;
+    params.shapes = 'organic';
+  }
+
+  // 3. Composition Analysis (New)
+  if (lower.match(/kneel|floor|down|bow|heavy|collapse/)) {
+    params.composition = 'bottom-heavy';
+  } else if (lower.match(/loom|tower|up|above|god|ceiling/)) {
+    params.composition = 'top-heavy';
+  } else if (lower.match(/surround|everywhere|swarm|many/)) {
+    params.composition = 'scattered';
+  } else {
+    params.composition = 'center';
+  }
+
+  return params;
+}
+
 /**
  * Generates an abstract visual representation using HTML5 Canvas.
- * Zero API cost, instant generation.
+ * Context-aware based on prompt keywords.
  */
 export async function generateLocalImage(prompt: string): Promise<string> {
   return new Promise((resolve) => {
@@ -28,42 +118,116 @@ export async function generateLocalImage(prompt: string): Promise<string> {
         return;
     }
 
-    // Deterministic "art" based on prompt hash
+    // 1. Parse Context
+    const params = analyzePrompt(prompt);
     const hash = prompt.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0);
-    const hue = Math.abs(hash) % 360;
-
-    // Background
-    ctx.fillStyle = `hsl(${hue}, 20%, 10%)`;
+    
+    // 2. Render Background
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, 512);
+    // Adjust gradient direction based on composition
+    if (params.composition === 'top-heavy') {
+        bgGradient.addColorStop(0, `hsl(${params.baseHue}, ${params.saturation}%, ${Math.max(10, params.lightness)}%)`);
+        bgGradient.addColorStop(1, `rgba(0,0,0,1)`);
+    } else if (params.composition === 'bottom-heavy') {
+        bgGradient.addColorStop(0, `rgba(0,0,0,1)`);
+        bgGradient.addColorStop(1, `hsl(${params.baseHue}, ${params.saturation}%, ${Math.max(10, params.lightness)}%)`);
+    } else {
+        bgGradient.addColorStop(0, `hsl(${params.baseHue}, ${params.saturation}%, ${Math.max(5, params.lightness - 10)}%)`);
+        bgGradient.addColorStop(1, `hsl(${params.secondaryHue}, ${params.saturation}%, ${Math.max(0, params.lightness - 20)}%)`);
+    }
+    
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, 512, 512);
+    
+    // Dark overlay for "Noir" feel
+    ctx.fillStyle = `rgba(0, 0, 0, ${params.darkness})`;
     ctx.fillRect(0, 0, 512, 512);
 
-    // Procedural Shapes (The "Forge" Aesthetic)
-    ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 15; i++) {
-      const x = ((Math.sin(hash + i) + 1) / 2) * 512;
-      const y = ((Math.cos(hash * i) + 1) / 2) * 512;
-      const s = (Math.sin(i) * 50) + 100;
+    // 3. Render Procedural Shapes
+    ctx.globalCompositeOperation = 'screen'; // Use screen/lighter for glowing effect
+    const numShapes = 10 + Math.floor(params.chaos * 40);
+    
+    for (let i = 0; i < numShapes; i++) {
+      // Deterministic pseudo-random positions based on hash + index
+      const r1 = Math.abs(Math.sin(hash + i));
+      const r2 = Math.abs(Math.cos(hash * i));
+      const r3 = Math.abs(Math.sin(hash * i * 2));
       
-      ctx.fillStyle = `hsla(${hue + (i * 20)}, 60%, 50%, 0.1)`;
+      let x = r1 * 512;
+      let y = r2 * 512;
+      const size = (r3 * 150) + 20;
+
+      // Adjust Position based on Composition
+      if (params.composition === 'center') {
+          // Biased towards center
+          x = (x + 256) / 2;
+          y = (y + 256) / 2;
+      } else if (params.composition === 'bottom-heavy') {
+          y = 256 + (r2 * 256); // Lower half
+      } else if (params.composition === 'top-heavy') {
+          y = r2 * 256; // Upper half
+      }
+      
+      const shapeHue = i % 3 === 0 ? params.baseHue : params.secondaryHue;
+      const opacity = (0.1 + (r1 * 0.2)) * (1 - params.darkness * 0.5); 
+      
+      ctx.fillStyle = `hsla(${shapeHue}, ${params.saturation}%, 50%, ${opacity})`;
+      ctx.strokeStyle = `hsla(${shapeHue}, ${params.saturation}%, 70%, ${opacity * 1.5})`;
+      ctx.lineWidth = 1 + (params.chaos * 3);
+
       ctx.beginPath();
-      ctx.arc(x, y, s, 0, Math.PI * 2);
-      ctx.fill();
       
-      ctx.strokeStyle = `hsla(${hue}, 80%, 80%, 0.2)`;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x - s/2, y - s/2, s, s);
+      if (params.shapes === 'organic' || params.shapes === 'void') {
+        // Circles and Blobs
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+      } else if (params.shapes === 'jagged') {
+        // Sharp triangles / lines
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + (r2 * 100) - 50, y + (r3 * 100) - 50);
+        ctx.lineTo(x + (r1 * 100) - 50, y + (r2 * 100) - 50);
+        ctx.closePath();
+      } else {
+        // Geometric Rectangles/Lines
+        const w = size;
+        const h = size * (r3 + 0.5); // Variable aspect ratio
+        ctx.rect(x - w/2, y - h/2, w, h);
+      }
+      
+      ctx.fill();
+      // Randomly stroke some shapes for definition
+      if (r3 > 0.5) ctx.stroke();
     }
 
-    // Text Overlay (Debug/Style)
+    // 4. Apply Textures
+    ctx.globalCompositeOperation = 'overlay';
+    
+    // Scanlines
+    if (params.texture === 'scanline' || params.texture === 'grain') {
+        for (let y = 0; y < 512; y += 4) {
+            ctx.fillStyle = `rgba(0,0,0,${0.2 + (params.chaos * 0.1)})`;
+            ctx.fillRect(0, y, 512, 1);
+        }
+    }
+
+    // Scratches / Noise
+    if (params.texture === 'scratch' || params.texture === 'grain') {
+       for(let k=0; k<100; k++) {
+           const sx = Math.random() * 512;
+           const sy = Math.random() * 512;
+           ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.1})`;
+           ctx.fillRect(sx, sy, Math.random() * 2, Math.random() * 20);
+       }
+    }
+
+    // 5. Text Overlay (Contextual Debug - The "Terminal" Look)
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.font = '10px monospace';
-    ctx.fillText("FORGE_LITE :: LOCAL_RENDER", 20, 20);
-    ctx.fillText(`HASH: ${hash.toString(16).toUpperCase()}`, 20, 35);
+    ctx.fillText(`FORGE_RENDER :: [${params.shapes.toUpperCase()}]`, 20, 480);
+    ctx.fillText(`COMPOSITION :: ${params.composition.toUpperCase()}`, 20, 492);
+    ctx.fillText(`PALETTE :: ${params.baseHue}/${params.secondaryHue}`, 20, 504);
 
-    // Resolve as base64 without prefix (Gemini service expects raw base64 often, but checking consumers)
-    // The consumers usually expect `data:image/...` or raw. geminiMediaService returns raw base64.
-    // toDataURL returns `data:image/png;base64,.....`
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
     resolve(dataUrl.split(',')[1]);
   });
 }
