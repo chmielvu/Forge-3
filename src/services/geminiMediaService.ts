@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { VISUAL_MANDATE, VIDEO_MANDATE } from '../config/visualMandate';
 import { useGameStore } from '../state/gameStore'; 
@@ -200,24 +201,21 @@ export async function generateImageAction(prompt: string): Promise<string | unde
 
   return withRetry(async () => {
       const ai = getAI();
-      // Enforce the strict visual mandate JSON wrapper for the model
-      const qualityEnforcedPrompt = `
-      GENERATE AN IMAGE BASED ON THIS STRICT JSON CONFIGURATION:
-      \`\`\`json
-      ${prompt}
-      \`\`\`
-      `;
       
+      // prompt already contains the "Generate image strictly..." prefix from visualCoherenceEngine
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image', 
-        contents: { parts: [{ text: qualityEnforcedPrompt }] },
+        contents: { parts: [{ text: prompt }] },
         config: {
           safetySettings: [
             { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
             { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
             { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
           ],
-          temperature: 0.7, 
+          temperature: 0.7,
+          imageConfig: {
+             aspectRatio: "16:9" 
+          }
         }
       });
 
@@ -306,10 +304,25 @@ export async function generateVideoAction(
 
   try {
     const ai = getAI();
+    
+    // Extract sanitized scene description from JSON wrapper if present
+    let sceneDescription = visualPrompt;
+    try {
+        const match = visualPrompt.match(/\{[\s\S]*\}/);
+        if (match) {
+            const parsed = JSON.parse(match[0]);
+            if (parsed.subject) {
+                sceneDescription = `${parsed.subject}. ${parsed.environment || ''} ${parsed.lighting || ''}`;
+            }
+        }
+    } catch (e) {
+        // Fallback to full string if parse fails
+    }
+
     const motionPrompt = `
       ${VISUAL_MANDATE.ZERO_DRIFT_HEADER}
       ${VIDEO_MANDATE.STYLE}
-      Scene: ${visualPrompt}
+      Scene: ${sceneDescription}
       Directives: ${VIDEO_MANDATE.DIRECTIVES}
       Aesthetic: ${VISUAL_MANDATE.STYLE}
     `;

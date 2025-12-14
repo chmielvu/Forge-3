@@ -97,7 +97,7 @@ export const UnifiedDirectorOutputSchema = {
     
     audio_markup: {
       type: Type.STRING,
-      description: "The narrative text wrapped in tags indicating emotional direction for TTS (e.g. [FAST], [WHISPER], [BREATHY])."
+      description: "The narrative text wrapped in SSML tags indicating emotional direction (e.g. <break time='500ms'/>, <prosody rate='slow'>)."
     },
     
     visual_prompt: { type: Type.STRING },

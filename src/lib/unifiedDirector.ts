@@ -2,12 +2,12 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { KnowledgeGraph } from "./types/kgot";
 import { KGotController } from "../controllers/KGotController";
-import { DIRECTOR_CORE_IDENTITY, DIRECTOR_FACULTY_PSYCHOLOGY } from "../config/directorCore";
+import { DIRECTOR_CORE_IDENTITY, DIRECTOR_FACULTY_PSYCHOLOGY, DIRECTOR_MASTER_PROMPT_TEMPLATE } from "../config/directorCore";
 import { UnifiedDirectorOutputSchema, UnifiedDirectorOutput } from "./schemas/unifiedDirectorSchema";
 import { PrefectDNA, YandereLedger, GameState } from "../types";
 import { INITIAL_LEDGER } from "../constants";
 import { callGeminiWithRetry } from "../utils/apiRetry";
-import { narrativeQualityEngine } from "../services/narrativeQualityEngine";
+// Removed narrativeQualityEngine import as critique is now internalized
 import { selectNarratorMode, NARRATOR_VOICES } from '../services/narratorEngine';
 
 const getApiKey = (): string => {
@@ -23,6 +23,39 @@ const getApiKey = (): string => {
 };
 
 const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
+
+// --- HELPER: ROBUST JSON PARSER ---
+function fuzzyJsonParse(text: string): any {
+  // 1. Try standard parse
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    // 2. Try extracting JSON block
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e2) {
+        // 3. Fallback: Try to clean common markdown errors
+        try {
+            const cleaned = jsonMatch[0].replace(/```json/g, '').replace(/```/g, '');
+            return JSON.parse(cleaned);
+        } catch(e3) {
+            console.error("Fuzzy JSON Parse Failed:", e3);
+            throw new Error("Failed to parse AI response.");
+        }
+      }
+    }
+    throw new Error("No JSON block found in response.");
+  }
+}
+
+// --- HELPER: AGENCY/LUCK CHECK ---
+function checkCriticalSuccess(ledger: YandereLedger): boolean {
+    // Base 5% chance, +1% for every 10 Hope points
+    const chance = 0.05 + (ledger.hopeLevel / 1000);
+    return Math.random() < chance;
+}
 
 // --- HELPER FUNCTIONS FOR AGENT LOGIC ---
 
@@ -206,7 +239,7 @@ export async function executeUnifiedDirectorTurn(
   isLiteMode: boolean = false
 ) {
   try {
-    const modelId = isLiteMode ? 'gemini-2.5-flash-lite-latest' : 'gemini-3-pro-preview';
+    const modelId = isLiteMode ? 'gemini-2.0-flash-lite-preview-02-05' : 'gemini-3-pro-preview';
     console.log(`⚡ [Unified Director] Starting single-agent turn using ${modelId}...`);
     
     // 1. Initialize Systems
@@ -218,99 +251,30 @@ export async function executeUnifiedDirectorTurn(
     const currentNarratorMode = selectNarratorMode(ledger);
     const voiceProfile = NARRATOR_VOICES[currentNarratorMode];
 
+    // 2.5 Calculate Fortune (Agency Injection)
+    const isCriticalSuccess = checkCriticalSuccess(ledger);
+    const fortuneInjection = isCriticalSuccess 
+      ? `**CRITICAL AGENCY EVENT:** The Subject's Hope has triggered a rare moment of clarity/luck. 
+         OVERRIDE standard Trauma physics. Allow the player's action ("${playerInput}") to SUCCEED even if stats suggest failure. 
+         Narrate this as a "Miracle of Will" or a "System Glitch".`
+      : `STANDARD PHYSICS: Apply standard Trauma/Compliance constraints. If Trauma > 90, creative resistance should fail or be twisted.`;
+
     // 3. Build unified prompt that includes BOTH prefect simulation AND narrative synthesis
     const prefectContextBlock = buildPrefectContextBlock(activePrefects, ledger, playerInput, history);
     
-    const unifiedPrompt = `
-${DIRECTOR_CORE_IDENTITY}
-
-${DIRECTOR_FACULTY_PSYCHOLOGY}
-
-# === UNIFIED TURN EXECUTION PROTOCOL ===
-
-You are executing a SINGLE INTEGRATED TURN with three phases in one inference:
-
-## PHASE 1: PREFECT AGENT SIMULATION (Role-Based Reasoning)
-${prefectContextBlock}
-
-## PHASE 2: NARRATIVE STRATEGY (I-MCTS Protocol)
-
-Before generating the scene, you must perform an INTROSPECTIVE SIMULATION (I-MCTS).
-**CRITICAL:** Do NOT skip this step. You must explicitly output the reasoning in 'thought_signature'.
-
-1. **EXPAND:** Identify 3 potential narrative branches for this turn:
-   - **Branch A: Immediate Trauma** (Kinetic escalation via Petra/Enforcer/Prefect)
-   - **Branch B: Psychological Subversion** (Gaslighting via Calista/Nurse/Prefect)
-   - **Branch C: Narrative Novelty** (Unexpected event, new mechanic, or rule shift)
-   
-2. **EVALUATE:** Score each branch (0-100) based on:
-   - **Tension:** Does it increase the 'Abyss' metric?
-   - **Coherence:** Does it fit the current 'Manara-Noir' visual state?
-   - **Castration Anxiety:** Does it threaten the 'Seat of the Ego'?
-
-3. **SELECT:** Choose the highest-scoring branch and execute it in Phase 3.
-
-## PHASE 3: NARRATIVE SYNTHESIS (Execution)
-
-Generate the final scene based on the Selected Branch from I-MCTS.
-
-**NARRATIVE VOICE MANDATE:**
-You are "The Abyss Narrator".
-CURRENT MODE: **${currentNarratorMode}**
-TONE: ${voiceProfile.tone}
-STYLE RULE: ${voiceProfile.choiceBias === 'validates_pattern_recognition' ? 'Use detached, medical terminology. Analyze the horror.' : 'Use intimate, second-person accusation. Be the voice of their failure.'}
-AUDIO MARKUP: You must also output 'audio_markup' containing the text wrapped in emotional tags (e.g. [WHISPER], [MOCKING], [FAST]) to guide the voice actor.
-
-**PLAYER INPUT:** "${playerInput}"
-**TURN:** ${graphSnapshot.global_state.turn_count}
-**LOCATION:** ${graphSnapshot.nodes['Subject_84']?.attributes?.currentLocation || "The Calibration Chamber"}
-
-**PSYCHOMETRIC LEDGER:**
-- Trauma: ${ledger.traumaLevel}/100
-- Compliance: ${ledger.complianceScore}/100
-- Hope: ${ledger.hopeLevel}/100
-- Shame: ${ledger.shamePainAbyssLevel}/100
-- Physical Integrity: ${ledger.physicalIntegrity}/100
-
-**RECENT NARRATIVE HISTORY:**
-${history.slice(-3).join('\n---\n')}
-
----
-
-# === YOUR TASK ===
-
-Generate a UNIFIED JSON output containing:
-
-1. **prefect_simulations**: Array of prefect thoughts (from Phase 1)
-   
-2. **thought_signature**: A string summarizing the I-MCTS process (Branches -> Scores -> Selection).
-   
-3. **narrative_text**: The integrated scene (from Phase 3).
-   - Weave ALL prefect actions into a single flowing narrative.
-   - Apply the "Grammar of Suffering" if trauma is inflicted.
-   - 300-500 words minimum.
-   
-4. **audio_markup**: The narrative text augmented with performance tags.
-   
-5. **somatic_state**: 
-   - impact_sensation: The Nova/immediate sensation
-   - internal_collapse: The Abdominal Void/systemic crisis
-   
-6. **visual_prompt**: A concise, descriptive string of the visual scene.
-   
-7. **choices**: 3-4 player options
-8. **ledger_update**: Numerical deltas to YandereLedger
-9. **kgot_mutations**: Graph updates (relationships, memories)
-
-**CRITICAL NARRATIVE INTEGRATION RULE:**
-Do NOT write separate sections for each prefect. Write ONE unified scene where:
-- Prefect A says/does something
-- Prefect B reacts to Prefect A
-- The player observes this dynamic
-- The Faculty (if present) moderates or escalates
-
-Execute with maximum depth and psychological precision.
-`;
+    // We use the Master Template which now includes the Aesthete's rules
+    const unifiedPrompt = DIRECTOR_MASTER_PROMPT_TEMPLATE
+      .replace('{{playerInput}}', playerInput)
+      .replace('{{turn}}', graphSnapshot.global_state.turn_count.toString())
+      .replace('{{location}}', graphSnapshot.nodes['Subject_84']?.attributes?.currentLocation || "The Calibration Chamber")
+      .replace('{{traumaLevel}}', ledger.traumaLevel.toString())
+      .replace('{{complianceScore}}', ledger.complianceScore.toString())
+      .replace('{{hopeLevel}}', ledger.hopeLevel.toString())
+      .replace('{{shamePainAbyssLevel}}', ledger.shamePainAbyssLevel.toString())
+      .replace('{{physicalIntegrity}}', ledger.physicalIntegrity.toString())
+      .replace('{{prefectIntents}}', prefectContextBlock) // Using the block we built
+      .replace('{{history}}', history.slice(-3).join('\n---\n'))
+      .replace('{{fortuneInjection}}', fortuneInjection); // Inject Agency check
     
     const ai = getAI();
     const response = await callGeminiWithRetry<GenerateContentResponse>(
@@ -330,35 +294,14 @@ Execute with maximum depth and psychological precision.
     let unifiedOutput: UnifiedDirectorOutput;
 
     try {
-      unifiedOutput = JSON.parse(outputText);
+      unifiedOutput = fuzzyJsonParse(outputText);
     } catch (parseError) {
       console.error("Failed to parse Unified Director output JSON:", parseError);
       throw new Error(`Invalid JSON response from AI: ${outputText.substring(0, 200)}...`);
     }
 
-    // 3.5. Aesthete Critique & Rewrite
-    if (unifiedOutput.narrative_text) {
-      try {
-        const criticContext = `
-          Active Prefects: ${activePrefects.map(p => p.archetype).join(', ')}.
-          Player Trauma: ${ledger.traumaLevel}.
-          Location: ${graphSnapshot.nodes['Subject_84']?.attributes?.currentLocation || "Unknown"}.
-        `;
-
-        const critique = await narrativeQualityEngine.critiqueWithAesthete(
-          unifiedOutput.narrative_text,
-          criticContext
-        );
-
-        if (critique.score < 85 && critique.rewrite_suggestion) {
-          console.log(`[Unified Director] 🎨 Aesthete Rewrite Triggered (Score: ${critique.score}). Violations: ${critique.violations.join(', ')}`);
-          unifiedOutput.narrative_text = critique.rewrite_suggestion;
-          unifiedOutput.thought_signature += ` | [AESTHETE REWRITE: ${critique.violations[0] || "Tone Correction"}]`;
-        }
-      } catch (e) {
-        console.warn("[Unified Director] Aesthete critique bypassed:", e);
-      }
-    }
+    // NOTE: Aesthete critique call has been removed. 
+    // The prompt now enforces self-critique in the 'thought_signature'.
     
     // 4. Apply mutations
     if (unifiedOutput.kgot_mutations) {
@@ -386,7 +329,8 @@ ${unifiedOutput.narrative_text}
       state_updates: unifiedOutput.ledger_update,
       audioCues: unifiedOutput.audio_cues,
       psychosisText: unifiedOutput.psychosis_text,
-      prefectSimulations: unifiedOutput.prefect_simulations
+      prefectSimulations: unifiedOutput.prefect_simulations,
+      audioMarkup: unifiedOutput.audio_markup
     };
     
   } catch (error: any) {

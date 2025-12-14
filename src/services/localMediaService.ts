@@ -5,23 +5,42 @@ const pendingRequests = new Map<string, { resolve: Function, reject: Function }>
 
 function getWorker() {
     if (!mediaWorker) {
-        // Initialize worker using standard Vite syntax
-        mediaWorker = new Worker(new URL('../workers/media.worker.ts', import.meta.url), { type: 'module' });
-        
-        mediaWorker.onmessage = (e) => {
-            const { type, id, payload, error } = e.data;
+        // Safe check for import.meta.url availability
+        const metaUrl = import.meta.url;
+        if (!metaUrl) {
+            console.error("[LocalMediaService] Worker initialization failed: import.meta.url is undefined");
+            return null;
+        }
+
+        try {
+            // Initialize worker using standard Vite syntax
+            mediaWorker = new Worker(new URL('../workers/media.worker.ts', metaUrl), { type: 'module' });
             
-            if (type === 'RESULT' && pendingRequests.has(id)) {
-                pendingRequests.get(id)!.resolve(payload);
-                pendingRequests.delete(id);
-            } else if (type === 'ERROR' && pendingRequests.has(id)) {
-                pendingRequests.get(id)!.reject(new Error(error));
-                pendingRequests.delete(id);
-            } else if (type === 'progress') {
-                // Optional: handle progress updates
-                // console.debug('[Worker Progress]', payload);
-            }
-        };
+            mediaWorker.onmessage = (e) => {
+                const { type, id, payload, error } = e.data;
+                
+                if (type === 'RESULT' && pendingRequests.has(id)) {
+                    pendingRequests.get(id)!.resolve(payload);
+                    pendingRequests.delete(id);
+                } else if (type === 'ERROR' && pendingRequests.has(id)) {
+                    pendingRequests.get(id)!.reject(new Error(error));
+                    pendingRequests.delete(id);
+                } else if (type === 'progress') {
+                    // Optional: handle progress updates
+                    // console.debug('[Worker Progress]', payload);
+                }
+            };
+            
+            mediaWorker.onerror = (e) => {
+                console.error("[LocalMediaService] Worker Error:", e);
+                // Clean up worker on critical error
+                mediaWorker = null;
+            };
+
+        } catch (e) {
+            console.error("[LocalMediaService] Failed to construct worker:", e);
+            mediaWorker = null;
+        }
     }
     return mediaWorker;
 }
@@ -250,6 +269,14 @@ export async function generateLocalImage(prompt: string): Promise<string> {
  */
 export async function generateLocalSpeech(text: string): Promise<{ audioData: string; duration: number }> {
     const worker = getWorker();
+    
+    // If worker failed to initialize, return empty result to skip processing gracefully
+    if (!worker) {
+        console.warn("[LocalMediaService] Skipping speech gen: Worker unavailable.");
+        // Return valid but empty object to prevent downstream errors
+        return { audioData: "", duration: 0 };
+    }
+
     const id = crypto.randomUUID();
 
     return new Promise((resolve, reject) => {
@@ -279,6 +306,11 @@ export async function generateLocalSpeech(text: string): Promise<{ audioData: st
  */
 export async function analyzeLocalSentiment(text: string): Promise<{ label: string, score: number }> {
     const worker = getWorker();
+    
+    if (!worker) {
+        return { label: 'UNKNOWN', score: 0 };
+    }
+
     const id = crypto.randomUUID();
 
     return new Promise((resolve, reject) => {

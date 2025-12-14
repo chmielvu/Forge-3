@@ -252,12 +252,14 @@ export class KGotController {
     const key = `${sourceId}_${targetId}_${relation}`;
     try {
         // DEDUPLICATION & DECAY LOGIC
-        // Check for existing similar edge types between these nodes
+        // Check for existing similar edge types between these nodes to prevent bloating.
+        // We filter for edges of the same semantic 'type' (e.g. 'RELATIONSHIP') but potentially different labels.
         const existingEdges = this.graph.edges(sourceId, targetId).filter(e => 
             this.graph.getEdgeAttribute(e, 'type') === (meta?.type || 'RELATIONSHIP')
         );
         
-        // Decay existing edges to represent memory fade/focus shift
+        // Decay existing edges to represent memory fade/focus shift.
+        // This ensures that the most recent edge is the dominant one, while older ones fade.
         existingEdges.forEach(e => {
             const currentWeight = this.graph.getEdgeAttribute(e, 'weight');
             this.graph.setEdgeAttribute(e, 'weight', currentWeight * 0.8);
@@ -272,6 +274,7 @@ export class KGotController {
                 meta: meta || { tension: 0 }
             });
         } else {
+            // If the exact same edge exists, we refresh its weight (superseding the decay above)
             this.graph.setEdgeAttribute(key, 'weight', weight);
             if (meta) {
                 const currentMeta = this.graph.getEdgeAttribute(key, 'meta');
@@ -279,11 +282,13 @@ export class KGotController {
             }
         }
         
-        // Update Activity Timestamp for Magellan
+        // Update Activity Timestamp for Magellan & Centrality Analysis
+        const turn = this.globalState.turn_count;
         if ((this.graph as any).hasNode(sourceId)) {
-            this.graph.mergeNodeAttributes(sourceId, {
-                last_active_turn: this.globalState.turn_count
-            });
+            this.graph.mergeNodeAttributes(sourceId, { last_active_turn: turn });
+        }
+        if ((this.graph as any).hasNode(targetId)) {
+            this.graph.mergeNodeAttributes(targetId, { last_active_turn: turn });
         }
 
     } catch (e) {
@@ -299,6 +304,44 @@ export class KGotController {
         }
     } catch (e) {
         console.error(`[KGot] Error removing edges between ${sourceId} and ${targetId}:`, e);
+    }
+  }
+
+  /**
+   * Performs a graph hygiene pass to remove low-weight edges.
+   * Uses centrality analysis to protect edges connected to key narrative figures.
+   */
+  public pruneGraph(weightThreshold: number = 0.1): void {
+    // 1. Calculate Centrality to protect key nodes (e.g. The Provost)
+    let scores: Record<string, number> = {};
+    try {
+        scores = pagerank(this.graph);
+    } catch(e) {
+        console.warn("[KGot] Prune: PageRank failed, proceeding without centrality protection.");
+    }
+
+    const edgesToRemove: string[] = [];
+    
+    // 2. Identify weak edges
+    this.graph.forEachEdge((edge, attrs, source, target) => {
+        const w = attrs.weight as number;
+        // Protect edges connected to high centrality nodes
+        const importance = (scores[source] || 0) + (scores[target] || 0);
+        
+        // Dynamic threshold: Important nodes keep weaker edges longer
+        // If importance is high (e.g. 0.1), threshold effectively becomes lower.
+        // e.g., if importance is 0.1, threshold = 0.1 * (1 - 0.5) = 0.05.
+        const effectiveThreshold = weightThreshold * (1.0 - Math.min(importance * 5, 0.8));
+        
+        if (w < effectiveThreshold) {
+            edgesToRemove.push(edge);
+        }
+    });
+
+    // 3. Remove them
+    edgesToRemove.forEach(e => this.graph.dropEdge(e));
+    if (edgesToRemove.length > 0) {
+        console.log(`[KGot] Pruned ${edgesToRemove.length} weak edges. Centrality protection active.`);
     }
   }
 
@@ -403,6 +446,11 @@ export class KGotController {
         console.error(`[KGot] Mutation ${idx} (${operation}) Execution Failed:`, e.message || e);
       }
     });
+    
+    // Auto-prune periodically (every ~5 turns or based on mutation count) to keep graph performant
+    if (Math.random() < 0.2) {
+        this.pruneGraph();
+    }
   }
 
   // --- Advanced Analysis (Graphology) ---

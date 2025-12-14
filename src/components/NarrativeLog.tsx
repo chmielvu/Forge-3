@@ -21,19 +21,38 @@ interface Props {
   ledger: YandereLedger;
 }
 
-const Typewriter: React.FC<{ text: string; onTyping: () => void; isTrauma: boolean }> = ({ text, onTyping, isTrauma }) => {
+interface TypewriterProps {
+    text: string;
+    onTyping: () => void;
+    isTrauma: boolean;
+    audioDuration?: number;
+    isAudioPlaying?: boolean;
+}
+
+const Typewriter: React.FC<TypewriterProps> = ({ text, onTyping, isTrauma, audioDuration, isAudioPlaying }) => {
   const [displayed, setDisplayed] = useState('');
   
   useEffect(() => {
     let idx = 0;
+    
+    // Calculate speed based on audio duration if available and playing
+    let speed = isTrauma ? 15 : 5; // Base speed (ms per char)
+    
+    if (isAudioPlaying && audioDuration && audioDuration > 0) {
+        // Sync to audio: duration (ms) / char count
+        // We subtract a small buffer to ensure text finishes slightly before audio
+        speed = (audioDuration * 1000) / (text.length + 10);
+    }
+
     const interval = setInterval(() => {
       setDisplayed(text.substring(0, idx + 1));
       onTyping();
       idx++;
       if (idx > text.length) clearInterval(interval);
-    }, isTrauma ? 15 : 5); // Trauma text types slower, more painfully
+    }, speed);
+    
     return () => clearInterval(interval);
-  }, [text, onTyping, isTrauma]);
+  }, [text, onTyping, isTrauma, audioDuration, isAudioPlaying]);
   
   const safeHTML = displayed
     .replace(/\*(.*?)\*/g, '<em class="text-amber-400 not-italic font-semibold text-shadow-sm">$1</em>')
@@ -93,6 +112,7 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
   
   // Access timeline directly from store to link logs to media
   const multimodalTimeline = useGameStore(s => s.multimodalTimeline);
+  const audioPlayback = useGameStore(s => s.audioPlayback);
 
   const scrollToBottom = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -154,6 +174,9 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
             // Find corresponding turn for media
             const turn = multimodalTimeline.find(t => t.id === log.id);
 
+            // Determine if this log's audio is currently playing
+            const isPlaying = audioPlayback.isPlaying && audioPlayback.currentPlayingTurnId === log.id;
+
             // Apply commentary only if it's a narrative log
             const enhancedContent = log.type === 'narrative' 
               ? injectNarratorCommentary(log.content, narratorMode, ledger)
@@ -200,7 +223,13 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
                       className={`text-lg md:text-xl leading-relaxed drop-shadow-md ${isPsychosis ? 'text-stone-300' : 'text-stone-200'}`} 
                       style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
                     >
-                      <Typewriter text={enhancedContent} onTyping={scrollToBottom} isTrauma={ledger.traumaLevel > 90} />
+                      <Typewriter 
+                        text={enhancedContent} 
+                        onTyping={scrollToBottom} 
+                        isTrauma={ledger.traumaLevel > 90}
+                        audioDuration={turn?.audioDuration}
+                        isAudioPlaying={isPlaying}
+                      />
                     </p>
                     {/* Inline Media Preview */}
                     <InlineMediaPreview turn={turn} />

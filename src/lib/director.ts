@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { KnowledgeGraph } from "./types/kgot";
 import { KGotController } from "../controllers/KGotController";
@@ -26,12 +27,20 @@ const getApiKey = (): string => {
 
 const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
+// ==================== HELPERS ====================
+
+function checkCriticalSuccess(ledger: YandereLedger): boolean {
+    // Base 5% chance, +1% for every 10 Hope points
+    const chance = 0.05 + (ledger.hopeLevel / 1000);
+    return Math.random() < chance;
+}
+
 // ==================== SCHEMAS ====================
 
 const DirectorOutputSchema = {
   type: Type.OBJECT,
   properties: {
-    thought_signature: { type: Type.STRING, description: "I-MCTS Result: The chosen narrative path (Trauma, Subversion, or Novelty) and why." },
+    thought_signature: { type: Type.STRING, description: "I-MCTS Result: The chosen narrative path (Trauma, Subversion, or Novelty) and why. MUST include internal critique reasoning." },
     
     somatic_state: {
       type: Type.OBJECT,
@@ -146,7 +155,15 @@ export async function executeDirectorTurn(
           }).join('\n')
         : "> No active Prefect interventions this turn. Focus on Environmental/Faculty pressure.";
 
-    // 5. Construct the Master System Prompt (v3.7 Enhanced)
+    // 5. Fortune Injection (Agency)
+    const isCriticalSuccess = checkCriticalSuccess(ledger);
+    const fortuneInjection = isCriticalSuccess 
+      ? `**CRITICAL AGENCY EVENT:** The Subject's Hope has triggered a rare moment of clarity/luck. 
+         OVERRIDE standard Trauma physics. Allow the player's action ("${playerInput}") to SUCCEED even if stats suggest failure. 
+         Narrate this as a "Miracle of Will" or a "System Glitch".`
+      : `STANDARD PHYSICS: Apply standard Trauma/Compliance constraints. If Trauma > 90, creative resistance should fail or be twisted.`;
+
+    // 6. Construct the Master System Prompt (v3.7 Enhanced)
     const prompt = DIRECTOR_MASTER_PROMPT_TEMPLATE
       .replace('{{playerInput}}', playerInput)
       .replace('{{turn}}', graphSnapshot.global_state.turn_count.toString())
@@ -157,9 +174,10 @@ export async function executeDirectorTurn(
       .replace('{{shamePainAbyssLevel}}', ledger.shamePainAbyssLevel.toString())
       .replace('{{physicalIntegrity}}', ledger.physicalIntegrity.toString())
       .replace('{{prefectIntents}}', prefectContext)
-      .replace('{{history}}', history.slice(-3).join('\n---\n'));
+      .replace('{{history}}', history.slice(-3).join('\n---\n'))
+      .replace('{{fortuneInjection}}', fortuneInjection);
 
-    // 6. Execution (Gemini 2.5 Flash for System 2 simulation)
+    // 7. Execution (Gemini 2.5 Flash for System 2 simulation)
     const ai = getAI();
     const response = await callGeminiWithRetry<GenerateContentResponse>(
       () => ai.models.generateContent({
@@ -175,9 +193,22 @@ export async function executeDirectorTurn(
     );
 
     const outputText = response.text || "{}";
-    const directorOutput = JSON.parse(outputText);
+    let directorOutput;
+    try {
+        directorOutput = JSON.parse(outputText);
+    } catch (e) {
+        console.error("Director JSON Parse Error:", e);
+        // Attempt basic cleanup
+        const match = outputText.match(/\{[\s\S]*\}/);
+        if (match) {
+            directorOutput = JSON.parse(match[0]);
+        } else {
+            throw new Error("Invalid JSON from Director");
+        }
+    }
 
-    // --- HEURISTIC QUALITY ANALYSIS (Fast Layer) ---
+    // --- HEURISTIC QUALITY ANALYSIS (Fast Layer Only) ---
+    // We strictly use local heuristics here. The deep critique is now handled via Chain of Thought in the main prompt.
     const qualityAnalysis = narrativeQualityEngine.analyzeNarrative(
       directorOutput.narrative_text,
       ledger
@@ -185,37 +216,18 @@ export async function executeDirectorTurn(
 
     if (!qualityAnalysis.passesQuality) {
       console.warn("[Director] Narrative Heuristics Warnings:", qualityAnalysis.issues.map(i => i.message));
-      // Attempt fast heuristic auto-fix (e.g. padding length, adding atmopshere)
+      // Attempt fast heuristic auto-fix (e.g. padding length, adding atmosphere)
       directorOutput.narrative_text = narrativeQualityEngine.autoFixNarrative(
         directorOutput.narrative_text,
         qualityAnalysis.issues,
         { ledger } as GameState
       );
     }
-
-    // --- THE AESTHETE: Chain of Draft Critique (Slow Layer) ---
-    console.log("🎨 [The Aesthete] Critiquing Director Output...");
-    const critique = await narrativeQualityEngine.critiqueWithAesthete(
-        directorOutput.narrative_text, 
-        `Subject Trauma: ${ledger.traumaLevel}. Input: ${playerInput}`
-    );
-
-    if (critique.score < 80 && critique.rewrite_suggestion) {
-        console.warn(`[The Aesthete] REJECTED (Score ${critique.score}). Rewriting...`);
-        console.warn(`[Violations] ${critique.violations.join(', ')}`);
-        
-        // Apply the Rewrite
-        directorOutput.narrative_text = critique.rewrite_suggestion;
-        directorOutput.thought_signature += ` [AESTHETE INTERVENTION: ${critique.violations.join(', ')}]`;
-    } else {
-        console.log(`[The Aesthete] APPROVED (Score ${critique.score}).`);
-    }
     
     // Record for history tracking
     narrativeQualityEngine.recordNarrative(directorOutput.narrative_text);
-    // --------------------------------------------
 
-    // 7. Apply Mutations
+    // 8. Apply Mutations
     if (directorOutput.kgot_mutations) {
         const mutations = directorOutput.kgot_mutations.map((m: any) => {
             if (m.operation === 'update_node' && m.params) {
@@ -237,14 +249,14 @@ export async function executeDirectorTurn(
 
     // Combine Somatic + Narrative for the log
     const combinedNarrative = `
-    <span class="somatic-nova">${directorOutput.somatic_state?.impact_sensation || ""}</span>
-    
-    <span class="somatic-void">${directorOutput.somatic_state?.internal_collapse || ""}</span>
-    
-    ${directorOutput.narrative_text}
-    `;
+<span class="somatic-nova">${directorOutput.somatic_state?.impact_sensation || ""}</span>
 
-    // 8. Return Result
+<span class="somatic-void">${directorOutput.somatic_state?.internal_collapse || ""}</span>
+
+${directorOutput.narrative_text}
+`;
+
+    // 9. Return Result
     return {
       narrative: combinedNarrative, 
       visualPrompt: directorOutput.visual_prompt || "Darkness.",

@@ -231,7 +231,8 @@ export const enqueueTurnForMedia = (
       turnId: turn.id,
       type: 'audio',
       prompt: turn.text,
-      narrativeText: turn.text,
+      // Priority: SSML Markup > Raw Narrative > Prompt Text
+      narrativeText: turn.metadata?.audioMarkup || turn.text,
       target: target,
       previousTurn: previousTurn,
     });

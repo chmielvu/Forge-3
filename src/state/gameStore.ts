@@ -193,7 +193,21 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       ...createMultimodalSlice(set, get, api),
       ...createSubjectSlice(set, get, api),
 
-      addLog: (log) => set((state) => ({ logs: [...state.logs, log] })),
+      addLog: (log) => set((state) => {
+          // MEMORY MANAGEMENT: Prune old logs if they exceed threshold
+          // This prevents the application state from bloating indefinitely
+          const MAX_LOGS = 50;
+          let updatedLogs = [...state.logs, log];
+          
+          if (updatedLogs.length > MAX_LOGS) {
+              // Keep initial system logs (0-1) and the last 40 logs
+              // This is a simple sliding window strategy
+              const systemLogs = updatedLogs.filter(l => l.type === 'system' && l.id.includes('init'));
+              const recentLogs = updatedLogs.slice(-(MAX_LOGS - systemLogs.length));
+              updatedLogs = [...systemLogs, ...recentLogs];
+          }
+          return { logs: updatedLogs };
+      }),
       setLogs: (logs) => set({ logs }),
       setChoices: (choices) => set({ choices }),
       setThinking: (isThinking) => set({ isThinking }),
@@ -247,11 +261,16 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           // 2. Register Multimodal Turn
           let newTurnId: string | null = null;
           if (result.narrative) {
-              const newTurn = get().registerTurn(result.narrative, result.visualPrompt, {
-                  ledgerSnapshot: result.state_updates ? { ...get().gameState.ledger, ...result.state_updates } : get().gameState.ledger,
-                  directorDebug: result.thoughtProcess,
-                  activeCharacters: typeof primaryActor !== 'string' ? [primaryActor.id] : [primaryActor]
-              });
+              const newTurn = get().registerTurn(
+                  result.narrative, 
+                  result.visualPrompt, 
+                  result.audioMarkup, 
+                  {
+                    ledgerSnapshot: result.state_updates ? { ...get().gameState.ledger, ...result.state_updates } : get().gameState.ledger,
+                    directorDebug: result.thoughtProcess,
+                    activeCharacters: typeof primaryActor !== 'string' ? [primaryActor.id] : [primaryActor]
+                  }
+              );
               newTurnId = newTurn.id;
               
               // Trigger media generation pipeline
@@ -262,30 +281,31 @@ export const useGameStore = create<GameStoreWithPrefects>()(
               );
           }
 
-          set((state) => {
-              const newLogs = [...state.logs];
-              
-              if (result.thoughtProcess) {
-                  newLogs.push({ id: `thought-${Date.now()}`, type: 'thought', content: result.thoughtProcess });
-              }
-              
-              if (result.narrative) {
-                  newLogs.push({ 
-                      id: newTurnId || `narrative-${Date.now()}`, 
-                      type: 'narrative', 
-                      content: result.narrative, 
-                      visualContext: result.visualPrompt 
-                  });
-              }
+          // State updates via setter to trigger pruning logic inside addLog
+          // We can't use simple spread here because addLog contains logic
+          
+          if (result.thoughtProcess) {
+              get().addLog({ id: `thought-${Date.now()}`, type: 'thought', content: result.thoughtProcess });
+          }
+          
+          if (result.narrative) {
+              get().addLog({ 
+                  id: newTurnId || `narrative-${Date.now()}`, 
+                  type: 'narrative', 
+                  content: result.narrative, 
+                  visualContext: result.visualPrompt 
+              });
+          }
 
-              if (result.psychosisText) {
-                  newLogs.push({
-                      id: `psychosis-${Date.now()}`,
-                      type: 'psychosis',
-                      content: result.psychosisText
-                  });
-              }
-              
+          if (result.psychosisText) {
+              get().addLog({
+                  id: `psychosis-${Date.now()}`,
+                  type: 'psychosis',
+                  content: result.psychosisText
+              });
+          }
+
+          set((state) => {
               let nextKgot = state.kgot;
               if (result.updatedGraph) {
                   nextKgot = result.updatedGraph;
@@ -304,7 +324,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
               return {
                   kgot: nextKgot,
                   choices: result.choices || [],
-                  logs: newLogs,
+                  // logs are updated via addLog above
                   isThinking: false,
                   gameState: {
                       ...state.gameState,

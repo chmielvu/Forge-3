@@ -36,7 +36,7 @@ export const createMultimodalSlice: StateCreator<
     hasUserInteraction: false, // Must be true for browser autoplay
   },
 
-  registerTurn: (text, visualPrompt, metadata) => {
+  registerTurn: (text, visualPrompt, audioMarkup, metadata) => {
     // Access root state and safely drill down to gameState
     const state = get(); 
     // Fallback to INITIAL_LEDGER if ledger is not yet ready to prevent undefined access
@@ -60,6 +60,7 @@ export const createMultimodalSlice: StateCreator<
         tags: metadata?.tags || [],
         simulationLog: metadata?.simulationLog,
         directorDebug: metadata?.directorDebug,
+        audioMarkup: audioMarkup || undefined,
       },
     };
     set((state) => ({

@@ -82,6 +82,7 @@ export interface MultimodalTurn {
     tags?: string[];
     simulationLog?: string;
     directorDebug?: string;
+    audioMarkup?: string;
   };
 }
 
@@ -123,7 +124,7 @@ export interface MultimodalSliceExports {
     autoAdvance: boolean;
     hasUserInteraction: boolean;
   };
-  registerTurn: (text: string, visualPrompt: string, metadata?: any) => MultimodalTurn;
+  registerTurn: (text: string, visualPrompt: string, audioMarkup?: string, metadata?: any) => MultimodalTurn;
   setCurrentTurn: (turnId: string) => void;
   goToNextTurn: () => void;
   goToPreviousTurn: () => void;
