@@ -1,6 +1,8 @@
 
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { VISUAL_MANDATE, VIDEO_MANDATE } from '../config/visualMandate';
+import { useGameStore } from '../state/gameStore'; 
+import { generateLocalImage, generateLocalSpeech, distortLocalImage } from './localMediaService';
 
 // Robust API Key Retrieval
 const getApiKey = (): string => {
@@ -20,6 +22,15 @@ const getApiKey = (): string => {
 };
 
 const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
+
+// --- HELPER: CHECK MODE ---
+function isLiteMode(): boolean {
+  try {
+    return useGameStore.getState().isLiteMode;
+  } catch(e) {
+    return false;
+  }
+}
 
 // --- RATE LIMITING QUEUE WITH CIRCUIT BREAKER ---
 class RequestQueue {
@@ -179,6 +190,12 @@ async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES):
  * Generate Image
  */
 export async function generateImageAction(prompt: string): Promise<string | undefined> {
+  // LITE MODE CHECK
+  if (isLiteMode()) {
+    console.log("[MediaService] Lite Mode: Delegating to Local Canvas");
+    return generateLocalImage(prompt);
+  }
+
   const apiKey = getApiKey();
   if (!apiKey) throw new MediaGenerationError('AUTH', "API key is missing.");
 
@@ -234,6 +251,12 @@ export async function generateImageAction(prompt: string): Promise<string | unde
  * Generate Speech
  */
 export async function generateSpeechAction(text: string, voiceName: string): Promise<{ audioData: string; duration: number } | undefined> {
+  // LITE MODE CHECK
+  if (isLiteMode()) {
+    console.log("[MediaService] Lite Mode: Delegating to Local Transformers.js");
+    return generateLocalSpeech(text);
+  }
+
   const apiKey = getApiKey();
   if (!apiKey) throw new MediaGenerationError('AUTH', "API key is missing.");
 
@@ -273,6 +296,12 @@ export async function generateVideoAction(
   visualPrompt: string, 
   aspectRatio: '16:9' | '9:16'
 ): Promise<string | undefined> {
+  // LITE MODE CHECK
+  if (isLiteMode()) {
+    console.warn("[MediaService] Lite Mode: Video generation skipped to save resources.");
+    return undefined; 
+  }
+
   const apiKey = getApiKey();
   if (!apiKey) return undefined;
 
@@ -353,6 +382,11 @@ export async function generateVideoAction(
  * Distort Image
  */
 export async function distortImageAction(imageB64: string, instruction: string): Promise<string | undefined> {
+  // LITE MODE CHECK
+  if (isLiteMode()) {
+    return distortLocalImage(imageB64);
+  }
+
   const apiKey = getApiKey();
   if (!apiKey) return undefined;
 

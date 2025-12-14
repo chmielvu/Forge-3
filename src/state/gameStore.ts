@@ -162,6 +162,11 @@ export interface GameStoreWithPrefects extends CombinedGameStoreState {
     updatePrefects: (prefects: PrefectDNA[]) => void;
     narrativeClusters: Record<string, string[]>; // New: Stores Node2Vec Clusters
     analyzeGraph: () => void; // New: Triggers analysis
+    
+    // Lite Mode Support
+    isLiteMode: boolean;
+    setLiteMode: (isLite: boolean) => void;
+    startSession: (isLiteMode?: boolean) => Promise<void>; 
 }
 
 export const useGameStore = create<GameStoreWithPrefects>()(
@@ -174,6 +179,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       prefects: [], 
       sessionActive: false, // Default to false
       narrativeClusters: {},
+      isLiteMode: false,
       
       isThinking: false,
       isMenuOpen: false,
@@ -195,6 +201,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       setGrimoireOpen: (isGrimoireOpen) => set({ isGrimoireOpen }),
       setDevOverlayOpen: (isDevOverlayOpen) => set({ isDevOverlayOpen }),
       updatePrefects: (prefects) => set({ prefects }),
+      setLiteMode: (isLiteMode) => set({ isLiteMode }),
 
       updateGameState: (updates) => set((state) => ({
         gameState: { ...state.gameState, ...updates }
@@ -289,6 +296,11 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                  nextLedger = updateLedgerHelper(state.gameState.ledger, result.state_updates);
               }
 
+              // Determine next turn count (Sync with KGoT or increment)
+              const nextTurn = nextKgot.global_state?.turn_count 
+                ? nextKgot.global_state.turn_count 
+                : (state.gameState.turn + 1);
+
               return {
                   kgot: nextKgot,
                   choices: result.choices || [],
@@ -296,13 +308,11 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                   isThinking: false,
                   gameState: {
                       ...state.gameState,
-                      ledger: nextLedger
+                      ledger: nextLedger,
+                      turn: nextTurn // Update local turn count
                   }
               };
           });
-          
-          // Trigger async graph analysis
-          setTimeout(() => get().analyzeGraph(), 100);
       },
 
       applyDirectorUpdates: (response: any) => {
@@ -337,6 +347,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             2 
           );
           
+          // Note: Text generation still uses cloud LLM unless refactored further. 
+          // Lite Mode currently focuses on Local Media (Images/Audio).
           const result = await executeUnifiedDirectorTurn(
             input,
             history,
@@ -435,13 +447,12 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           executedCode: undefined,
           lastSimulationLog: undefined,
           lastDirectorDebug: undefined,
+          // Preserve isLiteMode setting or reset? Assuming preserve.
         });
-        
-        // Removed auto-start. User must click enter again.
       },
 
-      startSession: async () => {
-        set({ sessionActive: true }); // Activate session
+      startSession: async (isLiteMode = false) => {
+        set({ sessionActive: true, isLiteMode }); // Activate session with mode preference
         const state = get();
         
         if (state.prefects.length === 0) {
@@ -492,7 +503,25 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         prefects: state.prefects,
         subjects: state.subjects,
         sessionActive: state.sessionActive,
+        isLiteMode: state.isLiteMode,
       }),
     }
   )
 );
+
+// --- Reactive Subscriptions ---
+
+let analysisTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Automatically trigger graph analysis whenever the Knowledge Graph (kgot) updates
+useGameStore.subscribe((state, prevState) => {
+  if (state.kgot !== prevState.kgot) {
+    if (analysisTimer) clearTimeout(analysisTimer);
+    
+    // Debounce analysis (2s) to prevent computation during rapid updates
+    analysisTimer = setTimeout(() => {
+      console.log("[GameStore] 🧠 Reactive Graph Analysis Triggered (KGOT Mutation)");
+      useGameStore.getState().analyzeGraph();
+    }, 2000);
+  }
+});

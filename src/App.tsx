@@ -10,11 +10,11 @@ import LedgerDisplay from './components/LedgerDisplay';
 import ActionWheel from './components/ActionWheel';
 import PrefectLeaderboard from './components/PrefectLeaderboard';
 import SubjectPanel from './components/SubjectPanel';
-import { Loader2, Monitor, LayoutTemplate, Film, Power, Skull, Brain } from 'lucide-react';
+import { Loader2, Monitor, LayoutTemplate, Film, Power, Skull, Brain, Zap } from 'lucide-react';
 
 type ViewMode = 'CINEMATIC' | 'ANALYTICAL';
 
-const StartScreen = ({ onStart }: { onStart: () => void }) => (
+const StartScreen = ({ onStart }: { onStart: (liteMode: boolean) => void }) => (
   <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#050505] text-[#f5f5f4] animate-fade-in font-serif">
     {/* Decorative Elements */}
     <div className="absolute inset-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] pointer-events-none"></div>
@@ -37,20 +37,39 @@ const StartScreen = ({ onStart }: { onStart: () => void }) => (
         Welcome to the calibration."
       </p>
 
-      <button 
-        onClick={onStart}
-        className="group relative px-12 py-4 bg-transparent border border-red-900/30 hover:border-red-600 hover:bg-red-950/20 transition-all duration-700 ease-out"
-      >
-        <span className="absolute inset-0 w-full h-full bg-red-900/5 filter blur-xl group-hover:blur-2xl transition-all duration-700 opacity-0 group-hover:opacity-100"></span>
-        <div className="flex items-center gap-3 relative z-10">
-          <Power size={18} className="text-red-500 group-hover:text-red-400 transition-colors" />
-          <span className="font-mono text-sm tracking-[0.4em] uppercase text-red-500 group-hover:text-red-200 transition-colors">
-            Enter The Forge
-          </span>
-        </div>
-      </button>
+      <div className="flex flex-col md:flex-row gap-6 justify-center items-center mt-8">
+        {/* Full Forge Button */}
+        <button 
+          onClick={() => onStart(false)}
+          className="group relative px-12 py-4 bg-transparent border border-red-900/30 hover:border-red-600 hover:bg-red-950/20 transition-all duration-700 ease-out"
+        >
+          <span className="absolute inset-0 w-full h-full bg-red-900/5 filter blur-xl group-hover:blur-2xl transition-all duration-700 opacity-0 group-hover:opacity-100"></span>
+          <div className="flex items-center gap-3 relative z-10">
+            <Power size={18} className="text-red-500 group-hover:text-red-400 transition-colors" />
+            <span className="font-mono text-sm tracking-[0.4em] uppercase text-red-500 group-hover:text-red-200 transition-colors">
+              Enter The Forge
+            </span>
+          </div>
+        </button>
+
+        {/* Local Forge Button */}
+        <button 
+          onClick={() => onStart(true)}
+          className="group relative px-8 py-4 bg-transparent border border-emerald-900/30 hover:border-emerald-600 hover:bg-emerald-950/20 transition-all duration-700 ease-out"
+        >
+          <div className="flex items-center gap-3 relative z-10">
+            <Zap size={18} className="text-emerald-500 group-hover:text-emerald-400 transition-colors" />
+            <span className="font-mono text-sm tracking-[0.2em] uppercase text-emerald-500 group-hover:text-emerald-200 transition-colors">
+              Local Mode
+            </span>
+          </div>
+          <div className="absolute top-full mt-2 w-full text-center">
+             <span className="text-[10px] text-emerald-800/60 font-mono tracking-wider">NO API COST (MEDIA)</span>
+          </div>
+        </button>
+      </div>
       
-      <div className="mt-16 font-mono text-[10px] text-stone-700 tracking-widest uppercase">
+      <div className="mt-20 font-mono text-[10px] text-stone-700 tracking-widest uppercase">
         Neuro-Symbolic Narrative Engine v3.7 <br/>
         <span className="text-red-900/50">Gemini 2.5 Flash / Gemini 3 Pro</span>
       </div>
@@ -68,7 +87,8 @@ export default function App() {
     choices,
     prefects,
     startSession,
-    sessionActive
+    sessionActive,
+    isLiteMode
   } = useGameStore();
 
   const [viewMode, setViewMode] = useState<ViewMode>('CINEMATIC');
@@ -77,12 +97,21 @@ export default function App() {
   // Removed useEffect for auto-start
 
   if (!sessionActive) {
-    return <StartScreen onStart={startSession} />;
+    return <StartScreen onStart={(lite) => startSession(lite)} />;
   }
 
   return (
     <div className="relative w-screen h-screen bg-[#050505] text-[#f5f5f4] overflow-hidden font-serif selection:bg-red-900 selection:text-white animate-fade-in">
       
+      {/* Indicator for Lite Mode */}
+      {isLiteMode && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 px-3 py-1 bg-emerald-900/20 border border-emerald-500/20 rounded-full backdrop-blur-md pointer-events-none">
+           <span className="text-[10px] font-mono text-emerald-400 tracking-widest uppercase flex items-center gap-2">
+             <Zap size={10} /> LOCAL FORGE ACTIVE
+           </span>
+        </div>
+      )}
+
       {/* LAYER 0: Background Media (The World) */}
       <div className={`absolute inset-0 z-0 transition-all duration-700 ${viewMode === 'ANALYTICAL' ? 'opacity-30 blur-sm scale-[1.02]' : 'opacity-60 scale-100'}`}>
          <MediaPanel variant="background" className="w-full h-full" />

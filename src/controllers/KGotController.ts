@@ -3,6 +3,7 @@ import Graph from 'graphology';
 import { z } from 'zod';
 import { KnowledgeGraph, KGotNode, KGotEdge, NodeType, Memory } from '../lib/types/kgot';
 import { YandereLedger } from '../types';
+import { UnifiedDirectorOutput } from '../lib/schemas/unifiedDirectorSchema';
 
 // Graphology Algorithms
 import pagerank from 'graphology-metrics/centrality/pagerank';
@@ -27,6 +28,49 @@ const EdgeSchema = z.object({
   weight: z.number().min(0).max(1).optional().default(0.5),
   meta: z.any().optional() // Relaxed validation for meta bag
 });
+
+// Mutation Parameter Schemas
+const MutationSchemas = {
+  add_edge: z.object({
+    source: z.string().min(1),
+    target: z.string().min(1),
+    relation: z.string().optional(),
+    label: z.string().optional(),
+    weight: z.number().optional().default(0.5),
+    meta: z.record(z.any()).optional()
+  }),
+  remove_edge: z.object({
+    source: z.string().min(1),
+    target: z.string().min(1)
+  }),
+  update_node: z.object({
+    id: z.string().min(1),
+    attributes: z.record(z.any())
+  }),
+  add_node: z.object({
+    id: z.string().min(1),
+    type: z.string().optional(),
+    label: z.string().optional(),
+    attributes: z.record(z.any()).optional()
+  }),
+  add_memory: z.object({
+    id: z.string().min(1),
+    description: z.string().min(1),
+    emotional_imprint: z.string().optional(),
+    involved_entities: z.array(z.string()).optional()
+  }),
+  update_grudge: z.object({
+    source: z.string().min(1),
+    target: z.string().min(1),
+    delta: z.number()
+  }),
+  add_trauma_bond: z.object({
+    source: z.string().min(1),
+    target: z.string().min(1),
+    intensity: z.number().optional(),
+    bond_type: z.string().optional()
+  })
+};
 
 /**
  * The Forge's Loom: Knowledge Graph of Thoughts (KGoT) Engine
@@ -589,56 +633,201 @@ export class KGotController {
     mutations.forEach(mutation => {
       const { operation, params = {} } = mutation;
       
-      switch (operation) {
-        case 'add_edge':
-          this.addEdge(params.source, params.target, params.relation || params.label, params.weight || 0.5, params.meta);
-          break;
-          
-        case 'remove_edge':
-          this.removeEdge(params.source, params.target);
-          break;
-          
-        case 'update_node':
-          if (this.graph.hasNode(params.id)) {
-             const currentAttrs = this.graph.getNodeAttributes(params.id);
-             this.graph.mergeNodeAttributes(params.id, {
-                 attributes: { ...currentAttrs.attributes, ...params.attributes }
-             });
+      try {
+        switch (operation) {
+          case 'add_edge': {
+            const valid = MutationSchemas.add_edge.parse(params);
+            this.addEdge(valid.source, valid.target, valid.relation || valid.label || 'RELATIONSHIP', valid.weight, valid.meta);
+            break;
           }
-          break;
+          
+          case 'remove_edge': {
+            const valid = MutationSchemas.remove_edge.parse(params);
+            this.removeEdge(valid.source, valid.target);
+            break;
+          }
+          
+          case 'update_node': {
+            const valid = MutationSchemas.update_node.parse(params);
+            if (this.graph.hasNode(valid.id)) {
+               const currentAttrs = this.graph.getNodeAttributes(valid.id);
+               this.graph.mergeNodeAttributes(valid.id, {
+                   attributes: { ...currentAttrs.attributes, ...valid.attributes }
+               });
+            }
+            break;
+          }
 
-        case 'add_node':
-          this.addNode({
-              id: params.id,
-              type: params.type || 'ENTITY',
-              label: params.label || params.id,
-              attributes: params.attributes || {}
-          });
-          break;
-
-        case 'add_memory':
-            this.addMemory(params.id, {
-                id: `mem_${Date.now()}_${Math.random().toString(36).substr(2,9)}`,
-                description: params.description,
-                emotional_imprint: params.emotional_imprint,
-                involved_entities: params.involved_entities || [],
-                timestamp: this.globalState.turn_count
+          case 'add_node': {
+            const valid = MutationSchemas.add_node.parse(params);
+            this.addNode({
+                id: valid.id,
+                type: valid.type || 'ENTITY',
+                label: valid.label || valid.id,
+                attributes: valid.attributes || {}
             });
             break;
+          }
 
-        case 'update_grudge':
-            this.updateGrudge(params.source, params.target, params.delta);
-            break;
-            
-        case 'add_trauma_bond':
-            this.addEdge(params.source, params.target, 'TRAUMA_BOND', params.intensity || 0.5, {
-                type: "trauma_bond",
-                bond_type: params.bond_type || "dependency",
-                intensity: params.intensity,
-                timestamp: new Date().toISOString()
-            });
-            break;
+          case 'add_memory': {
+              const valid = MutationSchemas.add_memory.parse(params);
+              this.addMemory(valid.id, {
+                  id: `mem_${Date.now()}_${Math.random().toString(36).substr(2,9)}`,
+                  description: valid.description,
+                  emotional_imprint: valid.emotional_imprint || 'Neutral',
+                  involved_entities: valid.involved_entities || [],
+                  timestamp: this.globalState.turn_count
+              });
+              break;
+          }
+
+          case 'update_grudge': {
+              const valid = MutationSchemas.update_grudge.parse(params);
+              this.updateGrudge(valid.source, valid.target, valid.delta);
+              break;
+          }
+              
+          case 'add_trauma_bond': {
+              const valid = MutationSchemas.add_trauma_bond.parse(params);
+              this.addEdge(valid.source, valid.target, 'TRAUMA_BOND', valid.intensity || 0.5, {
+                  type: "trauma_bond",
+                  bond_type: valid.bond_type || "dependency",
+                  intensity: valid.intensity,
+                  timestamp: new Date().toISOString()
+              });
+              break;
+          }
+          
+          default:
+            console.warn(`[KGot] Unknown mutation operation: ${operation}`);
+        }
+      } catch (e: any) {
+        console.error(`[KGot] Mutation Validation Failed for ${operation}:`, e.message || e);
       }
     });
+  }
+
+  /**
+   * Applies complex simulation results from the Unified Director to the graph.
+   * Updates agent state, memories, relationships, and hidden secrets.
+   */
+  public applyPrefectSimulations(simulations: UnifiedDirectorOutput['prefect_simulations']): void {
+    simulations.forEach(sim => {
+        if (!this.graph.hasNode(sim.prefect_id)) {
+            // Try resolving by name if ID miss
+            const resolved = this.resolveTargetId(sim.prefect_name);
+            if (resolved) sim.prefect_id = resolved;
+            else return; 
+        }
+
+        // 1. Retrieve Current State
+        const attrs = this.graph.getNodeAttributes(sim.prefect_id);
+        // @ts-ignore
+        const agentState = attrs.attributes.agent_state || {};
+        
+        // 2. Update Agent State (Emotion & Motivation)
+        const updatedAgentState = {
+            ...agentState,
+            current_mood: this.deriveMoodFromState(sim.emotional_state),
+            emotional_vector: sim.emotional_state,
+            last_hidden_motivation: sim.hidden_motivation,
+            last_public_action: sim.public_action
+        };
+
+        // 3. Update Secrets/Knowledge
+        // @ts-ignore
+        const currentSecrets = attrs.attributes.secrets || [];
+        const newSecrets = [...new Set([...currentSecrets, ...(sim.secrets_uncovered || [])])];
+
+        // 4. Merge Attributes
+        this.graph.mergeNodeAttributes(sim.prefect_id, {
+            attributes: {
+                ...attrs.attributes,
+                agent_state: updatedAgentState,
+                secrets: newSecrets
+            }
+        });
+
+        // 5. Handle Sabotage (Grudge Edge)
+        if (sim.sabotage_attempt) {
+             const targetId = this.resolveTargetId(sim.sabotage_attempt.target);
+             if (targetId && this.graph.hasNode(targetId)) {
+                 // Increase grudge intensity
+                 this.updateGrudge(sim.prefect_id, targetId, 25); 
+                 
+                 // Add explicit edge for the attempt
+                 this.addEdge(sim.prefect_id, targetId, 'SABOTAGE_ATTEMPT', 0.9, {
+                     method: sim.sabotage_attempt.method,
+                     deniability: sim.sabotage_attempt.deniability,
+                     timestamp: this.globalState.turn_count,
+                     desc: `Sabotage: ${sim.sabotage_attempt.method}`
+                 });
+             }
+        }
+
+        // 6. Handle Alliance Signals
+        if (sim.alliance_signal) {
+            const targetId = this.resolveTargetId(sim.alliance_signal.target);
+            if (targetId && this.graph.hasNode(targetId)) {
+                // Add positive edge
+                this.addEdge(sim.prefect_id, targetId, 'ALLIANCE_SIGNAL', 0.6, {
+                    message: sim.alliance_signal.message,
+                    timestamp: this.globalState.turn_count,
+                     desc: `Signal: ${sim.alliance_signal.message}`
+                });
+            }
+        }
+
+        // 7. Record Ephemeral Memory of Action
+        this.addMemory(sim.prefect_id, {
+            id: `mem_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
+            description: `Action: ${sim.public_action} | Motivation: ${sim.hidden_motivation}`,
+            emotional_imprint: `Paranoia: ${sim.emotional_state.paranoia}`,
+            involved_entities: [],
+            timestamp: this.globalState.turn_count
+        });
+    });
+  }
+
+  private deriveMoodFromState(state: { paranoia: number, desperation: number, confidence: number }): string {
+    if (state.paranoia > 0.6) return "Paranoid";
+    if (state.desperation > 0.6) return "Desperate";
+    if (state.confidence > 0.7) return "Confident";
+    if (state.confidence < 0.3) return "Anxious";
+    return "Calculated";
+  }
+
+  private resolveTargetId(nameOrId: string): string | null {
+    if (this.graph.hasNode(nameOrId)) return nameOrId;
+    
+    let foundId = null;
+    // Simple fuzzy match on label or ID parts
+    const search = nameOrId.toUpperCase();
+    
+    this.graph.forEachNode((id, attrs) => {
+        // @ts-ignore
+        const label = (attrs.label || "").toUpperCase();
+        if (label.includes(search) || id.includes(search)) {
+            foundId = id;
+        }
+        // Archetype match
+        // @ts-ignore
+        if (attrs.attributes?.agent_state?.archetype?.toUpperCase() === search) {
+            foundId = id;
+        }
+    });
+    
+    // Handle common mapping aliases
+    if (!foundId) {
+        if (search.includes("PLAYER") || search.includes("SUBJECT")) return "Subject_84";
+        if (search.includes("SELENE")) return "FACULTY_SELENE";
+        if (search.includes("PETRA")) return "FACULTY_PETRA";
+        if (search.includes("ELARA")) return "PREFECT_LOYALIST";
+        if (search.includes("KAELEN")) return "PREFECT_OBSESSIVE";
+        if (search.includes("RHEA")) return "PREFECT_DISSIDENT";
+        if (search.includes("ANYA")) return "PREFECT_NURSE";
+    }
+
+    return foundId;
   }
 }
