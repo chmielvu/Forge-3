@@ -1,5 +1,4 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { KnowledgeGraph } from "./types/kgot";
 import { KGotController } from "../controllers/KGotController";
 import { VISUAL_MANDATE } from "../config/visualMandate";
@@ -162,7 +161,7 @@ export async function executeDirectorTurn(
 
     // 6. Execution (Gemini 2.5 Flash for System 2 simulation)
     const ai = getAI();
-    const response = await callGeminiWithRetry(
+    const response = await callGeminiWithRetry<GenerateContentResponse>(
       () => ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-09-2025', 
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -178,10 +177,23 @@ export async function executeDirectorTurn(
     const outputText = response.text || "{}";
     const directorOutput = JSON.parse(outputText);
 
-    // --- THE AESTHETE: Chain of Draft Critique ---
-    // Only run critque 50% of time or if high trauma to save latency, 
-    // or always run it if "Aesthete" mode is requested. We run it always for quality.
-    
+    // --- HEURISTIC QUALITY ANALYSIS (Fast Layer) ---
+    const qualityAnalysis = narrativeQualityEngine.analyzeNarrative(
+      directorOutput.narrative_text,
+      ledger
+    );
+
+    if (!qualityAnalysis.passesQuality) {
+      console.warn("[Director] Narrative Heuristics Warnings:", qualityAnalysis.issues.map(i => i.message));
+      // Attempt fast heuristic auto-fix (e.g. padding length, adding atmopshere)
+      directorOutput.narrative_text = narrativeQualityEngine.autoFixNarrative(
+        directorOutput.narrative_text,
+        qualityAnalysis.issues,
+        { ledger } as GameState
+      );
+    }
+
+    // --- THE AESTHETE: Chain of Draft Critique (Slow Layer) ---
     console.log("🎨 [The Aesthete] Critiquing Director Output...");
     const critique = await narrativeQualityEngine.critiqueWithAesthete(
         directorOutput.narrative_text, 
@@ -198,6 +210,9 @@ export async function executeDirectorTurn(
     } else {
         console.log(`[The Aesthete] APPROVED (Score ${critique.score}).`);
     }
+    
+    // Record for history tracking
+    narrativeQualityEngine.recordNarrative(directorOutput.narrative_text);
     // --------------------------------------------
 
     // 7. Apply Mutations

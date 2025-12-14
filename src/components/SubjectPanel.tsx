@@ -2,7 +2,7 @@
 import React from 'react';
 import { useGameStore } from '../state/gameStore';
 import { Users, Shield, Zap, Brain, HeartCrack } from 'lucide-react';
-import { CharacterId, SubjectStatus } from '../types';
+import { CharacterId, SubjectStatus, SubjectState } from '../types';
 
 const STATUS_COLORS: Record<SubjectStatus, string> = {
   ACTIVE: 'text-stone-300',
@@ -29,7 +29,7 @@ const SubjectPanel: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3">
-        {subjectList.map((sub) => (
+        {subjectList.map((sub: SubjectState) => (
           <div key={sub.id} className="relative p-3 bg-zinc-900/40 border border-zinc-800 rounded-sm hover:bg-zinc-900/60 transition-colors">
             
             <div className="flex justify-between items-start mb-2">

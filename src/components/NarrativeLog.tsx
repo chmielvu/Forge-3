@@ -2,8 +2,9 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, Square, Brain, MessageCircle, Zap } from 'lucide-react';
-import { LogEntry, YandereLedger } from '../types';
+import { Activity, Square, Brain, MessageCircle, Zap, Image as ImageIcon, Film } from 'lucide-react';
+import { LogEntry, YandereLedger, MediaStatus, MultimodalTurn } from '../types';
+import { useGameStore } from '../state/gameStore';
 import { 
   selectNarratorMode, 
   detectCodeSwitchMode,
@@ -43,10 +44,55 @@ const Typewriter: React.FC<{ text: string; onTyping: () => void; isTrauma: boole
   return <span dangerouslySetInnerHTML={{ __html: safeHTML }} />;
 };
 
+const InlineMediaPreview: React.FC<{ turn?: MultimodalTurn }> = ({ turn }) => {
+  if (!turn) return null;
+
+  const isVideoReady = turn.videoStatus === MediaStatus.ready && turn.videoUrl;
+  const isImageReady = turn.imageStatus === MediaStatus.ready && turn.imageData;
+  
+  if (!isVideoReady && !isImageReady) return null;
+
+  return (
+    <div className="mt-4 mb-2 animate-fade-in group relative overflow-hidden rounded-sm border border-stone-800 bg-stone-950/50 max-w-sm">
+      {isVideoReady ? (
+        <div className="relative aspect-video">
+          <video 
+            src={turn.videoUrl} 
+            className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500"
+            autoPlay 
+            loop 
+            muted 
+            playsInline
+          />
+          <div className="absolute bottom-2 right-2 bg-black/60 px-2 py-1 flex items-center gap-1 rounded-sm border border-white/10 backdrop-blur-sm">
+            <Film size={10} className="text-stone-300" />
+            <span className="text-[9px] font-mono text-stone-300 uppercase tracking-wider">Video Feed</span>
+          </div>
+        </div>
+      ) : (
+        <div className="relative aspect-video">
+          <img 
+            src={turn.imageData?.startsWith('data:') ? turn.imageData : `data:image/jpeg;base64,${turn.imageData}`} 
+            alt="Narrative Visualization" 
+            className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500 hover:scale-105 transform duration-700 ease-in-out"
+          />
+          <div className="absolute bottom-2 right-2 bg-black/60 px-2 py-1 flex items-center gap-1 rounded-sm border border-white/10 backdrop-blur-sm">
+            <ImageIcon size={10} className="text-stone-300" />
+            <span className="text-[9px] font-mono text-stone-300 uppercase tracking-wider">Visual Record</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledger }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [narratorMode, setNarratorMode] = useState<NarratorMode>('MOCKING_JESTER');
   const [showNarratorIndicator, setShowNarratorIndicator] = useState(false);
+  
+  // Access timeline directly from store to link logs to media
+  const multimodalTimeline = useGameStore(s => s.multimodalTimeline);
 
   const scrollToBottom = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -105,6 +151,9 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
       <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 relative scroll-smooth">
         <div className="space-y-6 pb-2 min-h-full flex flex-col justify-end">
           {logs.map((log) => {
+            // Find corresponding turn for media
+            const turn = multimodalTimeline.find(t => t.id === log.id);
+
             // Apply commentary only if it's a narrative log
             const enhancedContent = log.type === 'narrative' 
               ? injectNarratorCommentary(log.content, narratorMode, ledger)
@@ -146,12 +195,16 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
                 )}
                 
                 {log.type === 'narrative' && (
-                  <p 
-                    className={`text-lg md:text-xl leading-relaxed drop-shadow-md ${isPsychosis ? 'text-stone-300' : 'text-stone-200'}`} 
-                    style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
-                  >
-                    <Typewriter text={enhancedContent} onTyping={scrollToBottom} isTrauma={ledger.traumaLevel > 90} />
-                  </p>
+                  <div className="space-y-4">
+                    <p 
+                      className={`text-lg md:text-xl leading-relaxed drop-shadow-md ${isPsychosis ? 'text-stone-300' : 'text-stone-200'}`} 
+                      style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
+                    >
+                      <Typewriter text={enhancedContent} onTyping={scrollToBottom} isTrauma={ledger.traumaLevel > 90} />
+                    </p>
+                    {/* Inline Media Preview */}
+                    <InlineMediaPreview turn={turn} />
+                  </div>
                 )}
               </div>
             );
