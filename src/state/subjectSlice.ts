@@ -29,7 +29,8 @@ export const createSubjectSlice: StateCreator<
         respect: 50,
         currentLocation: "The Calibration Chamber",
         visualCondition: "Bruised, glaring, uniform torn at collar",
-        flags: []
+        flags: [],
+        injuries: ["Split Lip", " bruised ribs"]
       },
       [CharacterId.DARIUS]: {
         id: CharacterId.DARIUS,
@@ -42,7 +43,8 @@ export const createSubjectSlice: StateCreator<
         respect: 40,
         currentLocation: "The Calibration Chamber",
         visualCondition: "Slumped shoulders, eyes on floor",
-        flags: []
+        flags: [],
+        injuries: ["Chronic Back Spasm", "Psychosomatic Tremor"]
       },
       [CharacterId.SILAS]: {
         id: CharacterId.SILAS,
@@ -55,7 +57,8 @@ export const createSubjectSlice: StateCreator<
         respect: 20,
         currentLocation: "Shadows",
         visualCondition: "Pristine uniform, blank expression",
-        flags: []
+        flags: [],
+        injuries: []
       },
       [CharacterId.THEO]: {
         id: CharacterId.THEO,
@@ -68,7 +71,8 @@ export const createSubjectSlice: StateCreator<
         respect: 10,
         currentLocation: "The Calibration Chamber",
         visualCondition: "Trembling, weeping, clutching self",
-        flags: []
+        flags: [],
+        injuries: ["Panic Hyperventilation", "Bruised Wrists"]
       }
     };
     set({ subjects: initialSubjects });

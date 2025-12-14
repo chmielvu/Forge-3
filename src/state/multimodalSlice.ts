@@ -404,8 +404,8 @@ export const createMultimodalSlice: StateCreator<
         isPlaying: false,
         volume: 0.7,
         playbackRate: 1.0,
-        autoAdvance: false,
         hasUserInteraction: false,
+        autoAdvance: false, // Ensure autoAdvance is reset
       },
     });
   },

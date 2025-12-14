@@ -1,4 +1,5 @@
 
+
 import { KnowledgeGraph } from './lib/types/kgot';
 
 export enum CharacterId {
@@ -40,7 +41,7 @@ export interface YandereLedger {
 export interface GraphNode {
   id: string;
   label: string;
-  group: 'subject' | 'faculty' | 'prefect';
+  group: 'subject' | 'faculty' | 'prefect' | 'location';
   val: number;
   traits?: string[];
   ocean?: { O: number; C: number; E: number; A: number; N: number };
@@ -107,7 +108,8 @@ export interface MediaQueueItem {
   previousTurn?: MultimodalTurn;
   addedAt?: number;
   retries?: number;
-  errorMessage?: string;
+  priority?: number; // NEW: Lower number = higher priority
+  errorMessage?: string; // Added to MediaQueueItem for failed queue
 }
 
 export interface CoherenceReport {
@@ -141,7 +143,7 @@ export interface MultimodalSliceExports {
   goToNextTurn: () => void;
   goToPreviousTurn: () => void;
   getTurnById: (turnId: string) => MultimodalTurn | undefined;
-  getTimelineStats: () => { totalTurns: number; loadedTurns: number; pendingMedia: number; failedMedia: number; completionRate: number };
+  getTimelineStats: () => { totalTurns: number; loadedTurns: number; pendingMedia: number; failedMedia: number; completionRate: number }; // Fixed typo
   pruneOldTurns: (keepCount: number) => void;
   enqueueMediaForTurn: (item: MediaQueueItem) => void;
   markMediaPending: (item: MediaQueueItem) => void;
@@ -175,6 +177,7 @@ export interface SubjectState {
   currentLocation: string;
   visualCondition: string;
   flags: string[];
+  injuries: string[]; // NEW: Specific injury tracking (e.g. "Bruised Tunica")
 }
 
 export interface SubjectSliceExports {
@@ -200,7 +203,7 @@ export interface CombinedGameStoreState extends MultimodalSliceExports, SubjectS
   logs: LogEntry[];
   choices: string[];
   prefects: PrefectDNA[];
-  sessionActive: boolean; // New Flag
+  sessionActive: boolean; 
   isThinking: boolean;
   isMenuOpen: boolean;
   isGrimoireOpen: boolean;

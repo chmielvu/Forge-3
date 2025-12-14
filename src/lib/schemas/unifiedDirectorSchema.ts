@@ -1,4 +1,5 @@
 
+
 import { Type } from "@google/genai";
 
 /**
@@ -9,9 +10,9 @@ export const UnifiedDirectorOutputSchema = {
   type: Type.OBJECT,
   properties: {
     // === PART 1: COGNITIVE GRAPH TRACE (System 2 Deep Think) ===
-    cognitive_graph: {
+    reasoning_trace: { // Renamed from cognitive_graph
       type: Type.OBJECT,
-      description: "Structured trace of the internal reasoning graph nodes (System 2).",
+      description: "Structured trace of the internal reasoning process (System 2).",
       properties: {
         analysis: { 
             type: Type.STRING, 
@@ -26,12 +27,16 @@ export const UnifiedDirectorOutputSchema = {
             type: Type.STRING, 
             description: "Node 3: Scoring and selection logic (Tension/Coherence/Novelty)." 
         },
-        synthesis_plan: { 
-            type: Type.STRING, 
-            description: "Node 4: Final execution plan based on the selected path." 
+        self_critique: { // NEW: Self-critique field
+          type: Type.STRING,
+          description: "Node 4: Internal critique of hypotheses for coherence and psychological accuracy."
+        },
+        selected_path: { // NEW: Selected path field
+          type: Type.STRING,
+          description: "Node 5: Final execution plan based on the selected path."
         }
       },
-      required: ["analysis", "hypotheses", "evaluation", "synthesis_plan"]
+      required: ["analysis", "hypotheses", "evaluation", "self_critique", "selected_path"]
     },
 
     // === PART 2: PREFECT SIMULATION ===
@@ -135,7 +140,7 @@ export const UnifiedDirectorOutputSchema = {
         properties: {
           operation: { 
             type: Type.STRING, 
-            enum: ['add_edge', 'update_node', 'add_memory', 'update_grudge', 'add_trauma_bond', 'update_ledger'] 
+            enum: ['add_edge', 'update_node', 'add_memory', 'update_grudge', 'add_trauma_bond', 'update_ledger', 'add_injury', 'add_subject_secret'] 
           },
           params: { type: Type.OBJECT, nullable: true }
         }
@@ -160,7 +165,7 @@ export const UnifiedDirectorOutputSchema = {
     audio_markup: { type: Type.STRING, nullable: true, description: "Narrative text formatted with SSML-like tags for TTS." }
   },
   required: [
-    "cognitive_graph",
+    "reasoning_trace", // Renamed from cognitive_graph
     "prefect_simulations",
     "script",
     "narrative_text", 
@@ -172,11 +177,12 @@ export const UnifiedDirectorOutputSchema = {
 
 // Type definition for TypeScript
 export interface UnifiedDirectorOutput {
-  cognitive_graph: {
+  reasoning_trace: { // Renamed from cognitive_graph
     analysis: string;
     hypotheses: string[];
     evaluation: string;
-    synthesis_plan: string;
+    self_critique: string; // NEW
+    selected_path: string; // NEW
   };
   prefect_simulations: Array<{
     prefect_id: string;

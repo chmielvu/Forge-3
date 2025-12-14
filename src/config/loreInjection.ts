@@ -22,7 +22,7 @@ export const LORE_CONSTITUTION = {
 
   // 3. The Grammar of Suffering (New v3.6)
   GRAMMAR_OF_SUFFERING: `**THE GRAMMAR OF SUFFERING & THE SOMATIC CASCADE:**
-  Violence is not an event; it is a systemic crisis. Narrate the 5 stages of impact:
+  Groin hit is not an event; it is a systemic crisis. Narrate the 5 stages of impact:
   1. **The Nova (Whiteout):** The eraser of thought. The flash of white heat.
   2. **The Abdominal Void (Referred Pain):** The sickening, hollow sensation of organs turning to liquid. Nausea.
   3. **The Systemic Shock:** Autonomic collapse. Cold sweat, ringing ears, tilting world.

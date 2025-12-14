@@ -10,7 +10,7 @@ import { createSubjectSlice } from './subjectSlice';
 import { LogEntry, CombinedGameStoreState, CharacterId, PrefectDNA, PrefectDecision, GameState } from '../types';
 import { KGotController } from '../controllers/KGotController';
 import { enqueueTurnForMedia } from './mediaController';
-import { createIndexedDBStorage } from '../utils/indexedDBStorage';
+import { createIndexedDBStorage, forgeStorage } from '../utils/indexedDBStorage'; // Import forgeStorage
 
 // Initialize the Controller to get the canonical graph structure
 const controller = new KGotController({ 
@@ -111,7 +111,7 @@ function simpleKMeans(vectors: Record<string, number[]>, k: number = 3): Record<
 // Helper to select active prefects for the scene
 function selectActivePrefects(
   prefects: PrefectDNA[], 
-  ledger: any, 
+  ledger: YandereLedger, // Use YandereLedger here
   count: number = 2
 ): PrefectDNA[] {
   const scores = new Map<string, number>();
@@ -167,6 +167,8 @@ export interface GameStoreWithPrefects extends CombinedGameStoreState {
     isLiteMode: boolean;
     setLiteMode: (isLite: boolean) => void;
     startSession: (isLiteMode?: boolean) => Promise<void>; 
+    saveSnapshot: () => Promise<void>; // Added missing method
+    loadSnapshot: () => Promise<void>; // Added missing method
 }
 
 export const useGameStore = create<GameStoreWithPrefects>()(
@@ -230,15 +232,15 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           const state = get();
           const currentController = new KGotController(state.kgot);
           
-          // 1. Compute GraphSAGE Embeddings (Deep Learning for Graph)
-          const embeddings = await currentController.getGraphSAGEEmbeddings();
+          // 1. Compute Node2Vec Embeddings
+          const embeddings = currentController.getNode2VecEmbeddings();
           
           // 2. Perform Clustering (Narrative Subplots)
           // K=3 for finding e.g., 'Trauma Group', 'Faculty Elite', 'Resistance'
           const clusters = simpleKMeans(embeddings, 3);
           
           // 3. Log results to system if changed
-          console.log("[GraphAnalysis] Narrative Clusters updated (SAGE):", clusters);
+          console.log("[GraphAnalysis] Narrative Clusters updated (Node2Vec):", clusters);
           
           set({ narrativeClusters: clusters });
       },
@@ -268,7 +270,9 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                   {
                     ledgerSnapshot: result.state_updates ? { ...get().gameState.ledger, ...result.state_updates } : get().gameState.ledger,
                     directorDebug: result.thoughtProcess,
-                    activeCharacters: typeof primaryActor !== 'string' ? [primaryActor.id] : [primaryActor]
+                    activeCharacters: typeof primaryActor !== 'string' ? [primaryActor.id] : [primaryActor],
+                    // Fix: Access currentLocation from KGotController's subject node attributes
+                    location: result.updatedGraph?.nodes['Subject_84']?.attributes?.currentLocation || get().gameState.location,
                   },
                   result.script // NEW: Pass the script to the turn registration
               );
@@ -305,6 +309,53 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                   type: 'psychosis',
                   content: result.psychosisText
               });
+          }
+
+          // === HANDLING MUTATIONS AND SYNCING TO STORE ===
+          if (result.updatedGraph && result.kgot_mutations) {
+             result.kgot_mutations.forEach((mut: any) => {
+                 // Handle 'add_injury' mutations
+                 if (mut.operation === 'add_injury' && mut.params) {
+                     const targetId = mut.params.target_id === 'Player' ? CharacterId.PLAYER : mut.params.target_id;
+                     
+                     // Resolve standard IDs
+                     let finalTarget = targetId;
+                     if (targetId.includes("84")) finalTarget = CharacterId.PLAYER;
+                     
+                     // Get current subject
+                     const subject = get().subjects[finalTarget];
+                     if (subject) {
+                         const injuryName = mut.params.injury_name;
+                         // Add to injuries array if not already present
+                         const updatedInjuries = [...new Set([...(subject.injuries || []), injuryName])];
+                         get().updateSubject(finalTarget, { injuries: updatedInjuries });
+                         
+                         get().addLog({
+                             id: `injury-${Date.now()}`,
+                             type: 'system',
+                             content: `CRITICAL INJURY LOGGED: ${injuryName} >> SUBJECT ${finalTarget}`
+                         });
+                     }
+                 }
+                 // Handle 'add_subject_secret' mutations
+                 if (mut.operation === 'add_subject_secret' && mut.params) {
+                     const subjectId = mut.params.subject_id === 'Player' ? CharacterId.PLAYER : mut.params.subject_id;
+                     const secretName = mut.params.secret_name;
+                     const secretDescription = mut.params.secret_description;
+                     const discoveredBy = mut.params.discovered_by;
+
+                     const subject = get().subjects[subjectId];
+                     if (subject) {
+                         get().addLog({
+                             id: `secret-${Date.now()}`,
+                             type: 'system',
+                             content: `SECRET DISCOVERED: "${secretName}" about ${subject.name} by ${discoveredBy}.`
+                         });
+                         // No direct update to subject.secrets here as it's managed by KGotController.
+                         // KGotController stores the secret in the subject's KGotNode attributes.
+                     }
+                 }
+             });
           }
 
           set((state) => {
@@ -482,74 +533,79 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             const newPrefects = initializePrefects(state.gameState.seed);
             set({ prefects: newPrefects });
         }
-
-        if (Object.keys(state.subjects).length === 0) {
-            state.initializeSubjects();
-        }
-
-        if (state.multimodalTimeline.length === 0) {
-           console.log("[GameStore] Bootstrapping opening scene...");
-           set({ isThinking: true });
-           
-           try {
-               const result = await executeUnifiedDirectorTurn(
-                   "INITIALIZE_SIMULATION", 
-                   [], 
-                   state.kgot,
-                   [],
-                   isLiteMode // Pass lite mode preference
-               );
-               get().applyServerState(result);
-           } catch (e: any) {
-               console.error("Failed to bootstrap session:", e);
-               set({ isThinking: false }); // Ensure UI is no longer stuck in thinking state
-               get().addLog({
-                 id: `error-boot-${Date.now()}`,
-                 type: 'system',
-                 content: `ERROR: Failed to initialize session. (${e.message || 'Unknown error'})`
-               });
-           }
-        }
-        
-        // Trigger initial graph analysis
-        get().analyzeGraph();
       },
-      
-      saveSnapshot: () => {
-         console.log("Snapshot saved via middleware");
+
+      // Implement saveSnapshot and loadSnapshot
+      saveSnapshot: async () => {
+        const state = get();
+        try {
+          await forgeStorage.saveGameState('forge-snapshot', {
+            gameState: state.gameState,
+            kgot: state.kgot,
+            logs: state.logs,
+            prefects: state.prefects,
+            multimodalTimeline: state.multimodalTimeline,
+            audioPlayback: state.audioPlayback,
+            // Only save serializable parts, omit functions
+          });
+          console.log("Game state saved to IndexedDB.");
+          get().addLog({ id: `system-save-${Date.now()}`, type: 'system', content: 'SYSTEM STATE ARCHIVED.' });
+        } catch (error) {
+          console.error("Failed to save game state:", error);
+          get().addLog({ id: `system-save-error-${Date.now()}`, type: 'system', content: `ERROR: Failed to archive system state: ${error.message}` });
+        }
       },
-      loadSnapshot: () => {
-         window.location.reload(); 
-      }
+
+      loadSnapshot: async () => {
+        try {
+          const snapshot = await forgeStorage.loadGameState('forge-snapshot');
+          if (snapshot) {
+            set((state) => ({
+              ...state,
+              gameState: snapshot.gameState,
+              kgot: snapshot.kgot,
+              logs: snapshot.logs,
+              prefects: snapshot.prefects,
+              multimodalTimeline: snapshot.multimodalTimeline,
+              audioPlayback: snapshot.audioPlayback,
+              // Restore sessionActive based on loaded state if desired, or keep false until user interaction
+              sessionActive: true, 
+              isThinking: false, // Always reset thinking state
+              // Other transient states
+              currentTurnId: snapshot.multimodalTimeline[snapshot.multimodalTimeline.length - 1]?.id || null,
+              choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'], // Reset choices
+            }));
+            console.log("Game state loaded from IndexedDB.");
+            get().addLog({ id: `system-load-${Date.now()}`, type: 'system', content: 'SYSTEM STATE RESTORED FROM ARCHIVE.' });
+          } else {
+            console.warn("No saved state found.");
+            get().addLog({ id: `system-load-none-${Date.now()}`, type: 'system', content: 'NO SYSTEM ARCHIVE FOUND. STARTING NEW SESSION.' });
+            get().resetGame();
+          }
+        } catch (error) {
+          console.error("Failed to load game state:", error);
+          get().addLog({ id: `system-load-error-${Date.now()}`, type: 'system', content: `ERROR: Failed to restore system state: ${error.message}` });
+          get().resetGame();
+        }
+      },
     }),
     {
-      name: 'forge-storage',
-      storage: createJSONStorage(() => createIndexedDBStorage()),
+      name: 'forge-game-state',
+      storage: createIndexedDBStorage(), // Use IndexedDB storage
       partialize: (state) => ({
         gameState: state.gameState,
         kgot: state.kgot,
+        logs: state.logs,
         prefects: state.prefects,
-        subjects: state.subjects,
-        sessionActive: state.sessionActive,
+        multimodalTimeline: state.multimodalTimeline,
+        audioPlayback: state.audioPlayback,
         isLiteMode: state.isLiteMode,
       }),
+      merge: (persistedState, currentState) => {
+        // Handle potential versioning or schema changes in persisted state
+        const state = persistedState as CombinedGameStoreState;
+        return { ...currentState, ...state, sessionActive: false, isThinking: false }; // Ensure session isn't active on reload
+      },
     }
   )
 );
-
-// --- Reactive Subscriptions ---
-
-let analysisTimer: ReturnType<typeof setTimeout> | null = null;
-
-// Automatically trigger graph analysis whenever the Knowledge Graph (kgot) updates
-useGameStore.subscribe((state, prevState) => {
-  if (state.kgot !== prevState.kgot) {
-    if (analysisTimer) clearTimeout(analysisTimer);
-    
-    // Debounce analysis (2s) to prevent computation during rapid updates
-    analysisTimer = setTimeout(() => {
-      console.log("[GameStore] 🧠 Reactive Graph Analysis Triggered (KGOT Mutation)");
-      useGameStore.getState().analyzeGraph();
-    }, 2000);
-  }
-});

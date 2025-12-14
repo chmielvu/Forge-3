@@ -5,7 +5,7 @@ import { YandereLedger } from '../../types';
 // Knowledge Graph of Thoughts (KGoT) Schema
 // Version: SOTA 3.7 - Graphology Integration
 
-export type NodeType = 'ENTITY' | 'LOCATION' | 'EVENT' | 'CONCEPT' | 'FACULTY' | 'PREFECT' | 'SUBJECT';
+export type NodeType = 'ENTITY' | 'LOCATION' | 'EVENT' | 'CONCEPT' | 'FACULTY' | 'PREFECT' | 'SUBJECT' | 'INJURY' | 'SECRET';
 
 export interface Memory {
   id: string;
@@ -65,7 +65,7 @@ export interface KGotNode {
     // Narrative Persistence
     memories?: Memory[];
     grudges?: Record<string, number>; // targetId -> intensity (0-100)
-    secrets?: string[];
+    secrets?: Array<{ name: string; description: string; discoveredBy?: string; turn?: number }>; // NEW: Secrets array
     
     // Legacy/Flexibility
     [key: string]: any;
@@ -76,7 +76,7 @@ export interface KGotNode {
   };
 }
 
-export type EdgeType = 'RELATIONSHIP' | 'SPATIAL' | 'TEMPORAL' | 'KNOWLEDGE' | 'TRAUMA_BOND' | 'SECRET_ALLIANCE' | 'GRUDGE' | 'OBSESSION';
+export type EdgeType = 'RELATIONSHIP' | 'SPATIAL' | 'TEMPORAL' | 'KNOWLEDGE' | 'TRAUMA_BOND' | 'SECRET_ALLIANCE' | 'GRUDGE' | 'OBSESSION' | 'AFFLICTS' | 'CAUSED_BY' | 'DISCOVERED';
 
 export interface KGotEdge {
   key?: string; // Support for MultiGraph keys

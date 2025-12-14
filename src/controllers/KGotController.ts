@@ -69,6 +69,19 @@ const MutationSchemas = {
     target: z.string().min(1),
     intensity: z.number().optional(),
     bond_type: z.string().optional()
+  }),
+  add_injury: z.object({
+    target_id: z.string().min(1),
+    source_id: z.string().min(1),
+    injury_name: z.string().min(1),
+    severity: z.number().optional(),
+    grammar_phase: z.string().optional()
+  }),
+  add_subject_secret: z.object({ // NEW: Schema for adding subject secrets
+    subject_id: z.string().min(1),
+    secret_name: z.string().min(1),
+    secret_description: z.string().min(1),
+    discovered_by: z.string().optional()
   })
 };
 
@@ -119,25 +132,25 @@ export class KGotController {
 
   public getGraph(): KnowledgeGraph {
     const nodes: Record<string, KGotNode> = {};
-    this.graph.forEachNode((id, attrs) => {
+    this.graph.forEachNode((id, nodeAttrs) => {
       nodes[id] = {
         id,
-        type: attrs.type as NodeType,
-        label: attrs.label as string,
-        attributes: attrs.attributes as any
+        type: nodeAttrs.type as NodeType,
+        label: nodeAttrs.label as string,
+        attributes: nodeAttrs.attributes as any
       };
     });
 
     const edges: KGotEdge[] = [];
-    this.graph.forEachEdge((key, attrs, source, target) => {
+    this.graph.forEachEdge((key, edgeAttrs, source, target) => {
       edges.push({
         key,
         source,
         target,
-        type: attrs.type as string,
-        label: attrs.label as string,
-        weight: attrs.weight as number,
-        meta: attrs.meta
+        type: edgeAttrs.type as string,
+        label: edgeAttrs.label as string,
+        weight: edgeAttrs.weight as number,
+        meta: edgeAttrs.meta
       });
     });
 
@@ -165,7 +178,8 @@ export class KGotController {
                     voice_id: "Charon" 
                 },
                 ledger: INITIAL_LEDGER,
-                currentLocation: "The Calibration Chamber"
+                currentLocation: "The Calibration Chamber", // Added currentLocation
+                secrets: [] // Initialize empty secrets array
             } 
         },
 
@@ -184,13 +198,15 @@ export class KGotController {
 
         // --- LOCATIONS ---
         { id: "loc_calibration", type: "LOCATION", label: "The Calibration Chamber", attributes: { noir_lighting_state: "Clinical_Spotlight", architectural_oppression: 0.95 } },
-        { id: "loc_confessional", type: "LOCATION", label: "The Velvet Confessional", attributes: { noir_lighting_state: "Venetian_Blind_Amber", architectural_oppression: 0.4 } }
+        { id: "loc_confessional", type: "LOCATION", label: "The Velvet Confessional", attributes: { noir_lighting_state: "Venetian_Blind_Amber", architectural_oppression: 0.4 } },
+        { id: "loc_infirmary", type: "LOCATION", label: "The Infirmary", attributes: { noir_lighting_state: "Sterile_Fluorescent", architectural_oppression: 0.6 } } // NEW
     ];
 
     this.batchAddNodes(canonicalNodes);
 
     this.addEdge("FACULTY_SELENE", "Subject_84", "dominance", 1.0, { trope: "owns_soul" });
     this.addEdge("PREFECT_OBSESSIVE", "Subject_84", "obsession", 1.0, { trope: "yandere_possession" });
+    this.addEdge("PREFECT_NURSE", "loc_infirmary", "works_in", 0.8, { type: "SPATIAL" }); // NEW
   }
 
   // --- Graph Operations (Robust Error Handling) ---
@@ -205,7 +221,7 @@ export class KGotController {
     }
 
     try {
-        if (!(this.graph as any).hasNode(parsed.id)) {
+        if (!this.graph.hasNode(parsed.id)) {
             this.graph.addNode(parsed.id, {
                 type: parsed.type,
                 label: parsed.label,
@@ -223,7 +239,7 @@ export class KGotController {
 
   public removeNode(nodeId: string): void {
     try {
-        if ((this.graph as any).hasNode(nodeId)) {
+        if (this.graph.hasNode(nodeId)) {
             this.graph.dropNode(nodeId);
         }
     } catch (e) {
@@ -232,11 +248,11 @@ export class KGotController {
   }
 
   public addEdge(sourceId: string, targetId: string, relation: string, weight: number = 0.5, meta?: any): void {
-    if (!(this.graph as any).hasNode(sourceId)) {
+    if (!this.graph.hasNode(sourceId)) {
         console.warn(`[KGot] addEdge ignored: Source ${sourceId} does not exist.`);
         return;
     }
-    if (!(this.graph as any).hasNode(targetId)) {
+    if (!this.graph.hasNode(targetId)) {
         console.warn(`[KGot] addEdge ignored: Target ${targetId} does not exist.`);
         return;
     }
@@ -266,7 +282,7 @@ export class KGotController {
         });
 
         // Add or Update the new edge
-        if (!(this.graph as any).hasEdge(key)) {
+        if (!this.graph.hasEdge(key)) {
             this.graph.addEdgeWithKey(key, sourceId, targetId, {
                 label: relation,
                 type: meta?.type || 'RELATIONSHIP',
@@ -284,10 +300,10 @@ export class KGotController {
         
         // Update Activity Timestamp for Magellan & Centrality Analysis
         const turn = this.globalState.turn_count;
-        if ((this.graph as any).hasNode(sourceId)) {
+        if (this.graph.hasNode(sourceId)) {
             this.graph.mergeNodeAttributes(sourceId, { last_active_turn: turn });
         }
-        if ((this.graph as any).hasNode(targetId)) {
+        if (this.graph.hasNode(targetId)) {
             this.graph.mergeNodeAttributes(targetId, { last_active_turn: turn });
         }
 
@@ -298,7 +314,7 @@ export class KGotController {
 
   public removeEdge(sourceId: string, targetId: string): void {
     try {
-        if ((this.graph as any).hasNode(sourceId) && (this.graph as any).hasNode(targetId)) {
+        if (this.graph.hasNode(sourceId) && this.graph.hasNode(targetId)) {
             const edges = this.graph.edges(sourceId, targetId);
             edges.forEach(e => this.graph.dropEdge(e));
         }
@@ -323,8 +339,8 @@ export class KGotController {
     const edgesToRemove: string[] = [];
     
     // 2. Identify weak edges
-    this.graph.forEachEdge((edge, attrs, source, target) => {
-        const w = attrs.weight as number;
+    this.graph.forEachEdge((edge, edgeAttrs, source, target) => {
+        const w = edgeAttrs.weight as number;
         // Protect edges connected to high centrality nodes
         const importance = (scores[source] || 0) + (scores[target] || 0);
         
@@ -376,7 +392,7 @@ export class KGotController {
             try { valid = MutationSchemas.update_node.parse(params); }
             catch(e) { console.warn(`[KGot] Mutation ${idx} (update_node) invalid params:`, e); return; }
 
-            if ((this.graph as any).hasNode(valid.id)) {
+            if (this.graph.hasNode(valid.id)) {
                const currentAttrs = this.graph.getNodeAttributes(valid.id);
                this.graph.mergeNodeAttributes(valid.id, {
                    attributes: { ...currentAttrs.attributes, ...valid.attributes }
@@ -438,6 +454,66 @@ export class KGotController {
               });
               break;
           }
+
+          case 'add_injury': {
+              let valid;
+              try { valid = MutationSchemas.add_injury.parse(params); }
+              catch(e) { console.warn(`[KGot] Mutation ${idx} (add_injury) invalid params:`, e); return; }
+
+              const targetId = this.resolveTargetId(valid.target_id) || valid.target_id;
+              const sourceId = this.resolveTargetId(valid.source_id) || valid.source_id;
+              const injuryNodeId = `INJURY_${Date.now()}_${valid.injury_name.replace(/\s+/g, '_').toUpperCase()}`;
+
+              // 1. Create INJURY Node
+              this.addNode({
+                  id: injuryNodeId,
+                  type: 'INJURY',
+                  label: valid.injury_name,
+                  attributes: {
+                      severity: valid.severity || 0.5,
+                      grammar_phase: valid.grammar_phase || 'Shock',
+                      timestamp: this.globalState.turn_count
+                  }
+              });
+
+              // 2. Link to Subject
+              this.addEdge(injuryNodeId, targetId, 'AFFLICTS', valid.severity || 0.5, { type: 'INJURY_LINK' });
+
+              // 3. Link to Inflictor
+              this.addEdge(injuryNodeId, sourceId, 'CAUSED_BY', 1.0, { type: 'INJURY_SOURCE' });
+
+              break;
+          }
+
+          case 'add_subject_secret': { // NEW: Handle add_subject_secret mutation
+            let valid;
+            try { valid = MutationSchemas.add_subject_secret.parse(params); }
+            catch(e) { console.warn(`[KGot] Mutation ${idx} (add_subject_secret) invalid params:`, e); return; }
+            this.addSubjectSecret(valid.subject_id, {
+                name: valid.secret_name,
+                description: valid.secret_description,
+                discoveredBy: valid.discovered_by,
+                turn: this.globalState.turn_count
+            });
+            // Also add an edge between the discoverer and the secret
+            if (valid.discovered_by && this.graph.hasNode(valid.discovered_by)) {
+                const secretNodeId = `SECRET_${Date.now()}_${valid.secret_name.replace(/\s+/g, '_').toUpperCase()}`;
+                this.addNode({ // Add the secret as a node itself for traceability
+                    id: secretNodeId,
+                    type: 'SECRET',
+                    label: valid.secret_name,
+                    attributes: {
+                        description: valid.secret_description,
+                        discoveredBy: valid.discovered_by,
+                        turnDiscovered: this.globalState.turn_count,
+                        aboutSubject: valid.subject_id
+                    }
+                });
+                this.addEdge(valid.discovered_by, secretNodeId, 'DISCOVERED', 1.0, { type: 'KNOWLEDGE_ACQUISITION' });
+                this.addEdge(secretNodeId, valid.subject_id, 'ABOUT', 1.0, { type: 'SECRET_RELATION' });
+            }
+            break;
+          }
           
           default:
             console.warn(`[KGot] Unknown mutation operation: ${operation}`);
@@ -458,7 +534,7 @@ export class KGotController {
   public getSocialHierarchy(): [string, number][] {
     if (this.graph.order === 0) return [];
     try {
-        const scores = pagerank(this.graph);
+        const scores = pagerank(this.graph) as Record<string, number>; // Explicitly cast to Record<string, number>
         return Object.entries(scores).sort((a: [string, number], b: [string, number]) => b[1] - a[1]);
     } catch (e) {
         console.warn("PageRank failed:", e);
@@ -484,7 +560,7 @@ export class KGotController {
   }
 
   public calculateDominancePath(source: string, target: string): string[] | null {
-    if (!(this.graph as any).hasNode(source) || !(this.graph as any).hasNode(target)) return null;
+    if (!this.graph.hasNode(source) || !this.graph.hasNode(target)) return null;
     try {
         const path = dijkstra.bidirectional(this.graph, source, target, (edge, attr) => {
              return 1.0 - (attr.weight || 0.5);
@@ -499,7 +575,7 @@ export class KGotController {
     if (this.graph.order === 0) return;
     try {
         const positions = forceAtlas2(this.graph, { iterations, settings: { gravity: 1.0 } });
-        this.graph.forEachNode((node, attr) => {
+        this.graph.forEachNode((node, nodeAttrs) => { // Renamed 'attr' to 'nodeAttrs'
             if (positions[node]) {
                 this.graph.mergeNodeAttributes(node, {
                     x: positions[node].x,
@@ -522,7 +598,7 @@ export class KGotController {
         for (let j = i + 1; j < limit; j++) {
             const source = nodes[i];
             const target = nodes[j];
-            if ((this.graph as any).hasEdge(source, target)) continue;
+            if (this.graph.hasEdge(source, target)) continue;
             try {
                 const path = dijkstra.bidirectional(this.graph, source, target);
                 if (path && path.length > 1 && path.length <= threshold + 1) { 
@@ -577,144 +653,85 @@ export class KGotController {
 
   public getNode2VecEmbeddings(dim: number = 16): Record<string, number[]> {
     this.knowledgeCompletion();
-    let bc = {};
+    let bc: Record<string, number> = {}; // Explicitly type bc
     try { bc = betweennessCentrality(this.graph); } catch (e) {}
     const rawEmbeds = this.origNode2Vec(dim);
-    const enriched: Record<string, number[]> = {};
-    this.graph.forEachNode(node => {
-        const structuralFeats = this.getNodeFeatures(node, bc as Record<string, number>);
-        if (rawEmbeds[node]) {
-            enriched[node] = rawEmbeds[node].concat(structuralFeats);
-        }
-    });
-    return enriched;
-  }
-
-  public async getGraphSAGEEmbeddings(layers = [16, 32, 16], epochs = 50, lr = 0.01): Promise<Record<string, number[]>> {
-    const nodes = this.graph.nodes();
-    const numNodes = nodes.length;
-    if (numNodes === 0) return {};
-    if (numNodes > 500) {
-        console.warn(`[KGot] GraphSAGE Warning: Graph size too large. Falling back to Node2Vec.`);
-        return this.getNode2VecEmbeddings();
-    }
-
-    try {
-        const tf = await import('@tensorflow/tfjs');
-        const nodeToIndex: Record<string, number> = {};
-        nodes.forEach((n, i) => nodeToIndex[n] = i);
-
-        const adjBuffer = tf.buffer([numNodes, numNodes]);
-        this.graph.forEachEdge((e, a, src, tgt) => {
-            const s = nodeToIndex[src];
-            const t = nodeToIndex[tgt];
-            if (s !== undefined && t !== undefined) {
-                adjBuffer.set(1, s, t);
-                adjBuffer.set(1, t, s); 
-            }
-        });
-        
-        for(let i=0; i<numNodes; i++) {
-            let deg = 0;
-            for(let j=0; j<numNodes; j++) if(adjBuffer.get(i, j)) deg++;
-            deg = deg > 0 ? deg : 1; 
-            for(let j=0; j<numNodes; j++) if(adjBuffer.get(i, j)) adjBuffer.set(1/deg, i, j);
-        }
-        
-        const A = adjBuffer.toTensor();
-
-        return tf.tidy(() => {
-            const inputDim = layers[0];
-            const initialFeatures = tf.randomNormal([numNodes, inputDim]);
-            const w1 = tf.variable(tf.randomNormal([layers[0] * 2, layers[1]], 0, 0.1));
-            const w2 = tf.variable(tf.randomNormal([layers[1] * 2, layers[2]], 0, 0.1));
-            const optimizer = tf.train.adam(lr);
-
-            const model = (x: any) => {
-                const neigh1 = tf.matMul(A, x);
-                const concat1 = tf.concat([x, neigh1], 1);
-                const h1 = tf.relu(tf.matMul(concat1, w1));
-                const norm1 = tf.div(h1, tf.norm(h1, 'euclidean', 1, true).add(1e-6));
-                
-                const neigh2 = tf.matMul(A, norm1);
-                const concat2 = tf.concat([norm1, neigh2], 1);
-                const h2 = tf.matMul(concat2, w2); 
-                const norm2 = tf.div(h2, tf.norm(h2, 'euclidean', 1, true).add(1e-6));
-                
-                return norm2;
-            };
-
-            for(let i=0; i<epochs; i++) {
-                optimizer.minimize(() => tf.mean(tf.square(tf.sub(model(initialFeatures), initialFeatures))));
-            }
-
-            const finalEmbeds = model(initialFeatures);
-            const data = finalEmbeds.arraySync() as number[][];
-            const result: Record<string, number[]> = {};
-            nodes.forEach((n, i) => result[n] = data[i]);
-            return result;
-        });
-
-    } catch (e) {
-        console.warn("GraphSAGE failed (tfjs likely missing or error):", e);
-        return this.getNode2VecEmbeddings();
-    }
+    // You can enrich rawEmbeds here with getNodeFeatures if needed, e.g.:
+    // const enriched: Record<string, number[]> = {};
+    // for (const node of this.graph.nodes()) {
+    //    enriched[node] = [...rawEmbeds[node], ...this.getNodeFeatures(node, bc)];
+    // }
+    // return enriched;
+    return rawEmbeds; // Returning raw Node2Vec embeddings for now
   }
 
   public updateLedger(subjectId: string, deltas: Partial<YandereLedger>): void {
-    if (!(this.graph as any).hasNode(subjectId)) return;
-    const attrs = this.graph.getNodeAttributes(subjectId);
-    // @ts-ignore
-    const ledger = attrs.attributes.ledger || {};
+    if (!this.graph.hasNode(subjectId)) return;
+    const nodeAttrs = this.graph.getNodeAttributes(subjectId);
+    const ledger: YandereLedger = nodeAttrs.attributes?.ledger || INITIAL_LEDGER; // Ensure ledger is initialized
+    
+    // Create a mutable copy of the ledger for updates
+    const updatedLedger: YandereLedger = { ...ledger };
+
     Object.keys(deltas).forEach((key) => {
         const k = key as keyof YandereLedger;
         const val = deltas[k];
-        if (typeof val === 'number' && typeof ledger[k] === 'number') {
-           // @ts-ignore
-           ledger[k] = Math.max(0, Math.min(100, ledger[k] + val));
+        if (typeof val === 'number' && typeof updatedLedger[k] === 'number') {
+           (updatedLedger[k] as number) = Math.max(0, Math.min(100, (updatedLedger[k] as number) + val));
         } else if (val !== undefined) {
-           // @ts-ignore
-           ledger[k] = val;
+           (updatedLedger[k] as any) = val; // Direct assignment for non-number types or new values
         }
     });
-    this.graph.mergeNodeAttributes(subjectId, { attributes: { ...attrs.attributes, ledger } });
+    this.graph.mergeNodeAttributes(subjectId, { attributes: { ...nodeAttrs.attributes, ledger: updatedLedger } });
   }
 
   public addMemory(nodeId: string, memory: Memory): void {
-    if (!(this.graph as any).hasNode(nodeId)) return;
-    const attrs = this.graph.getNodeAttributes(nodeId);
-    // @ts-ignore
-    const memories = attrs.attributes.memories || [];
+    if (!this.graph.hasNode(nodeId)) return;
+    const nodeAttrs = this.graph.getNodeAttributes(nodeId);
+    const memories = nodeAttrs.attributes?.memories || [];
     memories.push(memory);
-    if (memories.length > 20) memories.shift();
-    this.graph.mergeNodeAttributes(nodeId, { attributes: { ...attrs.attributes, memories } });
+    if (memories.length > 20) memories.shift(); // Keep a limited history
+    this.graph.mergeNodeAttributes(nodeId, { attributes: { ...nodeAttrs.attributes, memories } });
   }
 
   public updateGrudge(holderId: string, targetId: string, delta: number): void {
-    if (!(this.graph as any).hasNode(holderId)) return;
-    const attrs = this.graph.getNodeAttributes(holderId);
-    // @ts-ignore
-    const grudges = attrs.attributes.grudges || {};
+    if (!this.graph.hasNode(holderId)) return;
+    const nodeAttrs = this.graph.getNodeAttributes(holderId);
+    const grudges: Record<string, number> = nodeAttrs.attributes?.grudges || {};
     const current = grudges[targetId] || 0;
     const newVal = Math.max(0, Math.min(100, current + delta));
     grudges[targetId] = newVal;
-    this.graph.mergeNodeAttributes(holderId, { attributes: { ...attrs.attributes, grudges } });
+    this.graph.mergeNodeAttributes(holderId, { attributes: { ...nodeAttrs.attributes, grudges } });
     if (newVal > 50) {
         this.addEdge(holderId, targetId, 'GRUDGE', newVal / 100, { intensity: newVal, trope: 'Burning Hatred' });
     }
   }
 
+  // NEW: Method to add a secret to a subject's attributes
+  public addSubjectSecret(
+    subjectId: string,
+    secret: { name: string; description: string; discoveredBy?: string; turn?: number }
+  ): void {
+    if (!this.graph.hasNode(subjectId)) {
+        console.warn(`[KGot] Subject ${subjectId} not found to add secret.`);
+        return;
+    }
+    const nodeAttrs = this.graph.getNodeAttributes(subjectId);
+    const currentSecrets = nodeAttrs.attributes?.secrets || [];
+    currentSecrets.push(secret);
+    this.graph.mergeNodeAttributes(subjectId, { attributes: { ...nodeAttrs.attributes, secrets: currentSecrets } });
+  }
+
   // --- Unified Director Logic Bridge ---
   public applyPrefectSimulations(simulations: UnifiedDirectorOutput['prefect_simulations']): void {
     simulations.forEach(sim => {
-        if (!(this.graph as any).hasNode(sim.prefect_id)) {
+        if (!this.graph.hasNode(sim.prefect_id)) {
             const resolved = this.resolveTargetId(sim.prefect_name);
             if (resolved) sim.prefect_id = resolved;
             else return; 
         }
-        const attrs = this.graph.getNodeAttributes(sim.prefect_id);
-        // @ts-ignore
-        const agentState = attrs.attributes.agent_state || {};
+        const nodeAttrs = this.graph.getNodeAttributes(sim.prefect_id);
+        const agentState = nodeAttrs.attributes?.agent_state || {};
         const updatedAgentState = {
             ...agentState,
             current_mood: this.deriveMoodFromState(sim.emotional_state),
@@ -722,19 +739,18 @@ export class KGotController {
             last_hidden_motivation: sim.hidden_motivation,
             last_public_action: sim.public_action
         };
-        // @ts-ignore
-        const currentSecrets = attrs.attributes.secrets || [];
+        const currentSecrets = nodeAttrs.attributes?.secrets || [];
         const newSecrets = [...new Set([...currentSecrets, ...(sim.secrets_uncovered || [])])];
         this.graph.mergeNodeAttributes(sim.prefect_id, {
             attributes: {
-                ...attrs.attributes,
+                ...nodeAttrs.attributes,
                 agent_state: updatedAgentState,
                 secrets: newSecrets
             }
         });
         if (sim.sabotage_attempt) {
              const targetId = this.resolveTargetId(sim.sabotage_attempt.target);
-             if (targetId && (this.graph as any).hasNode(targetId)) {
+             if (targetId && this.graph.hasNode(targetId)) {
                  this.updateGrudge(sim.prefect_id, targetId, 25); 
                  this.addEdge(sim.prefect_id, targetId, 'SABOTAGE_ATTEMPT', 0.9, {
                      method: sim.sabotage_attempt.method,
@@ -746,7 +762,7 @@ export class KGotController {
         }
         if (sim.alliance_signal) {
             const targetId = this.resolveTargetId(sim.alliance_signal.target);
-            if (targetId && (this.graph as any).hasNode(targetId)) {
+            if (targetId && this.graph.hasNode(targetId)) {
                 this.addEdge(sim.prefect_id, targetId, 'ALLIANCE_SIGNAL', 0.6, {
                     message: sim.alliance_signal.message,
                     timestamp: this.globalState.turn_count,
@@ -773,15 +789,13 @@ export class KGotController {
   }
 
   private resolveTargetId(nameOrId: string): string | null {
-    if ((this.graph as any).hasNode(nameOrId)) return nameOrId;
+    if (this.graph.hasNode(nameOrId)) return nameOrId;
     let foundId = null;
     const search = nameOrId.toUpperCase();
-    this.graph.forEachNode((id, attrs) => {
-        // @ts-ignore
-        const label = (attrs.label || "").toUpperCase();
+    this.graph.forEachNode((id, nodeAttrs) => { // Renamed 'attrs' to 'nodeAttrs'
+        const label = (nodeAttrs.label || "").toUpperCase();
         if (label.includes(search) || id.includes(search)) foundId = id;
-        // @ts-ignore
-        if (attrs.attributes?.agent_state?.archetype?.toUpperCase() === search) foundId = id;
+        if (nodeAttrs.attributes?.agent_state?.archetype?.toUpperCase() === search) foundId = id;
     });
     if (!foundId) {
         if (search.includes("PLAYER") || search.includes("SUBJECT")) return "Subject_84";

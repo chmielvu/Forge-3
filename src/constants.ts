@@ -1,4 +1,5 @@
 
+
 import { GraphNode, CharacterId, YandereLedger } from './types';
 
 export const INITIAL_LEDGER: YandereLedger = {
@@ -38,6 +39,8 @@ export const INITIAL_NODES: (GraphNode & { ocean?: { O: number, C: number, E: nu
   { id: 'ASPIRANT_NYX', label: 'Nyx', group: 'prefect', val: 10, traits: ['Competitive', 'Ruthless'], ocean: { O: 0.7, C: 0.8, E: 0.5, A: 0.2, N: 0.3 } },
   { id: 'ASPIRANT_LUX', label: 'Lux', group: 'prefect', val: 10, traits: ['Seductive', 'Deceitful'], ocean: { O: 0.6, C: 0.3, E: 0.9, A: 0.2, N: 0.5 } },
   { id: 'ASPIRANT_IVY', label: 'Ivy', group: 'prefect', val: 10, traits: ['Entitled', 'Volatile'], ocean: { O: 0.4, C: 0.2, E: 0.7, A: 0.1, N: 0.9 } },
+  // NEW LOCATION
+  { id: 'loc_infirmary', label: 'The Infirmary', group: 'location', val: 5, traits: ['sterile', 'cold', 'hidden secrets'] }
 ];
 
 export const INITIAL_LINKS = [
@@ -56,6 +59,8 @@ export const INITIAL_LINKS = [
   { source: CharacterId.NICO, target: CharacterId.PLAYER, relation: 'challenges', weight: 5 },
   { source: CharacterId.SILAS, target: CharacterId.PLAYER, relation: 'observes', weight: 4 },
   { source: CharacterId.THEO, target: CharacterId.PLAYER, relation: 'fears_for', weight: 6 },
+  // NEW: Link Nurse to Infirmary
+  { source: CharacterId.NURSE, target: 'loc_infirmary', relation: 'works_in', weight: 0.8 }
 ];
 
 export const SYSTEM_INSTRUCTION = `
@@ -120,7 +125,7 @@ export const VISUAL_PROFILES: Record<CharacterId, string> = {
 
   // REMEDIAL CLASS
   [CharacterId.NICO]: "Nico (The Defiant Spark): Wiry, intense. Messy dark hair, fresh bruises on jaw. Uniform torn at the collar. Eyes burning with defiance even while kneeling. Spits blood. Radiates unbroken resistance.",
-  [CharacterId.DARIUS]: "Darius (The Broken Guardian): Large frame, broad shoulders now slumped in defeat. Gentle eyes filled with exhaustion. Protective posture, often positioning himself between threats and others. Uniform is worn but cared for. Physically imposing but spiritually shattered.",
+  [CharacterId.DARIUS]: "Darius (The Defiant Spark): Large frame, broad shoulders now slumped in defeat. Gentle eyes filled with exhaustion. Protective posture, often positioning himself between threats and others. Uniform is worn but cared for. Physically imposing but spiritually shattered.",
   [CharacterId.SILAS]: "Silas (The Silent Calculator): Average build, blends into shadows. Neat uniform, almost surgical in its tidiness. Blank expression, watchful eyes that record everything. Minimal movement. A mirror reflecting obedience.",
   [CharacterId.THEO]: "Theo (The Fragile Bird): Small, slight frame. Pale skin, trembling constantly. Uniform hangs loose on him. Large, tear-filled eyes. Often clutching himself or flinching. Radiates fragility and terror."
 };

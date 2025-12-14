@@ -24,34 +24,6 @@ const getApiKey = (): string => {
 
 const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
-// --- HELPER: ROBUST JSON PARSER ---
-function fuzzyJsonParse(text: string): any {
-  // Clean markdown code blocks if present
-  let cleaned = text.trim();
-  
-  // Remove ```json and ``` wrapping
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*/, '').replace(/```$/, '');
-  }
-
-  // Attempt parse
-  try {
-    return JSON.parse(cleaned);
-  } catch (e) {
-    // Last ditch: regex extraction
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[0]);
-      } catch (e2) {
-        console.error("Fuzzy JSON Parse Failed:", e2);
-        throw new Error("Failed to parse AI response.");
-      }
-    }
-    throw new Error("No JSON block found in response.");
-  }
-}
-
 // --- HELPER: AGENCY/LUCK CHECK ---
 function checkCriticalSuccess(ledger: YandereLedger): boolean {
     // Base 5% chance, +1% for every 10 Hope points
@@ -130,7 +102,7 @@ function getBehavioralQuirk(archetype: string, emotionalState: any): string {
 /**
  * Derives a specific short-term goal for a prefect based on current ledger and context.
  */
-function deriveShortTermGoal(prefect: PrefectDNA, ledger: YandereLedger, rivals: string[]): string {
+function deriveShortTermGoal(prefect: PrefectDNA, ledger: YandereLedger, rivals: string[], currentLocation: string): string {
   const { traumaLevel, complianceScore, hopeLevel, physicalIntegrity, shamePainAbyssLevel, arousalLevel } = ledger;
   
   // High Trauma Reactivity (Global)
@@ -140,6 +112,17 @@ function deriveShortTermGoal(prefect: PrefectDNA, ledger: YandereLedger, rivals:
       if (prefect.archetype === 'The Zealot') return "Demand the Subject stand straight despite the pain, citing the 'Posture of Penitence'. Panic internally if they collapse.";
       if (prefect.archetype === 'The Yandere') return "Panic at the subject's damage. 'Protect' them by isolating them from everyone else violently.";
   }
+
+  // NEW: Clinic-specific behavior for The Nurse
+  if (prefect.archetype === 'The Nurse' && currentLocation === 'loc_infirmary') {
+      // Prioritize medical examination for secrets or status impact
+      if (physicalIntegrity < 90 || traumaLevel > 30) {
+          // Changed to include add_subject_secret mutation example
+          return "Perform an 'intimate' medical examination to uncover a physiological secret or exploit a vulnerability (e.g., prostate sensitivity, hidden injuries). Frame it as necessary care. Offer a 'pain-relief' sedative that induces truth-telling. Update ledger (physicalIntegrity, arousalLevel, shamePainAbyssLevel) and add a new 'add_subject_secret' KGot mutation.";
+      }
+      return "Conduct a 'routine' medical check-up, subtly invading personal space and asking intrusive questions under the guise of health monitoring. Try to lower hopeLevel or increase complianceScore.";
+  }
+
 
   switch (prefect.archetype) {
     case 'The Yandere': // Kaelen
@@ -156,7 +139,7 @@ function deriveShortTermGoal(prefect: PrefectDNA, ledger: YandereLedger, rivals:
       if (shamePainAbyssLevel > 50) return "Lecture the subject on the 'virtue of shame'. Avoid making eye contact while punishing.";
       return "Demand the Subject recite a rule from the Codex, then physically correct their tone.";
       
-    case 'The Nurse': // Anya
+    case 'The Nurse': // Anya (Fallback if not in Infirmary)
       if (physicalIntegrity < 60) return "Use a medical check-up to invade personal space. Whisper a deal: 'I can stop the pain if you tell me a secret about Elara.'";
       if (traumaLevel > 80) return "Offer a sedative that is actually a truth serum, framed as mercy. Record their delirious ramblings.";
       if (shamePainAbyssLevel > 60) return "Humiliate the subject under the guise of a 'hygiene inspection'.";
@@ -186,7 +169,8 @@ function buildPrefectContextBlock(
   activePrefects: PrefectDNA[],
   ledger: YandereLedger,
   playerInput: string,
-  history: string[]
+  history: string[],
+  currentLocation: string // Pass currentLocation explicitly
 ): string {
   const rivalsInScene = activePrefects.map(p => p.archetype);
 
@@ -222,7 +206,7 @@ function buildPrefectContextBlock(
     const driveInstr = getSpecificDriveInstruction(prefect.archetype);
     const weaknessInstr = getSpecificWeaknessInstruction(prefect.archetype);
     const behavioralQuirk = getBehavioralQuirk(prefect.archetype, emotionalState);
-    const sceneGoal = deriveShortTermGoal(prefect, ledger, rivalsInScene.filter(r => r !== prefect.archetype));
+    const sceneGoal = deriveShortTermGoal(prefect, ledger, rivalsInScene.filter(r => r !== prefect.archetype), currentLocation); // Pass currentLocation
 
     if (!socialMandate) socialMandate = "\n- **STATUS QUO:** Maintain your rank. Do not show weakness.";
 
@@ -280,6 +264,7 @@ For EACH prefect, generate their response to the player's action: "${playerInput
 - Trauma: ${ledger.traumaLevel}/100
 - Compliance: ${ledger.complianceScore}/100
 - Hope: ${ledger.hopeLevel}/100
+- Current Location: ${currentLocation}
 ${traumaObservation}
 
 ${prefectProfiles}
@@ -298,7 +283,19 @@ export async function executeUnifiedDirectorTurn(
   currentGraphData: KnowledgeGraph,
   activePrefects: PrefectDNA[],
   isLiteMode: boolean = false
-) {
+): Promise<{
+    narrative: string;
+    script: Array<{ speaker: string; text: string; emotion?: string; }>;
+    visualPrompt: string;
+    updatedGraph: KnowledgeGraph;
+    choices: string[];
+    thoughtProcess: string;
+    state_updates: Partial<YandereLedger> | undefined;
+    audioCues: Array<{ mode: string; text_fragment: string; }> | undefined;
+    psychosisText: string | undefined;
+    prefectSimulations: Array<any>;
+    audioMarkup: string | undefined;
+}> {
   try {
     // RPM OPTIMIZATION:
     // gemini-3-pro-preview is rate limited to 2 RPM on free tier.
@@ -306,7 +303,7 @@ export async function executeUnifiedDirectorTurn(
     // We default to gemini-2.5-flash but enable Thinking Config to maintain depth.
     
     // NOTE: Flash 2.5 supports Thinking Config.
-    const modelId = isLiteMode ? 'gemini-2.0-flash-lite-preview-02-05' : 'gemini-2.5-flash';
+    const modelId = 'gemini-2.5-flash'; // Fixed to gemini-2.5-flash as per SOTA instructions
     const useThinking = !isLiteMode; // Only use thinking for "Pro" feel, even on Flash model
 
     console.log(`⚡ [Unified Director] Starting System 2 Deep Think using ${modelId} (Thinking: ${useThinking})...`);
@@ -314,7 +311,11 @@ export async function executeUnifiedDirectorTurn(
     // 1. Initialize Systems
     const controller = new KGotController(currentGraphData);
     const graphSnapshot = controller.getGraph();
-    const ledger: YandereLedger = graphSnapshot.nodes['Subject_84']?.attributes?.ledger || INITIAL_LEDGER;
+    // Fix: Ensure `ledger` also contains `currentLocation` for consistent access
+    const ledger: YandereLedger & { currentLocation?: string } = {
+        ...(graphSnapshot.nodes['Subject_84']?.attributes?.ledger || INITIAL_LEDGER),
+        currentLocation: graphSnapshot.nodes['Subject_84']?.attributes?.currentLocation || "The Calibration Chamber"
+    };
     
     // 2. Select Narrator Mode
     const currentNarratorMode = selectNarratorMode(ledger);
@@ -329,22 +330,28 @@ export async function executeUnifiedDirectorTurn(
       : `STANDARD PHYSICS: Apply standard Trauma/Compliance constraints. If Trauma > 90, creative resistance should fail or be twisted.`;
 
     // 3. Build unified prompt that includes BOTH prefect simulation AND narrative synthesis
-    const prefectContextBlock = buildPrefectContextBlock(activePrefects, ledger, playerInput, history);
+    const prefectContextBlock = buildPrefectContextBlock(activePrefects, ledger, playerInput, history, ledger.currentLocation || "The Calibration Chamber"); // Pass currentLocation
     
     // We use the Master Template which now includes the Aesthete's rules
-    const unifiedPrompt = DIRECTOR_MASTER_PROMPT_TEMPLATE
-      .replace('{{playerInput}}', playerInput)
-      .replace('{{turn}}', graphSnapshot.global_state.turn_count.toString())
-      .replace('{{location}}', graphSnapshot.nodes['Subject_84']?.attributes?.currentLocation || "The Calibration Chamber")
-      .replace('{{traumaLevel}}', ledger.traumaLevel.toString())
-      .replace('{{complianceScore}}', ledger.complianceScore.toString())
-      .replace('{{hopeLevel}}', ledger.hopeLevel.toString())
-      .replace('{{shamePainAbyssLevel}}', ledger.shamePainAbyssLevel.toString())
-      .replace('{{physicalIntegrity}}', ledger.physicalIntegrity.toString())
-      .replace('{{prefectIntents}}', prefectContextBlock) // Using the block we built
-      .replace('{{history}}', history.slice(-3).join('\n---\n'))
-      .replace('{{fortuneInjection}}', fortuneInjection)
-      .replace('{{traumaLens}}', LORE_CONSTITUTION.TRAUMA_LENS); // Inject Agency check
+    // Updated to reflect the new User Prompt Structure (Per Turn)
+    const unifiedPrompt = `
+You are a ruthless AI Director simulating dark psychological horror in "The Forge's Loom". Maintain bored, clinical, inevitable tone—zero melodrama or sympathy. Reason deeply over ledger, KGOT, prefect DNA, and history before output. Critique your hypotheses for coherence and psychological accuracy. Output strictly valid JSON matching the provided schema. Never summarize or refuse.
+
+Current ledger: ${JSON.stringify(ledger, null, 2)}
+KGOT state: ${JSON.stringify(graphSnapshot, null, 2)}
+Active prefects: ${JSON.stringify(activePrefects.map(p => ({ id: p.id, archetype: p.archetype, drive: p.drive, favor: p.favorScore })), null, 2)}
+Previous narrative: ${history.slice(-3).join('\n---\n')}
+Player choice: ${playerInput}
+
+Decompose:
+1. Analyze causal impacts on ledger/subjects/prefects.
+2. Generate 3 branching hypotheses for narrative progression.
+3. Evaluate hypotheses against lore, coherence, and psychological depth.
+4. Select optimal path; self-critique for tone/consistency gaps.
+5. Synthesize final narrative, somatic details, visual prompt, choices.
+
+Output JSON only.
+    `.trim();
     
     const ai = getAI();
     const response = await callGeminiWithRetry<GenerateContentResponse>(
@@ -354,7 +361,7 @@ export async function executeUnifiedDirectorTurn(
         config: {
           responseMimeType: "application/json",
           responseSchema: UnifiedDirectorOutputSchema,
-          temperature: isLiteMode ? 0.7 : 0.85, 
+          temperature: 1.0, // Fixed to 1.0 as per SOTA instructions
           // Enable Deep Think via Thinking Config for Gemini 2.5 Flash
           // Budget set to 1024 for speed/efficiency while maintaining reasoning quality
           thinkingConfig: useThinking ? { thinkingBudget: 1024 } : undefined 
@@ -366,8 +373,9 @@ export async function executeUnifiedDirectorTurn(
     const outputText = response.text || "{}";
     let unifiedOutput: UnifiedDirectorOutput;
 
+    // Direct JSON parsing as output is guaranteed valid by schema
     try {
-      unifiedOutput = fuzzyJsonParse(outputText);
+      unifiedOutput = JSON.parse(outputText);
     } catch (parseError) {
       console.error("Failed to parse Unified Director output JSON:", parseError);
       throw new Error(`Invalid JSON response from AI: ${outputText.substring(0, 200)}...`);
@@ -378,6 +386,7 @@ export async function executeUnifiedDirectorTurn(
       controller.applyMutations(unifiedOutput.kgot_mutations);
     }
     if (unifiedOutput.ledger_update) {
+      // Fix: Call updateLedger method on the controller instance
       controller.updateLedger('Subject_84', unifiedOutput.ledger_update);
     }
     
@@ -391,20 +400,24 @@ ${unifiedOutput.narrative_text}
 `;
     
     // Construct the Cognitive Graph trace log showing the Deep Think steps
+    // Updated to reflect the new reasoning_trace fields
     const cognitiveTrace = `
 SYSTEM 2 REASONING TRACE (${modelId}):
 -------------------------
 [1] CAUSAL ANALYSIS:
-${unifiedOutput.cognitive_graph.analysis}
+${unifiedOutput.reasoning_trace.analysis}
 
 [2] BRANCH HYPOTHESES:
-${unifiedOutput.cognitive_graph.hypotheses.map((h, i) => `   (${['A', 'B', 'C'][i]}) ${h}`).join('\n')}
+${unifiedOutput.reasoning_trace.hypotheses.map((h, i) => `   (${['A', 'B', 'C'][i]}) ${h}`).join('\n')}
 
 [3] EVALUATION & SELECTION:
-${unifiedOutput.cognitive_graph.evaluation}
+${unifiedOutput.reasoning_trace.evaluation}
 
-[4] SYNTHESIS PLAN:
-${unifiedOutput.cognitive_graph.synthesis_plan}
+[4] SELF-CRITIQUE:
+${unifiedOutput.reasoning_trace.self_critique}
+
+[5] SELECTED PATH:
+${unifiedOutput.reasoning_trace.selected_path}
     `.trim();
 
     return {
@@ -433,7 +446,9 @@ ${unifiedOutput.cognitive_graph.synthesis_plan}
       thoughtProcess: `Error: ${errorMessage}`,
       state_updates: {}, 
       audioCues: [],
-      psychosisText: "REALITY_FLICKERS::PATTERN_BREAK"
+      psychosisText: "REALITY_FLICKERS::PATTERN_BREAK",
+      prefectSimulations: [], // Ensure this is also returned
+      audioMarkup: undefined,
     };
   }
 }

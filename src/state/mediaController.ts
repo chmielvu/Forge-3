@@ -75,7 +75,7 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
                   item.target || CharacterId.PLAYER,
                   turn.text,
                   ledger,
-                  item.narrativeText || turn.text,
+                  item.narrativeText || item.prompt, // Use item.prompt for TTS if narrativeText is empty
                   item.previousTurn,
                   item.prompt
               );
@@ -191,6 +191,9 @@ const processMediaQueue = async (): Promise<void> => {
     mediaProcessingTimeout = null; // Clear timeout when queue is truly empty
     return;
   }
+  
+  // Sort pending queue by priority (lower number = higher priority)
+  pending.sort((a, b) => (a.priority || 99) - (b.priority || 99));
 
   // Take the next batch of items from pending
   const itemsToProcess = pending.slice(0, availableSlots);
@@ -229,19 +232,34 @@ export const enqueueTurnForMedia = (
   // Use the visualPrompt from the turn (Director Output) if available, otherwise fallback
   const directorVisualPrompt = turn.visualPrompt;
 
+  // --- DYNAMIC PRIORITY CALCULATION ---
+  let traumaBoost = 0;
+  if (ledger.traumaLevel > 70 || ledger.shamePainAbyssLevel > 60) traumaBoost += 0.5;
+  if (ledger.hopeLevel < 30) traumaBoost += 0.5; // Cumulative boost
+
+  // Audio Priority: Base 1 (highest)
+  let audioPriority = 1 - traumaBoost; // Lower number is higher priority
+  audioPriority = Math.max(0, audioPriority); // Ensure it doesn't go below 0
+
+  // Image Priority: Base 2
+  let imagePriority = 2 - traumaBoost;
+  imagePriority = Math.max(0, imagePriority);
+
+  // Video Priority: Base 3 (if enabled, generally lowest)
+  let videoPriority = 3; 
+
   // Image
   if ((turn.imageStatus === MediaStatus.idle || forceEnqueue) && BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableImages) {
     store.enqueueMediaForTurn({
       turnId: turn.id,
       type: 'image',
-      // Pass the director's visual prompt here. It will be passed to generateNarrativeImage
-      // which will then pass it to buildVisualPrompt for coherent styling.
       prompt: directorVisualPrompt || turn.text, 
       narrativeText: turn.text,
       target: target,
       previousTurn: previousTurn,
+      priority: imagePriority, // Apply calculated priority
     });
-    if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] Enqueued image for turn ${turn.id}`);
+    if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] Enqueued image for turn ${turn.id} with priority ${imagePriority}.`);
   }
 
   // Audio
@@ -250,13 +268,13 @@ export const enqueueTurnForMedia = (
       turnId: turn.id,
       type: 'audio',
       prompt: turn.text,
-      // Priority: Script > Audio Markup > Raw Narrative
       script: turn.script,
       narrativeText: turn.metadata?.audioMarkup || turn.text,
       target: target,
       previousTurn: previousTurn,
+      priority: audioPriority, // Apply calculated priority
     });
-    if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] Enqueued audio for turn ${turn.id}`);
+    if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] Enqueued audio for turn ${turn.id} with priority ${audioPriority}.`);
   }
 
   if (!mediaProcessingTimeout) {
@@ -289,8 +307,8 @@ export const regenerateMediaForTurn = async (turnId: string, type?: 'image' | 'a
   }
 
   const itemsToRemove: MediaQueueItem[] = [];
-  if (!type || type === 'image') itemsToRemove.push({ turnId, type: 'image', prompt: '' });
-  if (!type || type === 'audio') itemsToRemove.push({ turnId, type: 'audio', prompt: '' });
+  if (!type || type === 'image') itemsToRemove.push({ turnId, type: 'image', prompt: '', priority: 0 });
+  if (!type || type === 'audio') itemsToRemove.push({ turnId, type: 'audio', prompt: '', priority: 0 });
   // Video removed
 
   itemsToRemove.forEach(item => store.removeMediaFromQueue(item));
@@ -326,6 +344,7 @@ export const preloadUpcomingMedia = (currentTurnId: string, count: number) => {
       const target = nextTurn.metadata?.activeCharacters?.[0] || CharacterId.PROVOST;
       const ledgerToUse = nextTurn.metadata?.ledgerSnapshot || store.gameState.ledger;
 
+      // enqueueTurnForMedia will now calculate and apply dynamic priority
       enqueueTurnForMedia(nextTurn, target, ledgerToUse, previousTurn);
     }
   }

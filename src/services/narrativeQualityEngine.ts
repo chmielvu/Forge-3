@@ -221,9 +221,62 @@ export class NarrativeQualityEngine {
 
   autoFixNarrative(narrative: string, issues: NarrativeIssue[], context: GameState): string {
     let fixed = narrative;
+    const currentWordCount = fixed.split(/\s+/).length;
+
+    // Fix: Length
     if (issues.some(i => i.category === 'length')) {
-        fixed += " \n\nThe silence that follows is heavy, tasting of ozone and ancient dust.";
+        const wordsToAdd = this.minWordCount - currentWordCount;
+        if (wordsToAdd > 0) {
+            const filler = [
+                "The silence that follows is heavy, tasting of ozone and ancient dust. The air, thick with unspoken implications, presses in from all sides.",
+                "A low hum resonates through the very foundations of the structure, a constant, subtle reminder of the unseen mechanisms at work. Every surface feels cold, clinical.",
+                "The shadows, long and stretching, dance with a cruel indifference, painting fleeting, distorted figures on the periphery of vision. Time seems to drag, each second an eternity.",
+                "A faint, metallic scent, almost imperceptible, hangs in the air, hinting at unseen processes and the cold precision of the machines that govern this space.",
+                "The ambient sounds of the facility — distant clanks, the soft whisper of unseen vents — form a monotonous, oppressive symphony that grates against the frayed nerves."
+            ];
+            // Add enough filler until minWordCount is met, or add a full paragraph if no specific length target
+            let addedContent = '';
+            let remainingWords = wordsToAdd;
+            let fillerIndex = 0; // Use an index to cycle through filler
+            while (remainingWords > 0 && fillerIndex < filler.length) {
+                const phrase = filler[fillerIndex];
+                addedContent += ` ${phrase}`;
+                remainingWords -= phrase.split(/\s+/).length;
+                fillerIndex++;
+            }
+            fixed += addedContent;
+        }
     }
+
+    // Fix: Environmental Detail
+    if (issues.some(i => i.category === 'detail') && !issues.some(i => i.category === 'length')) {
+        const location = context.location || "The Calibration Chamber";
+        const traumaLevel = context.ledger?.traumaLevel || 0;
+        let environmentalAdd = "";
+
+        if (traumaLevel > 70) {
+            environmentalAdd = `The stark walls of ${location} seem to lean in, the oppressive architecture blurring at the edges of your vision, reflecting a sick, jaundiced light.`;
+        } else if (traumaLevel > 40) {
+            environmentalAdd = `The cold, unyielding surfaces of ${location} gleam faintly under the sterile, unforgiving lights, a constant testament to its unfeeling purpose.`;
+        } else {
+            environmentalAdd = `The air within ${location} carries a faint metallic tang, a signature of the unseen machinery and the pristine, if menacing, order.`;
+        }
+        fixed = `${fixed}\n\n${environmentalAdd}`;
+    }
+
+    // Fix: Thematic Resonance
+    if (issues.some(i => i.category === 'theme') && !issues.some(i => i.category === 'length') && !issues.some(i => i.category === 'detail')) {
+        const thematicAdditions = [
+            "This is not chaos; it is merely a complex form of calibration, a refinement of the self through imposed order.",
+            "Each moment here is a lesson in submission, a slow, inevitable descent into the void of perfect compliance.",
+            "You are merely a variable, being adjusted to fit the grand equation of the Forge's design, stripped of all superfluous will.",
+            "The shame that blossoms within is not a flaw, but a feature—a necessary tool for the architects of your new self."
+        ];
+        // Append a random thematic line
+        const randomThematic = thematicAdditions[Math.floor(Math.random() * thematicAdditions.length)];
+        fixed = `${fixed}\n\n[[#a8a29e|"${randomThematic}"]]`; // Use existing text color from current styles
+    }
+
     return fixed;
   }
 

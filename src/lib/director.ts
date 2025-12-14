@@ -75,7 +75,7 @@ const DirectorOutputSchema = {
       items: {
         type: Type.OBJECT,
         properties: {
-          operation: { type: Type.STRING, enum: ['add_edge', 'update_node', 'add_memory', 'update_grudge', 'add_trauma_bond', 'update_ledger'] },
+          operation: { type: Type.STRING, enum: ['add_edge', 'update_node', 'add_memory', 'update_grudge', 'add_trauma_bond', 'update_ledger', 'add_injury', 'add_subject_secret'] },
           params: { 
             type: Type.OBJECT,
             properties: {
@@ -244,6 +244,7 @@ export async function executeDirectorTurn(
         controller.applyMutations(mutations);
     }
     if (directorOutput.ledger_update) {
+        // Fix: Call updateLedger method on the controller instance
         controller.updateLedger('Subject_84', directorOutput.ledger_update);
     }
 

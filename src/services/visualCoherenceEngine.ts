@@ -3,6 +3,7 @@ import { YandereLedger, PrefectDNA, CharacterId, MultimodalTurn, CharacterVisual
 import { VISUAL_PROFILES } from '../constants';
 import { LIGHTING_PRESETS } from '../config/visualMandate';
 import { CHARACTER_VOICE_MAP } from '../config/voices';
+import { FORGE_MOTIFS } from '../data/motifs'; // NEW: Import motifs
 
 /**
  * AudioCoherenceEngine v2
@@ -172,14 +173,71 @@ class VisualCoherenceEngine {
     return details;
   }
 
+  // NEW: Method to dynamically select motifs based on ledger and narrative
+  private _selectMotifs(ledger: YandereLedger, narrativeText: string): string[] {
+    const motifs: string[] = [];
+    const lowerNarrative = narrativeText.toLowerCase();
+
+    // Ledger-based motif triggers
+    if (ledger.traumaLevel > 70) {
+        motifs.push(FORGE_MOTIFS.TearTracks);
+        motifs.push(FORGE_MOTIFS.AvertedGaze);
+        if (ledger.traumaLevel > 85) {
+            motifs.push(FORGE_MOTIFS.EgoShatter);
+        }
+    }
+    if (ledger.shamePainAbyssLevel > 60) {
+        motifs.push(FORGE_MOTIFS.ClenchedJaw);
+        motifs.push(FORGE_MOTIFS.BodilyBetrayal);
+    }
+    if ((ledger.arousalLevel || 0) > 60) {
+        motifs.push(FORGE_MOTIFS.FlushedSkin);
+        motifs.push(FORGE_MOTIFS.DilatedPupils);
+    }
+    if ((ledger.prostateSensitivity || 0) > 40) {
+        motifs.push(FORGE_MOTIFS.RigidPosture);
+    }
+
+    // Keyword-based motif triggers
+    if (lowerNarrative.includes("bound") || lowerNarrative.includes("restrained")) {
+        motifs.push(FORGE_MOTIFS.BoundWrists);
+    }
+    if (lowerNarrative.includes("groin") || lowerNarrative.includes("testi")) {
+        motifs.push(FORGE_MOTIFS.SeatOfEgo);
+        motifs.push(FORGE_MOTIFS.CovenantRestraint);
+    }
+    if (lowerNarrative.includes("chest") || lowerNarrative.includes("cleavage")) {
+        motifs.push(FORGE_MOTIFS.RimLitCleavage);
+        motifs.push(FORGE_MOTIFS.VelvetShadowPool);
+    }
+    if (lowerNarrative.includes("kneel") || lowerNarrative.includes("bow")) {
+        motifs.push(FORGE_MOTIFS.RigidPosture);
+    }
+    if (lowerNarrative.includes("sweat")) {
+        motifs.push(FORGE_MOTIFS.GlisteningSweat);
+    }
+    if (lowerNarrative.includes("smile") && lowerNarrative.includes("cruel")) {
+        motifs.push(FORGE_MOTIFS.CruelHalfSmile);
+    }
+    if (lowerNarrative.includes("eyes") && lowerNarrative.includes("feline")) {
+        motifs.push(FORGE_MOTIFS.FelineEyes);
+    }
+
+    // Deduplicate and return
+    return Array.from(new Set(motifs));
+  }
+
   private buildSubjectDescription(target: PrefectDNA | CharacterId | string, ledger: YandereLedger, narrativeText: string): string {
     const base = typeof target === 'string' 
       ? VISUAL_PROFILES[target as CharacterId] || `${target}: vulnerable figure in tattered academy uniform`
       : `${target.displayName} (${target.archetype}): ${VISUAL_PROFILES[target.id as CharacterId] || 'detailed prefect figure'}`;
 
     const somatic = this.inferSomaticDetails(ledger, narrativeText);
+    const dynamicMotifs = this._selectMotifs(ledger, narrativeText); // NEW
 
-    return `${base}${somatic.length ? ', ' + somatic.join(', ') : ''}, under cold clinical gaze`;
+    const combinedDetails = [...somatic, ...dynamicMotifs]; // Combine somatic and dynamic motifs
+
+    return `${base}${combinedDetails.length ? ', ' + combinedDetails.join(', ') : ''}, under cold clinical gaze`;
   }
 
   public buildCoherentPrompt(
