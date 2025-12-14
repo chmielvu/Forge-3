@@ -1,19 +1,32 @@
 
-import { pipeline } from '@xenova/transformers';
+// Worker Instance Singleton
+let mediaWorker: Worker | null = null;
+const pendingRequests = new Map<string, { resolve: Function, reject: Function }>();
 
-// Singleton for TTS pipeline
-let ttsSynthesizer: any = null;
+function getWorker() {
+    if (!mediaWorker) {
+        // Initialize worker using standard Vite syntax
+        mediaWorker = new Worker(new URL('../workers/media.worker.ts', import.meta.url), { type: 'module' });
+        
+        mediaWorker.onmessage = (e) => {
+            const { type, id, payload, error } = e.data;
+            
+            if (type === 'RESULT' && pendingRequests.has(id)) {
+                pendingRequests.get(id)!.resolve(payload);
+                pendingRequests.delete(id);
+            } else if (type === 'ERROR' && pendingRequests.has(id)) {
+                pendingRequests.get(id)!.reject(new Error(error));
+                pendingRequests.delete(id);
+            } else if (type === 'progress') {
+                // Optional: handle progress updates
+                // console.debug('[Worker Progress]', payload);
+            }
+        };
+    }
+    return mediaWorker;
+}
 
-const getSynthesizer = async () => {
-  if (!ttsSynthesizer) {
-    console.log("[LocalMedia] Loading Transformers.js TTS...");
-    // Initialize the pipeline
-    ttsSynthesizer = await pipeline('text-to-speech', 'Xenova/speecht5_tts', { quantized: true });
-  }
-  return ttsSynthesizer;
-};
-
-// --- VISUAL ANALYSIS HELPERS ---
+// --- VISUAL ANALYSIS HELPERS (Kept on main thread as they are lightweight canvas ops) ---
 
 interface VisualParams {
   baseHue: number;
@@ -89,7 +102,7 @@ function analyzePrompt(prompt: string): VisualParams {
     params.shapes = 'organic';
   }
 
-  // 3. Composition Analysis (New)
+  // 3. Composition Analysis
   if (lower.match(/kneel|floor|down|bow|heavy|collapse/)) {
     params.composition = 'bottom-heavy';
   } else if (lower.match(/loom|tower|up|above|god|ceiling/)) {
@@ -233,30 +246,53 @@ export async function generateLocalImage(prompt: string): Promise<string> {
 }
 
 /**
- * Generates speech using on-device Transformers.js (SpeechT5).
+ * Optimally generates speech using the off-main-thread worker.
  */
 export async function generateLocalSpeech(text: string): Promise<{ audioData: string; duration: number }> {
-  try {
-    const synthesizer = await getSynthesizer();
-    // Speaker embeddings for 'slt' (CMU Arctic) - usually default or fetched
-    const speaker_embeddings = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin';
-    
-    const result = await synthesizer(text, { speaker_embeddings });
-    
-    // Transformers.js returns Float32Array audio, convert to WAV/Base64
-    // result.audio is Float32Array, result.sampling_rate is number
-    const wavBuffer = encodeWAV(result.audio, result.sampling_rate);
-    const base64 = arrayBufferToBase64(wavBuffer);
-    
-    return {
-      audioData: base64,
-      duration: result.audio.length / result.sampling_rate
-    };
-  } catch (e) {
-    console.error("[LocalMedia] TTS Failed:", e);
-    // Fallback stub if transformers fails
-    return { audioData: '', duration: 0 };
-  }
+    const worker = getWorker();
+    const id = crypto.randomUUID();
+
+    return new Promise((resolve, reject) => {
+        pendingRequests.set(id, {
+            resolve: (data: any) => {
+                // Convert Float32Array to WAV (Base64) for HTML5 Audio
+                const wavBuffer = encodeWAV(data.audio, data.sampling_rate);
+                resolve({
+                    audioData: arrayBufferToBase64(wavBuffer),
+                    duration: data.audio.length / data.sampling_rate
+                });
+            },
+            reject
+        });
+
+        worker.postMessage({
+            type: 'GENERATE_SPEECH',
+            id,
+            payload: { text }
+        });
+    });
+}
+
+/**
+ * Local "Aesthete" Critique using DistilBERT (via Worker).
+ * Replaces the cloud API call in Lite Mode.
+ */
+export async function analyzeLocalSentiment(text: string): Promise<{ label: string, score: number }> {
+    const worker = getWorker();
+    const id = crypto.randomUUID();
+
+    return new Promise((resolve, reject) => {
+        pendingRequests.set(id, {
+            resolve: (data: any) => resolve(data[0]), // Returns { label: 'NEGATIVE', score: 0.99 }
+            reject
+        });
+
+        worker.postMessage({
+            type: 'ANALYZE_SENTIMENT',
+            id,
+            payload: { text }
+        });
+    });
 }
 
 /**

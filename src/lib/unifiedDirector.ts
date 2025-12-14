@@ -7,6 +7,7 @@ import { UnifiedDirectorOutputSchema, UnifiedDirectorOutput } from "./schemas/un
 import { PrefectDNA, YandereLedger, GameState } from "../types";
 import { INITIAL_LEDGER } from "../constants";
 import { callGeminiWithRetry } from "../utils/apiRetry";
+import { narrativeQualityEngine } from "../services/narrativeQualityEngine";
 
 const getApiKey = (): string => {
   try {
@@ -109,14 +110,32 @@ function buildPrefectContextBlock(
   const rivalsInScene = activePrefects.map(p => p.archetype);
 
   const prefectProfiles = activePrefects.map((prefect, idx) => {
-    const relationships = Object.entries(prefect.relationships)
-      .map(([targetId, score]) => {
-        const name = targetId.includes('PREFECT') ? targetId.split('_')[2] : targetId;
-        const sentiment = score > 0 ? "Ally" : "Rival";
-        return `${name}: ${sentiment} (${score.toFixed(1)})`;
-      })
-      .join(', ');
+    // 1. Analyze Relationships with Active Rivals in the Scene
+    let relationshipsDesc = "";
+    let socialMandate = "";
     
+    // Check against every other active prefect
+    const otherActivePrefects = activePrefects.filter(p => p.id !== prefect.id);
+    
+    otherActivePrefects.forEach(other => {
+        // Default to 0 if relationship undefined
+        const score = prefect.relationships[other.id] || 0;
+        const name = other.displayName;
+        
+        relationshipsDesc += `${name}: ${score.toFixed(1)} | `;
+
+        if (score > 0.5) {
+            // ALLIANCE LOGIC
+            socialMandate += `\n- **ALLIANCE (${name}):** You trust ${name}. Coordinate with them. Use 'alliance_signal' to show support or share a secret glance.`;
+        } else if (score < -0.4) {
+            // RIVALRY LOGIC
+            socialMandate += `\n- **RIVALRY (${name}):** You despise ${name}. If they fail, mock them. If they succeed, try to undermine them via 'sabotage_attempt'. Do not let them outshine you.`;
+        } else {
+            // INDIFFERENCE / NEUTRAL
+            socialMandate += `\n- **NEUTRAL (${name}):** Ignore ${name} unless they interfere with your goal.`;
+        }
+    });
+
     const emotionalState = prefect.currentEmotionalState || { paranoia: 0.2, desperation: 0.2, confidence: 0.5 };
     
     // Archetype-specific logic integration
@@ -124,18 +143,8 @@ function buildPrefectContextBlock(
     const weaknessInstr = getSpecificWeaknessInstruction(prefect.archetype);
     const sceneGoal = deriveShortTermGoal(prefect, ledger, rivalsInScene.filter(r => r !== prefect.archetype));
 
-    // Identify active rivals in the scene to inject specific conflict triggers
-    let conflictTrigger = "";
-    
-    if (prefect.archetype === 'The Zealot' && rivalsInScene.includes('The Yandere')) {
-        conflictTrigger = "CONFLICT TRIGGER: You are terrified of the Yandere's instability. If she gets close to the subject, INTERVENE with a rule citation to separate them.";
-    }
-    if (prefect.archetype === 'The Yandere' && rivalsInScene.includes('The Zealot')) {
-        conflictTrigger = "CONFLICT TRIGGER: The Zealot is trying to take your toy away with her 'rules'. Ignore her or threaten her subtly.";
-    }
-    if (prefect.archetype === 'The Sadist' && rivalsInScene.includes('The Nurse')) {
-        conflictTrigger = "CONFLICT TRIGGER: The Nurse is 'coddling' the subject. Break something she just fixed to prove a point.";
-    }
+    // Fallback if no specific social mandate generated
+    if (!socialMandate) socialMandate = "\n- **STATUS QUO:** Maintain your rank. Do not show weakness.";
 
     return `
 ### PREFECT ${idx + 1}: ${prefect.displayName} (${prefect.archetype})
@@ -158,14 +167,14 @@ function buildPrefectContextBlock(
 - Desperation: ${(emotionalState.desperation * 100).toFixed(0)}%
 - Confidence: ${(emotionalState.confidence * 100).toFixed(0)}%
 
-**RELATIONSHIPS:** ${relationships || "None established"}
+**RELATIONSHIPS:** ${relationshipsDesc || "None established"}
 
 **BEHAVIORAL MANDATES (HIGHEST PRIORITY):**
 1. **CURRENT SCENE GOAL (MANDATORY):** "${sceneGoal}"
    (You MUST attempt to achieve this specific goal in the current turn).
 2. **WEAKNESS MANIFESTATION:** ${weaknessInstr}
    (The weakness MUST appear in the 'public_action' text as a physical or tonal tell).
-3. **${conflictTrigger || "MAINTAIN STATUS QUO"}**
+3. **SOCIAL DYNAMICS (RELATIONAL PRESSURE):** ${socialMandate}
 
 ---`;
   }).join('\n');
@@ -181,6 +190,7 @@ For EACH prefect, generate their response to the player's action: "${playerInput
 2. Prefects can CONTRADICT each other (e.g., Elara wants compliance, Rhea secretly signals resistance)
 3. Apply the EMOTIONAL STRATEGY LAYER: If a prefect has high paranoia, they should be defensive/suspicious
 4. **MANDATORY GOAL:** Ensure the 'current_scene_goal' provided above is the primary driver of their 'public_action'.
+5. **USE TOOLS:** Use 'sabotage_attempt' and 'alliance_signal' fields to enact the SOCIAL DYNAMICS mandates.
 
 **PLAYER STATE FOR CONTEXT:**
 - Trauma: ${ledger.traumaLevel}/100
@@ -205,7 +215,7 @@ export async function executeUnifiedDirectorTurn(
   isLiteMode: boolean = false // Dynamic Model Switching
 ) {
   try {
-    const modelId = isLiteMode ? 'gemini-2.5-flash' : 'gemini-3-pro-preview';
+    const modelId = isLiteMode ? 'gemini-2.5-flash-lite-latest' : 'gemini-3-pro-preview';
     console.log(`⚡ [Unified Director] Starting single-agent turn using ${modelId}...`);
     
     // 1. Initialize Systems
@@ -310,6 +320,31 @@ Execute with maximum depth and psychological precision.
     } catch (parseError) {
       console.error("Failed to parse Unified Director output JSON:", parseError);
       throw new Error(`Invalid JSON response from AI: ${outputText.substring(0, 200)}...`);
+    }
+
+    // 3.5. Aesthete Critique & Rewrite
+    if (unifiedOutput.narrative_text) {
+      try {
+        // Construct context for the critic
+        const criticContext = `
+          Active Prefects: ${activePrefects.map(p => p.archetype).join(', ')}.
+          Player Trauma: ${ledger.traumaLevel}.
+          Location: ${graphSnapshot.nodes['Subject_84']?.attributes?.currentLocation || "Unknown"}.
+        `;
+
+        const critique = await narrativeQualityEngine.critiqueWithAesthete(
+          unifiedOutput.narrative_text,
+          criticContext
+        );
+
+        if (critique.score < 85 && critique.rewrite_suggestion) {
+          console.log(`[Unified Director] 🎨 Aesthete Rewrite Triggered (Score: ${critique.score}). Violations: ${critique.violations.join(', ')}`);
+          unifiedOutput.narrative_text = critique.rewrite_suggestion;
+          unifiedOutput.thought_signature += ` | [AESTHETE REWRITE: ${critique.violations[0] || "Tone Correction"}]`;
+        }
+      } catch (e) {
+        console.warn("[Unified Director] Aesthete critique bypassed:", e);
+      }
     }
     
     // 4. Apply mutations (same as before)

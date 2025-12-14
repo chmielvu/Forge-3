@@ -37,7 +37,7 @@ const MutationSchemas = {
     relation: z.string().optional(),
     label: z.string().optional(),
     weight: z.number().optional().default(0.5),
-    meta: z.record(z.any()).optional()
+    meta: z.record(z.string(), z.any()).optional()
   }),
   remove_edge: z.object({
     source: z.string().min(1),
@@ -45,13 +45,13 @@ const MutationSchemas = {
   }),
   update_node: z.object({
     id: z.string().min(1),
-    attributes: z.record(z.any())
+    attributes: z.record(z.string(), z.any())
   }),
   add_node: z.object({
     id: z.string().min(1),
     type: z.string().optional(),
     label: z.string().optional(),
-    attributes: z.record(z.any()).optional()
+    attributes: z.record(z.string(), z.any()).optional()
   }),
   add_memory: z.object({
     id: z.string().min(1),
@@ -205,7 +205,7 @@ export class KGotController {
     }
 
     try {
-        if (!this.graph.hasNode(parsed.id)) {
+        if (!(this.graph as any).hasNode(parsed.id)) {
             this.graph.addNode(parsed.id, {
                 type: parsed.type,
                 label: parsed.label,
@@ -223,7 +223,7 @@ export class KGotController {
 
   public removeNode(nodeId: string): void {
     try {
-        if (this.graph.hasNode(nodeId)) {
+        if ((this.graph as any).hasNode(nodeId)) {
             this.graph.dropNode(nodeId);
         }
     } catch (e) {
@@ -232,11 +232,11 @@ export class KGotController {
   }
 
   public addEdge(sourceId: string, targetId: string, relation: string, weight: number = 0.5, meta?: any): void {
-    if (!this.graph.hasNode(sourceId)) {
+    if (!(this.graph as any).hasNode(sourceId)) {
         console.warn(`[KGot] addEdge ignored: Source ${sourceId} does not exist.`);
         return;
     }
-    if (!this.graph.hasNode(targetId)) {
+    if (!(this.graph as any).hasNode(targetId)) {
         console.warn(`[KGot] addEdge ignored: Target ${targetId} does not exist.`);
         return;
     }
@@ -251,7 +251,7 @@ export class KGotController {
 
     const key = `${sourceId}_${targetId}_${relation}`;
     try {
-        if (!this.graph.hasEdge(key)) {
+        if (!(this.graph as any).hasEdge(key)) {
             this.graph.addEdgeWithKey(key, sourceId, targetId, {
                 label: relation,
                 type: meta?.type || 'RELATIONSHIP',
@@ -272,7 +272,7 @@ export class KGotController {
 
   public removeEdge(sourceId: string, targetId: string): void {
     try {
-        if (this.graph.hasNode(sourceId) && this.graph.hasNode(targetId)) {
+        if ((this.graph as any).hasNode(sourceId) && (this.graph as any).hasNode(targetId)) {
             const edges = this.graph.edges(sourceId, targetId);
             edges.forEach(e => this.graph.dropEdge(e));
         }
@@ -312,7 +312,7 @@ export class KGotController {
             try { valid = MutationSchemas.update_node.parse(params); }
             catch(e) { console.warn(`[KGot] Mutation ${idx} (update_node) invalid params:`, e); return; }
 
-            if (this.graph.hasNode(valid.id)) {
+            if ((this.graph as any).hasNode(valid.id)) {
                const currentAttrs = this.graph.getNodeAttributes(valid.id);
                this.graph.mergeNodeAttributes(valid.id, {
                    attributes: { ...currentAttrs.attributes, ...valid.attributes }
@@ -415,7 +415,7 @@ export class KGotController {
   }
 
   public calculateDominancePath(source: string, target: string): string[] | null {
-    if (!this.graph.hasNode(source) || !this.graph.hasNode(target)) return null;
+    if (!(this.graph as any).hasNode(source) || !(this.graph as any).hasNode(target)) return null;
     try {
         const path = dijkstra.bidirectional(this.graph, source, target, (edge, attr) => {
              return 1.0 - (attr.weight || 0.5);
@@ -453,7 +453,7 @@ export class KGotController {
         for (let j = i + 1; j < limit; j++) {
             const source = nodes[i];
             const target = nodes[j];
-            if (this.graph.hasEdge(source, target)) continue;
+            if ((this.graph as any).hasEdge(source, target)) continue;
             try {
                 const path = dijkstra.bidirectional(this.graph, source, target);
                 if (path && path.length > 1 && path.length <= threshold + 1) { 
@@ -593,7 +593,7 @@ export class KGotController {
   }
 
   public updateLedger(subjectId: string, deltas: Partial<YandereLedger>): void {
-    if (!this.graph.hasNode(subjectId)) return;
+    if (!(this.graph as any).hasNode(subjectId)) return;
     const attrs = this.graph.getNodeAttributes(subjectId);
     // @ts-ignore
     const ledger = attrs.attributes.ledger || {};
@@ -612,7 +612,7 @@ export class KGotController {
   }
 
   public addMemory(nodeId: string, memory: Memory): void {
-    if (!this.graph.hasNode(nodeId)) return;
+    if (!(this.graph as any).hasNode(nodeId)) return;
     const attrs = this.graph.getNodeAttributes(nodeId);
     // @ts-ignore
     const memories = attrs.attributes.memories || [];
@@ -622,7 +622,7 @@ export class KGotController {
   }
 
   public updateGrudge(holderId: string, targetId: string, delta: number): void {
-    if (!this.graph.hasNode(holderId)) return;
+    if (!(this.graph as any).hasNode(holderId)) return;
     const attrs = this.graph.getNodeAttributes(holderId);
     // @ts-ignore
     const grudges = attrs.attributes.grudges || {};
@@ -638,7 +638,7 @@ export class KGotController {
   // --- Unified Director Logic Bridge ---
   public applyPrefectSimulations(simulations: UnifiedDirectorOutput['prefect_simulations']): void {
     simulations.forEach(sim => {
-        if (!this.graph.hasNode(sim.prefect_id)) {
+        if (!(this.graph as any).hasNode(sim.prefect_id)) {
             const resolved = this.resolveTargetId(sim.prefect_name);
             if (resolved) sim.prefect_id = resolved;
             else return; 
@@ -665,7 +665,7 @@ export class KGotController {
         });
         if (sim.sabotage_attempt) {
              const targetId = this.resolveTargetId(sim.sabotage_attempt.target);
-             if (targetId && this.graph.hasNode(targetId)) {
+             if (targetId && (this.graph as any).hasNode(targetId)) {
                  this.updateGrudge(sim.prefect_id, targetId, 25); 
                  this.addEdge(sim.prefect_id, targetId, 'SABOTAGE_ATTEMPT', 0.9, {
                      method: sim.sabotage_attempt.method,
@@ -677,7 +677,7 @@ export class KGotController {
         }
         if (sim.alliance_signal) {
             const targetId = this.resolveTargetId(sim.alliance_signal.target);
-            if (targetId && this.graph.hasNode(targetId)) {
+            if (targetId && (this.graph as any).hasNode(targetId)) {
                 this.addEdge(sim.prefect_id, targetId, 'ALLIANCE_SIGNAL', 0.6, {
                     message: sim.alliance_signal.message,
                     timestamp: this.globalState.turn_count,
@@ -704,7 +704,7 @@ export class KGotController {
   }
 
   private resolveTargetId(nameOrId: string): string | null {
-    if (this.graph.hasNode(nameOrId)) return nameOrId;
+    if ((this.graph as any).hasNode(nameOrId)) return nameOrId;
     let foundId = null;
     const search = nameOrId.toUpperCase();
     this.graph.forEachNode((id, attrs) => {

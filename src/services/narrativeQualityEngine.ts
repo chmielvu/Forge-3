@@ -1,5 +1,8 @@
+
 import { YandereLedger, GameState, PrefectDNA, PrefectArchetype } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
+import { analyzeLocalSentiment } from './localMediaService';
+import { useGameStore } from '../state/gameStore';
 
 // API Key retrieval for internal use
 const getApiKey = (): string => {
@@ -57,26 +60,73 @@ export class NarrativeQualityEngine {
    */
   async critiqueWithAesthete(narrative: string, context: string): Promise<AestheteCritique> {
     try {
+        const isLite = useGameStore.getState().isLiteMode;
+
+        if (isLite) {
+            // LITE MODE: Local DistilBERT Check
+            try {
+                const sentiment = await analyzeLocalSentiment(narrative);
+                
+                // In a horror game, "POSITIVE" sentiment with high confidence might indicate broken immersion
+                if (sentiment.label === 'POSITIVE' && sentiment.score > 0.9) {
+                    return {
+                        score: 60,
+                        critique: "Tone Alert: Narrative detected as overly positive/cheerful for a horror setting.",
+                        violations: ["Tone Mismatch (Local Detection)"],
+                        // No auto-rewrite locally to save resources, just a warning
+                    };
+                }
+                return { score: 100, critique: "Local Check Passed", violations: [] };
+            } catch (e) {
+                console.warn("[Aesthete] Local check failed, bypassing.", e);
+                return { score: 100, critique: "Bypass", violations: [] };
+            }
+        }
+
+        // PRO MODE: Cloud-based Aesthete
         const prompt = `
-        ACT AS "THE AESTHETE". You are a rigorous editor for a "Dark Academia / Vampire Noir" narrative engine.
-        
-        YOUR MANDATE:
-        1. **Check for Forbidden Generics**: Words like "pain", "hurt", "scared" are BANNED. Use specific somatic terms ("cremasteric reflex", "cortisol spike", "ontological collapse").
-        2. **Check Lighting**: Does the text describe the light/shadow? If not, it fails.
-        3. **Check Tone**: Must be "Bored, Inevitable, Clinical". No melodrama.
-        
-        INPUT TEXT:
-        "${narrative}"
-        
-        CONTEXT:
-        ${context}
-        
+        ACT AS "THE AESTHETE". You are the ruthless, high-functioning sociopath editor for "The Forge", a narrative engine defined by "Baroque Brutalism" and "Scientific Sadism".
+
+        YOUR GOAL: Ensure the narrative feels like a "Bored God" describing the dissection of an insect.
+
+        ### THE RULES OF THE HOUSE (MANDATORY CHECKS) ###
+
+        1. **NO GENERIC SUFFERING (The Vocabulary of the Abyss):**
+           - **BANNED WORDS:** "pain", "hurt", "scared", "terrified", "sad", "angry", "felt", "fear".
+           - **REQUIRED REPLACEMENTS:** Use specific somatic, anatomical, or industrial terms.
+             - Instead of "pain", use "neurological whiteout", "cremasteric spasm", "burning circuitry", "synaptic misfire".
+             - Instead of "scared", use "autonomic collapse", "cortisol spike", "primal regression", "the abdominal void".
+
+        2. **CLINICAL CHIAROSCURO (Lighting Mandate):**
+           - You MUST check if the text explicitly describes the light and shadow.
+           - Keywords: "Jaundiced gaslight", "clinical fluorescence", "weeping shadows", "chiaroscuro", "silhouette".
+           - If the lighting is not described, the text FAILS.
+
+        3. **THE GRAMMAR OF SUFFERING (Somatic Cascade):**
+           - Violence is not an event; it is a sequence.
+           - Does the text describe the **Impact** -> **Nausea (Void)** -> **Systemic Shock (Cold Sweat)** -> **Psychic Aftershock (Shame)**?
+           - If it just says "she hit him", it FAILS.
+
+        4. **TONE MANDATE: "BORED, CLINICAL, INEVITABLE":**
+           - No melodrama. No breathless excitement. No exclamation points unless mocking.
+           - The narrator should sound like a surgeon explaining a procedure to a corpse.
+           - "It is not cruelty; it is calibration."
+
+        ### INPUT DATA ###
+        NARRATIVE: "${narrative}"
+        CONTEXT: ${context}
+
+        ### YOUR TASK ###
+        Evaluate the narrative against the RULES.
+        If Score < 85, you MUST PROVIDE A REWRITE that strictly follows the rules.
+        The rewrite must be substantial (approx same length or longer), colder, and more descriptive.
+
         OUTPUT JSON:
         {
-          "score": number (0-100),
-          "critique": "Brief explanation of flaws",
-          "violations": ["list", "of", "issues"],
-          "rewrite_suggestion": "The rewritten text (if score < 80) applying the Somatic Cascade and Noir Lighting."
+          "score": number, // 0-100
+          "critique": "Short explanation of failures.",
+          "violations": ["List of specific banned words found", "Missing lighting", "Tone too excited"],
+          "rewrite_suggestion": "The rewritten narrative text applying the Somatic Cascade and Noir Lighting. Leave empty if score >= 85."
         }
         `;
 
@@ -97,7 +147,6 @@ export class NarrativeQualityEngine {
             }
         });
 
-        // Correct way to extract text from response per guidelines
         const text = result.text;
         if (!text) return { score: 100, critique: "Pass", violations: [] };
         
