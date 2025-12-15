@@ -61,6 +61,7 @@ export const UnifiedDirectorOutputSchema = {
           
           current_scene_goal: { type: Type.STRING },
           public_action: { type: Type.STRING },
+          public_actionSummary: { type: Type.STRING, nullable: true }, // Added public_actionSummary
           hidden_motivation: { type: Type.STRING },
           internal_monologue: { type: Type.STRING },
           
@@ -87,7 +88,9 @@ export const UnifiedDirectorOutputSchema = {
             properties: {
               paranoia: { type: Type.NUMBER },
               desperation: { type: Type.NUMBER },
-              confidence: { type: Type.NUMBER }
+              confidence: { type: Type.NUMBER },
+              arousal: { type: Type.NUMBER, nullable: true }, // Added arousal
+              dominance: { type: Type.NUMBER, nullable: true }, // Added dominance
             }
           },
           secrets_uncovered: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -155,7 +158,8 @@ export const UnifiedDirectorOutputSchema = {
                 'add_node', 'update_node', 'remove_node', 'add_edge', 'update_edge', 'remove_edge',
                 'add_memory', 'update_grudge', 'add_injury', 'add_trauma_bond', 'update_ledger_stat',
                 'add_secret', 'update_phase', 'add_secret_alliance', 'add_trauma_memory', 'update_dominance',
-                'add_psychosis_node'
+                'add_psychosis_node', // Add new mutation types here
+                'update_relationship', 'update_agent_emotion', 'inflict_somatic_trauma', 'reveal_secret'
             ]
           },
           // Flexible params object - exact shape validated by Zod at runtime
@@ -185,6 +189,13 @@ export const UnifiedDirectorOutputSchema = {
           node_id: { type: Type.STRING, nullable: true },
           hallucination: { type: Type.STRING, nullable: true },
           intensity: { type: Type.NUMBER, nullable: true },
+          
+          // New Lore Mutation Parameters
+          category: { type: Type.STRING, nullable: true },
+          emotion: { type: Type.STRING, nullable: true },
+          agent_id: { type: Type.STRING, nullable: true },
+          location: { type: Type.STRING, nullable: true },
+          revealed_to: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
         }
       },
       nullable: true
@@ -230,6 +241,7 @@ export interface UnifiedDirectorOutput {
     prefect_name: string;
     current_scene_goal: string;
     public_action: string;
+    public_actionSummary?: string; // Added here for type consistency
     hidden_motivation: string;
     internal_monologue: string;
     sabotage_attempt?: {
@@ -245,6 +257,8 @@ export interface UnifiedDirectorOutput {
       paranoia: number;
       desperation: number;
       confidence: number;
+      arousal?: number; // Added arousal
+      dominance?: number; // Added dominance
     };
     secrets_uncovered: string[];
     favor_score_delta: number;

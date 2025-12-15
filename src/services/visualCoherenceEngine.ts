@@ -93,7 +93,10 @@ class VisualCoherenceEngine {
         location: 'The Arrival Dock',
         lightingScheme: 'stormy natural light, deep shadows',
         atmosphericEffects: ['volcanic ash', 'sea spray', 'heavy humidity'],
-        dominantColors: ['#050505', '#881337', '#facc15', '#1c1917']
+        dominantColors: ['#050505', '#881337', '#facc15', '#1c1917'],
+        keyProps: [], // Initialize
+        surfaceMaterials: [], // Initialize
+        architecturalStyle: "Roman Imperial decay, Gothic Bedlam" // Initialize
       },
       timeOfDay: 'evening',
       weatherCondition: 'stormy',
@@ -101,9 +104,28 @@ class VisualCoherenceEngine {
     };
   }
 
-  private calculateCameraDynamics(ledger: YandereLedger, narrativeText: string): string {
+  private calculateCameraDynamics(ledger: YandereLedger, narrativeText: string, target?: PrefectDNA | CharacterId | string): string {
     const dirs: string[] = [];
     const lowerText = narrativeText.toLowerCase();
+
+    // Influence from active Prefect's psychometrics/visualDNA
+    let targetArchetype: string | undefined;
+    if (typeof target === 'object' && 'archetype' in target) {
+        targetArchetype = target.archetype;
+    } else if (typeof target === 'string' && ARCHETYPE_VISUAL_MAP[target]) {
+        targetArchetype = target;
+    }
+
+    if (targetArchetype) {
+        const visualArchetypeData = ARCHETYPE_VISUAL_MAP[targetArchetype];
+        if (visualArchetypeData?.visualDNA?.includes("feline eyes") || visualArchetypeData?.visualDNA?.includes("predatory grin")) {
+            dirs.push("extreme close-up on eyes and mouth, shallow depth isolating facial micro-expressions");
+        }
+        if (visualArchetypeData?.visualDNA?.includes("statuesque") || visualArchetypeData?.visualDNA?.includes("imposing")) {
+            dirs.push("low-angle worm's eye view emphasizing towering authority figures");
+        }
+    }
+
 
     if (ledger.phase === 'gamma') {
       dirs.push("anamorphic lens flares with horizontal streaks, crushed blacks, pulsating breathing vignette, heavy film grain, 35mm anamorphic look");
@@ -143,7 +165,35 @@ class VisualCoherenceEngine {
     return dirs.length ? dirs.join("; ") : "medium close-up 50mm lens, static clinical framing, high contrast chiaroscuro";
   }
 
-  private calculateLightingDynamics(ledger: YandereLedger): string {
+  private calculateLightingDynamics(ledger: YandereLedger, target?: PrefectDNA | CharacterId | string): string {
+    // Priority 1: Overrides based on Narrative Beat
+    // (This is handled by the prompt template now via beat instructions, but kept here for local logic if needed)
+
+    // Priority 2: Overrides based on specific Prefect's presence (if dominant)
+    let targetArchetype: string | undefined;
+    if (typeof target === 'object' && 'archetype' in target) {
+        targetArchetype = target.archetype;
+    } else if (typeof target === 'string' && ARCHETYPE_VISUAL_MAP[target]) {
+        targetArchetype = target;
+    }
+
+    if (targetArchetype) {
+        switch (targetArchetype) {
+            case 'The Confessor': // Calista
+                return LIGHTING_PRESETS.Intimate;
+            case 'The Sadist': // Petra
+                return LIGHTING_PRESETS.Harsh;
+            case 'The Logician': // Lysandra
+                return LIGHTING_PRESETS.Clinical;
+            case 'The Nurse': // Anya
+                return LIGHTING_PRESETS.WarmCandle; // Deceptive warmth
+            case 'The Provost': // Selene
+                return LIGHTING_PRESETS.Moody; // Distant, observing
+        }
+    }
+
+
+    // Priority 3: Ledger-based dynamics
     if (ledger.phase === 'gamma') {
       return "conflicting practical sources: flickering overhead fluorescents mixed with pulsing crimson emergency strips, anamorphic flares, crushed blacks with blooming highlights";
     }
@@ -170,6 +220,9 @@ class VisualCoherenceEngine {
     if (lower.match(/sweat|perspir|bead/)) details.push("glistening sweat on exposed skin");
     if (lower.match(/flush|red|blush|hot/)) details.push("deep flush spreading across chest and neck");
     if (lower.match(/tear|cry|sob|weep/)) details.push("fresh tear trails, red-rimmed eyes");
+
+    // NEW: Add somatic signatures from active prefects if present
+    // This is handled by the prompt directly now from prefectDNA (somaticSignature field)
 
     return details;
   }
@@ -284,35 +337,49 @@ class VisualCoherenceEngine {
 
   private buildSubjectDescription(target: PrefectDNA | CharacterId | string, ledger: YandereLedger, narrativeText: string, sceneContext: string, beat?: NarrativeBeat): string {
     let base = "";
-    
+    let somaticDetails: string[] = this.inferSomaticDetails(ledger, narrativeText);
+    let visualDNAKeywords: string[] = [];
+    let characterProps: string[] = [];
+    let characterSomaticSignature: string | undefined;
+
     // Attempt to resolve base description from Archetype Map or Visual Profiles
     if (typeof target === 'object' && 'archetype' in target) {
         // It's a PrefectDNA
         const archData = ARCHETYPE_VISUAL_MAP[target.archetype];
         if (archData) {
             base = `${target.displayName} (${target.archetype}): ${archData.physique}, ${archData.face}, wearing ${archData.attire}. Mood: ${archData.mood}`;
+            if (archData.visualDNA) visualDNAKeywords.push(archData.visualDNA);
+            if (target.psychometrics?.idleProp) characterProps.push(target.psychometrics.idleProp);
+            if (target.psychometrics?.somaticSignature) characterSomaticSignature = target.psychometrics.somaticSignature;
         } else {
-            // Fallback
-             base = `${target.displayName} (${target.archetype}): detailed prefect figure`;
+            base = `${target.displayName} (${target.archetype}): detailed prefect figure`;
         }
+        if (target.appearanceDescription) base += `. APPEARANCE: ${target.appearanceDescription}`;
+
     } else if (typeof target === 'string') {
-        // Check if it's a CharacterId
+        // Check if it's a CharacterId (Player or Subject boys)
         if (VISUAL_PROFILES[target as CharacterId]) {
             base = VISUAL_PROFILES[target as CharacterId];
         } 
-        // Check if it's an archetype key
+        // Check if it's an archetype key directly
         else if (ARCHETYPE_VISUAL_MAP[target]) {
              const archData = ARCHETYPE_VISUAL_MAP[target];
              base = `${target}: ${archData.physique}, ${archData.face}, wearing ${archData.attire}`;
+             if (archData.visualDNA) visualDNAKeywords.push(archData.visualDNA);
         } else {
             base = `${target}: vulnerable figure in tattered academy uniform`;
         }
     }
 
-    const somatic = this.inferSomaticDetails(ledger, narrativeText);
+    // Combine inferred somatic details with character-specific somatic signature
+    if (characterSomaticSignature) {
+        somaticDetails = Array.from(new Set([...somaticDetails, characterSomaticSignature]));
+    }
+
+
     const dynamicMotifs = this._selectMotifs(ledger, narrativeText, sceneContext, beat); 
 
-    const combinedDetails = Array.from(new Set([...somatic, ...dynamicMotifs]));
+    const combinedDetails = Array.from(new Set([...somaticDetails, ...visualDNAKeywords, ...dynamicMotifs, ...characterProps]));
 
     return `${base}${combinedDetails.length ? '. Visible details: ' + combinedDetails.join(', ') : ''}, under cold clinical gaze`;
   }
@@ -326,8 +393,8 @@ class VisualCoherenceEngine {
     directorVisualInstruction?: string,
     beat?: NarrativeBeat
   ): { imagePrompt: string; ttsPrompt: string } {
-    const camera = this.calculateCameraDynamics(ledger, narrativeText);
-    const lighting = this.calculateLightingDynamics(ledger);
+    const camera = this.calculateCameraDynamics(ledger, narrativeText, target);
+    const lighting = this.calculateLightingDynamics(ledger, target);
     const subject = directorVisualInstruction || this.buildSubjectDescription(target, ledger, narrativeText, sceneContext, beat);
 
     const env = this.memory.environmentState;

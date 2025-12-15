@@ -1,10 +1,8 @@
 
-
-
-import { YandereLedger } from '../../types';
+import { YandereLedger, PrefectPsychometrics } from '../../types';
 
 // Knowledge Graph of Thoughts (KGoT) Schema
-// Version: SOTA 3.7 - Graphology Integration
+// Version: SOTA 3.8 - Graphology Integration with Manara-Noir
 
 export type NodeType = 'ENTITY' | 'LOCATION' | 'EVENT' | 'CONCEPT' | 'FACULTY' | 'PREFECT' | 'SUBJECT' | 'INJURY' | 'SECRET';
 
@@ -43,6 +41,10 @@ export interface AgentState {
   // Tracking
   target_of_interest?: string | null;
   active_schemes?: string[];
+  
+  // New Emotional States
+  arousal?: number;
+  dominance?: number;
 }
 
 export interface KGotNode {
@@ -66,8 +68,16 @@ export interface KGotNode {
     // Narrative Persistence
     memories?: Memory[];
     grudges?: Record<string, number>; // targetId -> intensity (0-100)
-    secrets?: Array<{ name: string; description: string; discoveredBy?: string; turn?: number }>; // NEW: Secrets array
+    secrets?: Array<{ name: string; description: string; discoveredBy?: string; turn?: number }>; 
     
+    // Character-Specific Richness (From PrefectDNA)
+    psychometrics?: PrefectPsychometrics; 
+    appearanceDescription?: string; 
+    narrativeFunctionDescription?: string;
+    promptKeywords?: string[]; 
+    visualDNA?: string; 
+    somaticSignature?: string; 
+
     // Legacy/Flexibility
     [key: string]: any;
   };

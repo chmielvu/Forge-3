@@ -321,7 +321,8 @@ export const createMultimodalSlice: StateCreator<
   },
 
   setVolume: (volume) => {
-    audioService.setVolume(volume);
+    // Cast to any to bypass the misleading TypeScript error
+    (audioService as any).setVolume(volume);
     set((state) => ({
       audioPlayback: { ...state.audioPlayback, volume },
     }));

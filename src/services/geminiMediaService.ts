@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { VISUAL_MANDATE, VIDEO_MANDATE } from '../config/visualMandate';
 import { useGameStore } from '../state/gameStore'; 
@@ -223,6 +224,53 @@ export async function generateSpeechAction(text: string, voiceName: string): Pro
       return { audioData, duration };
   });
 }
+
+/**
+ * Generates multi-speaker speech for dramatic audio.
+ */
+export async function generateMultiSpeakerSpeechAction(
+  prompt: string, 
+  speakerVoiceConfigs: Array<{ speaker: string, voiceConfig: { prebuiltVoiceConfig: { voiceName: string } } }>
+): Promise<{ audioData: string; duration: number } | undefined> {
+  // Local multi-speaker not supported yet, fallback to local single speaker if lite mode is on.
+  // Or, if local multi-speaker logic is added, call it here.
+  if (isLiteMode()) {
+    console.warn("[GeminiMediaService] Multi-speaker audio not supported in Lite Mode. Falling back to single speaker for: ", prompt);
+    // Fallback to single speaker local if needed, for now just empty data
+    return generateLocalSpeech(prompt); // Fallback to local single speaker
+  }
+
+  const apiKey = getApiKey();
+  if (!apiKey) throw new MediaGenerationError('AUTH', "API key is missing.");
+
+  return withRetry(async () => {
+      const ai = getAI();
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-preview-tts', // Assuming this model supports multi-speaker via config
+        contents: { parts: [{ text: prompt }] },
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            multiSpeakerVoiceConfig: {
+              speakerVoiceConfigs: speakerVoiceConfigs
+            }
+          },
+        }
+      });
+      
+      const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (!audioData) throw new Error("No multi-speaker audio data returned from Gemini.");
+
+      // Calculate approximate duration for UI sync
+      const base64Length = audioData.length;
+      const byteLength = (base64Length * 3) / 4; 
+      const sampleCount = byteLength / 2; 
+      const duration = sampleCount / 24000; 
+
+      return { audioData, duration };
+  });
+}
+
 
 // ... rest of the file (generateVideoAction, distortImageAction) unchanged ...
 export async function generateVideoAction(

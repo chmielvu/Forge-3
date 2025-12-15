@@ -3,13 +3,19 @@ import { YandereLedger, PrefectDNA, CharacterId, MultimodalTurn, ScriptItem } fr
 import { BEHAVIOR_CONFIG } from "../config/behaviorTuning"; 
 import { visualCoherenceEngine } from './visualCoherenceEngine';
 import { CharacterId as CId } from '../types';
-import { generateImageAction, generateSpeechAction, distortImageAction } from './geminiMediaService';
+import { 
+  generateImageAction, 
+  generateSpeechAction, 
+  generateMultiSpeakerSpeechAction, 
+  distortImageAction 
+} from './geminiMediaService';
 import { CHARACTER_VOICE_MAP, resolveVoiceForSpeaker } from '../config/voices';
 import { audioService } from './AudioService';
 import { NarrativeBeat } from "./TensionManager";
 
 // Re-export for compatibility
 export { CHARACTER_VOICE_MAP, resolveVoiceForSpeaker };
+export { generateSpeechAction as generateSpeech }; 
 
 // --- VISUAL PROMPT BUILDERS ---
 
@@ -78,133 +84,112 @@ export const generateNarrativeImage = async (
     }
     
     console.error(`[mediaService] Image generation failed after ${MAX_IMAGE_RETRIES + 1} attempts.`, error);
-    throw error;
-  }
-};
-
-// --- AUDIO ENGINE ---
-
-export const generateSpeech = async (narrative: string, voiceIdOverride?: string): Promise<{ audioData: string; duration: number } | undefined> => {
-  if (!BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableAudio) {
-    if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log("[mediaService] Audio generation is disabled by config.");
-    return Promise.resolve(undefined);
-  }
-
-  try {
-    const voiceName = voiceIdOverride || resolveVoiceForSpeaker('Narrator');
-    return await generateSpeechAction(narrative, voiceName);
-  } catch (error: any) {
-    console.error("⚠️ Audio generation failed:", error);
-    throw new Error(error.message || "Audio generation failed");
+    return undefined;
   }
 };
 
 /**
- * Generates a mixed audio track from a script.
- * 1. Generates audio for each script line using specific character voices.
- * 2. Concatenates them into a single buffer.
- * 3. Returns the blob + timing alignment data for UI highlighting.
+ * Generates dramatic multi-speaker audio from a structured script.
  */
 export const generateDramaticAudio = async (
-    script: ScriptItem[]
-): Promise<{ audioData: string; duration: number; alignment: Array<{ index: number; start: number; end: number; speaker: string }> } | undefined> => {
-    if (!BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableAudio) return undefined;
-    if (!script || script.length === 0) return undefined;
+  script: ScriptItem[]
+): Promise<{ audioData: string; duration: number; alignment: Array<{ index: number, start: number, end: number, speaker: string }> } | undefined> => {
+  if (!BEHAVIOR_CONFIG.ANIMATION.ENABLE_TTS) {
+    if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log("[mediaService] TTS generation disabled by config.");
+    return undefined;
+  }
 
-    // Filter out extremely short lines that might just be noise or formatting
-    const validLines = script.filter(s => s.text && s.text.length > 2);
-    if (validLines.length === 0) return undefined;
+  try {
+    // Map script items to speakerVoiceConfigs required by multi-speaker TTS
+    const speakerVoiceConfigs = script.map(item => ({
+      speaker: item.speaker,
+      voiceConfig: { prebuiltVoiceConfig: { voiceName: resolveVoiceForSpeaker(item.speaker) } }
+    }));
 
-    try {
-        console.log(`[mediaService] Generating dramatic audio for ${validLines.length} lines...`);
-        
-        // Generate all audio clips in parallel (limit concurrency handled by geminiMediaService queue)
-        const clipsPromise = validLines.map(async (line) => {
-            const voice = resolveVoiceForSpeaker(line.speaker);
-            try {
-                const result = await generateSpeechAction(line.text, voice);
-                return { ...result, speaker: line.speaker };
-            } catch (e) {
-                console.warn(`[mediaService] Failed to gen audio for line: "${line.text.substring(0, 20)}..."`, e);
-                return null; 
-            }
-        });
+    // Construct multi-speaker prompt by joining script items
+    const multiSpeakerText = script.map(item => `${item.speaker}: ${item.text}`).join('\n');
 
-        const clips = await Promise.all(clipsPromise);
-        
-        // Use Singleton Context to prevent resource exhaustion (Leak Fix)
-        const ctx = audioService.getContext();
-        
-        // Decode all valid clips to buffers
-        const buffers = await Promise.all(clips.map(async (clip) => {
-            if (!clip) return null;
-            // Decode Base64 to ArrayBuffer -> AudioBuffer
-            const binaryString = atob(clip.audioData);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-            
-            // Note: ctx.decodeAudioData usually expects a complete file buffer (like ArrayBuffer from fetch)
-            // But we have raw PCM/WAV bytes in base64. Ensure decodeAudioData supports it.
-            // If ctx is closed, this might throw, but AudioService.getContext() ensures it's open.
-            try {
-                // IMPORTANT: decodeAudioData detaches the buffer, so we slice it just in case
-                return await ctx.decodeAudioData(bytes.buffer.slice(0)); 
-            } catch (decodeErr) {
-                console.error("Audio Decode Error:", decodeErr);
-                return null;
-            }
-        }));
+    // Attempt to use the multi-speaker API first
+    const result = await generateMultiSpeakerSpeechAction(multiSpeakerText, speakerVoiceConfigs);
 
-        // Calculate total duration and construct master buffer
-        const validBuffers = buffers.filter(b => b !== null) as AudioBuffer[];
-        if (validBuffers.length === 0) return undefined;
-
-        // Add 0.3s pause between lines
-        const GAP = 0.3; 
-        const totalDuration = validBuffers.reduce((acc, b) => acc + b.duration + GAP, 0);
-        const totalSamples = Math.ceil(totalDuration * 24000);
-        
-        const masterBuffer = ctx.createBuffer(1, totalSamples, 24000);
-        const channelData = masterBuffer.getChannelData(0);
-        
-        let offset = 0;
-        const alignment: Array<{ index: number; start: number; end: number; speaker: string }> = [];
-
-        validBuffers.forEach((buffer, idx) => {
-            const clipData = buffer.getChannelData(0);
-            channelData.set(clipData, Math.floor(offset * 24000));
-            
-            // Record alignment
-            const start = offset;
-            const end = offset + buffer.duration;
-            alignment.push({
-                index: idx, // Maps to validLines[idx]
-                start,
-                end,
-                speaker: validLines[idx].speaker
-            });
-
-            offset += buffer.duration + GAP;
-        });
-
-        // Encode Master Buffer back to Wav/Base64
-        const wavBytes = encodeWAVFromFloat32(channelData, 24000);
-        const base64 = arrayBufferToBase64(wavBytes);
-
+    if (result && typeof result !== 'string') {
         return {
-            audioData: base64,
-            duration: totalDuration,
-            alignment
+            audioData: result.audioData,
+            duration: result.duration,
+            alignment: script.map((item, index) => ({
+                index,
+                start: (index / script.length) * result.duration, // Approximate alignment
+                end: ((index + 1) / script.length) * result.duration,
+                speaker: item.speaker
+            }))
         };
-
-    } catch (e) {
-        console.error("[mediaService] Dramatic Audio Composition Failed:", e);
-        return undefined;
     }
+    
+    // Fallback: Generate individual lines and stitch them (if multi-speaker fails or returns nothing)
+    // This provides better alignment data but is slower/more expensive
+    console.log("[mediaService] Multi-speaker generation returned empty, falling back to sequential generation.");
+    
+    const clipsPromise = script.map(async (line) => {
+        const voice = resolveVoiceForSpeaker(line.speaker);
+        try {
+            const clipResult = await generateSpeechAction(line.text, voice);
+            return { ...clipResult, speaker: line.speaker };
+        } catch (e) {
+            console.warn(`[mediaService] Failed to gen audio for line: "${line.text.substring(0, 20)}..."`, e);
+            return null; 
+        }
+    });
+
+    const clips = await Promise.all(clipsPromise);
+    const validClips = clips.filter(c => c !== null) as Array<{ audioData: string, duration: number, speaker: string }>;
+
+    if (validClips.length === 0) return undefined;
+
+    // Stitching logic using AudioService
+    const ctx = audioService.getContext();
+    const buffers = validClips.map(clip => audioService.decodePCM(clip.audioData)); // CRITICAL FIX: Use decodePCM
+    
+    const GAP = 0.1; // Silence between lines
+    const totalDuration = validClips.reduce((acc, c) => acc + c.duration + GAP, 0);
+    const totalSamples = Math.ceil(totalDuration * 24000);
+    
+    const masterBuffer = ctx.createBuffer(1, totalSamples, 24000);
+    const channelData = masterBuffer.getChannelData(0);
+    
+    let offset = 0;
+    const alignment: Array<{ index: number, start: number, end: number, speaker: string }> = [];
+
+    buffers.forEach((buffer, idx) => {
+        const clipData = buffer.getChannelData(0);
+        channelData.set(clipData, Math.floor(offset * 24000));
+        
+        alignment.push({
+            index: idx,
+            start: offset,
+            end: offset + buffer.duration,
+            speaker: validClips[idx].speaker
+        });
+        
+        offset += buffer.duration + GAP;
+    });
+
+    // Encode back to Base64 (WAV)
+    const wavBytes = encodeWAVFromFloat32(channelData, 24000);
+    const base64 = arrayBufferToBase64(wavBytes);
+
+    return {
+        audioData: base64,
+        duration: totalDuration,
+        alignment
+    };
+
+  } catch (error) {
+    console.error("[mediaService] generateDramaticAudio failed:", error);
+    return undefined; // Fail gracefully
+  }
 };
 
-// --- HELPERS (Copied from localMediaService/Worker logic for browser compatibility) ---
+// --- HELPERS for Stitching ---
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = '';
@@ -242,12 +227,3 @@ function encodeWAVFromFloat32(samples: Float32Array, sampleRate: number): ArrayB
 function writeString(view: DataView, offset: number, string: string) {
   for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
 }
-
-export const distortImage = async (imageB64: string, instruction: string): Promise<string | undefined> => {
-    if (!BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableImages) return Promise.resolve(undefined);
-    try {
-      return await distortImageAction(imageB64, instruction);
-    } catch (e) {
-      return undefined;
-    }
-};

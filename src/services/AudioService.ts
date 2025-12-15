@@ -34,8 +34,11 @@ export class AudioService {
     return this.context;
   }
 
-  // Decodes raw PCM data (Gemini format)
-  private decodePCM(base64: string): AudioBuffer {
+  /**
+   * Decodes raw PCM data (Gemini format) into an AudioBuffer.
+   * This is made public for reuse in other services (e.g., mediaService.ts)
+   */
+  public decodePCM(base64: string): AudioBuffer {
     const ctx = this.getContext();
     const binaryString = atob(base64);
     const len = binaryString.length;
@@ -107,10 +110,6 @@ export class AudioService {
       }
       this.source = null;
     }
-  }
-
-  public setVolume(val: number) {
-    if (this.gainNode) this.gainNode.gain.value = val;
   }
 
   public setPlaybackRate(val: number) {

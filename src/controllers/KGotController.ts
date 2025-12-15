@@ -1,7 +1,7 @@
 
 import { KnowledgeGraph, KGotNode, KGotEdge } from '../lib/types/kgot';
 import { UnifiedDirectorOutput } from '../lib/schemas/unifiedDirectorSchema';
-import { YandereLedger } from '../types';
+import { YandereLedger, PrefectDNA } from '../types';
 import { KGotCore } from '../lib/kgot/core';
 import { applyMutations } from '../lib/kgot/mutations';
 import { fuzzyResolve } from '../lib/kgot/search';
@@ -176,6 +176,33 @@ export class KGotController {
       applyMutations(this.core, [updateMut], turn);
   }
 
+  /**
+   * Updates an agent's attributes based on PrefectDNA.
+   * This is used to sync PrefectDNA changes from the gameStore to the KGotNode attributes.
+   */
+  public updateAgentAttributes(prefect: PrefectDNA): void {
+      const turn = this.core.getGraph().global_state.turn_count;
+      const updateMut = {
+          operation: 'update_node',
+          id: prefect.id,
+          updates: {
+              attributes: { 
+                  // Directly store the full PrefectDNA attributes for rich context
+                  // Avoid direct circular references if PrefectDNA has deep graph objects
+                  prefectDNA: { ...prefect, relationships: { ...prefect.relationships } }, 
+                  psychometrics: prefect.psychometrics, // Ensure psychometrics are carried over
+                  appearanceDescription: prefect.appearanceDescription,
+                  narrativeFunctionDescription: prefect.narrativeFunctionDescription,
+                  promptKeywords: prefect.promptKeywords,
+                  visualDNA: prefect.visualDNA,
+                  somaticSignature: prefect.somaticSignature,
+                  // Add other specific attributes as needed
+              }
+          }
+      };
+      applyMutations(this.core, [updateMut], turn);
+  }
+
   // --- Metrics & Analysis (Core Methods) ---
 
   public updateMetrics(): void {
@@ -225,7 +252,10 @@ export class KGotController {
                       agent_state: {
                           emotional_vector: sim.emotional_state,
                           last_action: sim.public_action
-                      }
+                      },
+                      // Also update specific emotional states for potential psychometrics
+                      currentEmotionalState: sim.emotional_state, // Direct update to PrefectDNA part
+                      lastPublicAction: sim.public_actionSummary || sim.public_action, // Use summary if available
                   }
               }
           });
@@ -237,6 +267,7 @@ export class KGotController {
                   id: `mem_${Date.now()}_${pid}`,
                   description: `Action: ${sim.public_action} | Motivation: ${sim.hidden_motivation}`,
                   emotional_imprint: `Confidence: ${sim.emotional_state.confidence}`,
+                  involved_entities: [pid, sim.sabotage_attempt?.target || sim.alliance_signal?.target || ''], 
                   timestamp: turn
               }
           });
@@ -248,6 +279,26 @@ export class KGotController {
                   source: pid,
                   target: this.resolveEntityId(sim.sabotage_attempt.target) || sim.sabotage_attempt.target,
                   delta: 25 
+              });
+          }
+           if (sim.alliance_signal) {
+              muts.push({
+                  operation: 'update_relationship',
+                  source: pid,
+                  target: this.resolveEntityId(sim.alliance_signal.target) || sim.alliance_signal.target,
+                  category: 'TRUST', // Or 'LOVE', 'SYMPATHY' based on context
+                  delta: 0.2 // Small positive delta for alliance
+              });
+          }
+          if (sim.secrets_uncovered && sim.secrets_uncovered.length > 0) {
+              sim.secrets_uncovered.forEach(secret => {
+                  muts.push({
+                      operation: 'add_secret',
+                      secret_id: `secret_${Date.now()}_${pid}_${Math.random().toString(36).substring(2, 6)}`,
+                      description: secret,
+                      discovered_by: sim.prefect_name,
+                      turn_discovered: turn
+                  });
               });
           }
       });

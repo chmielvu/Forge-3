@@ -1,5 +1,5 @@
 
-import { PrefectDNA, TraitVector, PrefectArchetype } from '../../types';
+import { PrefectDNA, TraitVector, PrefectArchetype, PrefectPsychometrics } from '../../types';
 
 // --- 1. Deterministic PRNG (Mulberry32) ---
 // Ensures that the same "seed" always generates the exact same Prefects
@@ -25,6 +25,12 @@ interface ArchetypeTemplate {
   bias: (rand: () => number) => TraitVector;
   drives: string[];
   weaknesses: string[];
+  psychometrics: PrefectPsychometrics; // NEW: Add psychometric signature
+  appearanceDescription: string; // NEW: Add more detailed appearance
+  narrativeFunctionDescription: string; // NEW: Add narrative function description
+  promptKeywords: string[]; // NEW: Add prompt keywords
+  visualDNA: string; // NEW: Specific visual prompts/anchors for a character
+  somaticSignature: string; // NEW: How their body expresses internal state
 }
 
 const PROCEDURAL_ARCHETYPES: Record<string, ArchetypeTemplate> = {
@@ -46,7 +52,21 @@ const PROCEDURAL_ARCHETYPES: Record<string, ArchetypeTemplate> = {
       "Enjoys cruelty too much - Faculty sees as liability",
       "Lacks subtlety - leaves evidence",
       "Easily baited into rage by defiance"
-    ]
+    ],
+    psychometrics: { // NEW
+      tortureStyle: 'KINETIC',
+      physiologicalTell: "The Predatory Giggle",
+      breakingPointTrigger: "Defiance or perceived softness",
+      idleProp: "Twirling a small, gleaming bladed object",
+      vocalQuirk: "Sharp, high-pitched cackle",
+      visualDNA: "Feral, athletic, coiled, predatory grin, scarred midriff, tight leather",
+      somaticSignature: "Muscles tense like a spring, darting eyes, restless energy"
+    },
+    appearanceDescription: "A lean, wiry woman with erratic, wild hair often in a messy braid. Piercing, gleeful green eyes. Wears cropped, utilitarian clothing that reveals a scarred midriff. Often fidgeting with a small, sharp object.",
+    narrativeFunctionDescription: "Specializes in direct physical coercion. Translates theoretical pain into visceral reality. Seeks the 'perfect break' in subjects.",
+    promptKeywords: ["kinetic_impact", "gleeful_cruelty", "scarred_midriff", "predatory_grin"],
+    visualDNA: "Feral, athletic, coiled, predatory grin, scarred midriff, tight leather",
+    somaticSignature: "Muscles tense like a spring, darting eyes, restless energy, body language like a coiled viper"
   },
   'The Defector': {
     // Bias: Low submission, High cunning/ambition
@@ -66,7 +86,21 @@ const PROCEDURAL_ARCHETYPES: Record<string, ArchetypeTemplate> = {
       "Secretly aligned with Mara - if discovered, both are executed",
       "Hesitates when ordered to inflict severe damage",
       "Paranoid about exposure"
-    ]
+    ],
+    psychometrics: { // NEW
+      tortureStyle: 'PUBLIC', // Publicly verbal, privately not
+      physiologicalTell: "The Code-Switcher",
+      breakingPointTrigger: "Threat of exposure, direct accusation of disloyalty",
+      idleProp: "Taps ash from cigarette nervously, drops hidden notes",
+      vocalQuirk: "Harsh alto (public), urgent whisper (private)",
+      visualDNA: "Chameleon, fiery red hair, intense green eyes, worn pragmatic clothes",
+      somaticSignature: "Eyes darting to exits, smoker's slouch, clenched jaw (public)"
+    },
+    appearanceDescription: "A young woman with sharp angular features and fiery red hair, often hidden. Wears practical, somewhat disheveled clothing. Constantly scans the environment. Her public demeanor is bored and cynical.",
+    narrativeFunctionDescription: "Undermines the Forge from within. Provides a potential lifeline to Subjects but at great risk. Embodies the cost of living a lie.",
+    promptKeywords: ["secret_rebel", "code_switcher", "watchful_eyes", "pragmatic_betrayal"],
+    visualDNA: "Chameleon, fiery red hair, intense green eyes, worn pragmatic clothes",
+    somaticSignature: "Smoker's slouch, eyes dart to the exits, clenched jaw (public), urgent gestures in private (dropping a key)"
   },
   'The Voyeur': {
     // Bias: Low charisma, Moderate cruelty
@@ -86,7 +120,21 @@ const PROCEDURAL_ARCHETYPES: Record<string, ArchetypeTemplate> = {
       "Prefers watching to acting - Faculty questions her commitment",
       "Distracted by details during chaos",
       "Physically weaker than other Prefects"
-    ]
+    ],
+    psychometrics: { // NEW
+      tortureStyle: 'CLINICAL', // Observational
+      physiologicalTell: "Fixed, unblinking gaze",
+      breakingPointTrigger: "Forced participation, direct emotional appeal",
+      idleProp: "Small, ornate spyglass, a hidden sketchbook",
+      vocalQuirk: "Flat, almost silent observations",
+      visualDNA: "Austere, watchful, blending into shadows, detailed notes, hidden focus",
+      somaticSignature: "Stillness, minimal gestures, head tilted slightly to listen"
+    },
+    appearanceDescription: "A quiet, unassuming woman who blends into the background. Wears plain, dark academic robes. Her eyes are unblinking and constantly observing. Carries a small, intricate notebook.",
+    narrativeFunctionDescription: "Records and analyzes events without direct intervention. A source of hidden information, but also a symbol of complicity through inaction.",
+    promptKeywords: ["observant_gaze", "detached_watcher", "hidden_scribe", "quiet_analysis"],
+    visualDNA: "Austere, watchful, blending into shadows, detailed notes, hidden focus",
+    somaticSignature: "Stillness, minimal gestures, head tilted slightly to listen"
   },
   'The Parasite': {
     // Bias: High cunning/ambition, Low cruelty
@@ -107,6 +155,21 @@ const PROCEDURAL_ARCHETYPES: Record<string, ArchetypeTemplate> = {
       "Useless in a direct confrontation",
       "Loyalty is entirely transactional"
     ]
+    ,
+    psychometrics: { // NEW
+      tortureStyle: 'EMOTIONAL', // Indirect manipulation
+      physiologicalTell: "Shifting eyes, too-easy smile",
+      breakingPointTrigger: "Direct confrontation, exposure of mimicry",
+      idleProp: "Adorning herself with a rival's discarded item",
+      vocalQuirk: "Mimics the vocal quirks of dominant Prefects",
+      visualDNA: "Mimetic, adaptable, blending, shifting identity, elegant but hollow",
+      somaticSignature: "Fluid, almost boneless movements, posture mirroring whoever is dominant"
+    },
+    appearanceDescription: "A chameleon-like figure whose appearance subtly shifts to mirror those around her. Always impeccably dressed, but with a faint, unsettling blankness behind her eyes. Her smile feels too wide.",
+    narrativeFunctionDescription: "Clings to power by mirroring and exploiting others. Represents the superficiality of ambition without true conviction.",
+    promptKeywords: ["mimicry", "transactional_loyalty", "empty_charm", "shadow_play"],
+    visualDNA: "Mimetic, adaptable, blending, shifting identity, elegant but hollow",
+    somaticSignature: "Fluid, almost boneless movements, posture mirroring whoever is dominant"
   },
   'The Perfectionist': {
     // Bias: High submission/ambition
@@ -126,7 +189,21 @@ const PROCEDURAL_ARCHETYPES: Record<string, ArchetypeTemplate> = {
       "Paralyzed by fear of imperfection - cracks under pressure",
       "Inflexible when variables change",
       "Cannot improvise"
-    ]
+    ],
+    psychometrics: { // NEW
+      tortureStyle: 'RITUALISTIC',
+      physiologicalTell: "Visible trembling under pressure, rigid posture",
+      breakingPointTrigger: "Unexpected variables, public failure",
+      idleProp: "Adjusting perfect uniform, polishing a small device",
+      vocalQuirk: "Precise, overly enunciated, brittle",
+      visualDNA: "Rigid, flawless, severe, perfectly tailored, contained anxiety",
+      somaticSignature: "Unnatural stillness, jaw often tight, eyes darting for imperfections"
+    },
+    appearanceDescription: "A Prefect with an almost unnaturally perfect appearance. Every hair in place, uniform pristine. Her movements are stiff, precise, almost robotic. Her eyes hold a constant, anxious tension.",
+    narrativeFunctionDescription: "Enforces rules with unyielding precision. Represents the oppressive weight of the institution's flawless facade. Vulnerable to chaos.",
+    promptKeywords: ["flawless_order", "brittle_perfection", "anxious_control", "rigid_posture"],
+    visualDNA: "Rigid, flawless, severe, perfectly tailored, contained anxiety",
+    somaticSignature: "Unnatural stillness, jaw often tight, eyes darting for imperfections"
   },
   'The Martyr': {
     // Bias: Extreme submission, Low cunning
@@ -146,7 +223,21 @@ const PROCEDURAL_ARCHETYPES: Record<string, ArchetypeTemplate> = {
       "Self-destructive loyalty - Faculty exploits without rewarding",
       "Easily manipulated by authority figures",
       "Will burn herself out"
-    ]
+    ],
+    psychometrics: { // NEW
+      tortureStyle: 'EMOTIONAL', // Self-inflicted or accepted
+      physiologicalTell: "Meek, averted gaze, almost welcoming pain",
+      breakingPointTrigger: "Being ignored by Faculty, questioned devotion",
+      idleProp: "Clutching a worn, personal item like a rosary",
+      vocalQuirk: "Soft, self-effacing whispers, pleas for understanding",
+      visualDNA: "Submissive, worn, earnest, downcast, self-sacrificing",
+      somaticSignature: "Shoulders hunched, head bowed, body language of resigned acceptance"
+    },
+    appearanceDescription: "A Prefect who seems almost eager for suffering. Her eyes are often downcast, her posture meek. Wears a plain, unadorned uniform. Carries a worn, personal trinket, clutching it for comfort.",
+    narrativeFunctionDescription: "Embodies the path of ultimate submission and self-sacrifice. Her devotion is exploited to reinforce the Forge's ideology of 'necessity'.",
+    promptKeywords: ["self_sacrificing", "meek_devotion", "exploited_loyalty", "resigned_acceptance"],
+    visualDNA: "Submissive, worn, earnest, downcast, self-sacrificing",
+    somaticSignature: "Shoulders hunched, head bowed, body language of resigned acceptance"
   },
   'The Wildcard': {
     // Bias: High Variance (Random)
@@ -166,163 +257,88 @@ const PROCEDURAL_ARCHETYPES: Record<string, ArchetypeTemplate> = {
       "Inconsistency makes her unreliable - Faculty can't predict her",
       "Prone to spectacular failures",
       "No long-term strategy"
-    ]
-  },
-  'The Mimic': {
-    // Bias: High Charisma/Ambition
-    bias: (rand) => ({
-      cruelty: 0.4 + (rand() * 0.2),
-      charisma: 0.6 + (rand() * 0.2),
-      cunning: 0.7 + (rand() * 0.2),
-      submission_to_authority: 0.6 + (rand() * 0.2),
-      ambition: 0.8 + (rand() * 0.15)
-    }),
-    drives: [
-      "Copy successful Prefect strategies",
-      "Become TA by being a perfect student",
-      "Reflect the Faculty's desires back at them"
     ],
-    weaknesses: [
-      "Lacks originality - Faculty sees through imitation",
-      "Identity crumbles under stress",
-      "Dependent on others to lead"
-    ]
-  }
-};
-
-// --- 4. Canon Prefect Definitions (Immutable) ---
-export const CANON_PREFECTS: Record<string, PrefectDNA> = {
-  'ELARA': {
-    id: 'PREFECT_LOYALIST',
-    displayName: 'Elara',
-    archetype: 'The Zealot',
-    isCanon: true,
-    traitVector: { cruelty: 0.6, charisma: 0.5, cunning: 0.4, submission_to_authority: 0.9, ambition: 0.8 },
-    drive: "Prove ideological purity to secure TA position and validate the Forge's mission",
-    secretWeakness: "Secretly horrified by the violence she orders - flinches at impact, then overcompensates with zealous justifications",
-    favorScore: 65,
-    relationships: {},
-    knowledge: [] // Initialize empty knowledge
-  },
-  'KAELEN': {
-    id: 'PREFECT_OBSESSIVE',
-    displayName: 'Kaelen',
-    archetype: 'The Yandere',
-    isCanon: true,
-    traitVector: { cruelty: 0.9, charisma: 0.7, cunning: 0.8, submission_to_authority: 0.3, ambition: 0.6 },
-    drive: "Become TA to gain unrestricted access to Subject 84 for 'purification rituals'",
-    secretWeakness: "Manic possession makes her unpredictable - Faculty sees her as unstable liability",
-    favorScore: 45,
-    relationships: {},
-    knowledge: [] // Initialize empty knowledge
-  },
-  'RHEA': {
-    id: 'PREFECT_DISSIDENT',
-    displayName: 'Rhea',
-    archetype: 'The Dissident',
-    isCanon: true,
-    traitVector: { cruelty: 0.2, charisma: 0.6, cunning: 0.9, submission_to_authority: 0.1, ambition: 0.7 },
-    drive: "Become TA to undermine Faculty from position of power and avenge her brother",
-    secretWeakness: "Her public cruelty is a performance - if caught helping Subjects, she's executed",
-    favorScore: 55,
-    relationships: {},
-    knowledge: [] // Initialize empty knowledge
-  },
-  'ANYA': {
-    id: 'PREFECT_NURSE',
-    displayName: 'Anya',
-    archetype: 'The Nurse',
-    isCanon: true,
-    traitVector: { cruelty: 0.5, charisma: 0.8, cunning: 0.7, submission_to_authority: 0.7, ambition: 0.9 },
-    drive: "Become TA to access advanced medical research and secure family's influence",
-    secretWeakness: "Her empathy is entirely performative - Subjects who discover this lose all hope",
-    favorScore: 70,
-    relationships: {},
-    knowledge: [] // Initialize empty knowledge
-  }
-};
-
-// --- 5. Generator Functions ---
-
-function generateRandomPrefect(seed: number, index: number): PrefectDNA {
-  const rand = seededRandom(seed + index);
-  
-  // 1. Pick Name
-  const nameIndex = Math.floor(rand() * PROCEDURAL_NAMES.length);
-  const name = PROCEDURAL_NAMES[nameIndex];
-  
-  // 2. Pick Archetype (Weighted? Uniform for now)
-  const typeKeys = Object.keys(PROCEDURAL_ARCHETYPES);
-  const typeIndex = Math.floor(rand() * typeKeys.length);
-  const archetype = typeKeys[typeIndex];
-  const template = PROCEDURAL_ARCHETYPES[archetype];
-  
-  // 3. Generate Traits via Bias Function
-  const traits = template.bias(rand);
-  
-  // 4. Select Content
-  const drive = template.drives[Math.floor(rand() * template.drives.length)];
-  const weakness = template.weaknesses[Math.floor(rand() * template.weaknesses.length)];
-  
-  return {
-    id: `PREFECT_PROC_${index}_${name.toUpperCase()}`,
-    displayName: name,
-    archetype: archetype as any, // Cast to PrefectArchetype
-    isCanon: false,
-    traitVector: {
-      cruelty: Math.max(0, Math.min(1, traits.cruelty)),
-      charisma: Math.max(0, Math.min(1, traits.charisma)),
-      cunning: Math.max(0, Math.min(1, traits.cunning)),
-      submission_to_authority: Math.max(0, Math.min(1, traits.submission_to_authority)),
-      ambition: Math.max(0, Math.min(1, traits.ambition))
+    psychometrics: { // NEW
+      tortureStyle: 'KINETIC', // Chaotic, unpredictable
+      physiologicalTell: "Manic laughter that stops abruptly",
+      breakingPointTrigger: "Boredom or being ignored",
+      idleProp: "Juggling a small ball or coin",
+      vocalQuirk: "Rapid-fire speech, changing volume randomly",
+      visualDNA: "Chaotic, vibrant, unpredictable, disheveled, mischievous grin",
+      somaticSignature: "Restless energy, fidgeting, body language of constant surprise"
     },
-    drive,
-    secretWeakness: weakness,
-    favorScore: 50, // Standard starting score
-    relationships: {},
-    knowledge: [] // Initialize empty knowledge
-  };
-}
+    appearanceDescription: "A wild card with mismatched accessories and messy hair. Her expression shifts rapidly. Wears her uniform with deliberate sloppiness.",
+    narrativeFunctionDescription: "Introduces chaos and unpredictability. A destabilizing element in the hierarchy.",
+    promptKeywords: ["chaotic_energy", "unpredictable_grin", "disheveled_charm", "manic_gaze"],
+    visualDNA: "Chaotic, vibrant, unpredictable, disheveled, mischievous grin",
+    somaticSignature: "Restless energy, fidgeting, body language of constant surprise"
+  }
+};
 
-export function initializePrefects(playthroughSeed: number): PrefectDNA[] {
-  const prefects: PrefectDNA[] = [
-    { ...CANON_PREFECTS['ELARA'] },
-    { ...CANON_PREFECTS['KAELEN'] },
-    { ...CANON_PREFECTS['RHEA'] },
-    { ...CANON_PREFECTS['ANYA'] }
-  ];
-
-  // Generate 4 procedural prefects
-  for (let i = 0; i < 4; i++) {
-    prefects.push(generateRandomPrefect(playthroughSeed, i));
+export function initializePrefects(seed: number, count: number = 4): PrefectDNA[] {
+  const rand = seededRandom(seed);
+  const archetypeKeys = Object.keys(PROCEDURAL_ARCHETYPES);
+  
+  // Shuffle archetypes to pick unique ones
+  for (let i = archetypeKeys.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [archetypeKeys[i], archetypeKeys[j]] = [archetypeKeys[j], archetypeKeys[i]];
   }
 
-  // Initialize Relationship Logic (from Prompt 2)
-  prefects.forEach(p => {
-    if (p.id === 'PREFECT_LOYALIST') {
-      p.relationships['PREFECT_OBSESSIVE'] = -0.4;
-      p.relationships['PREFECT_DISSIDENT'] = -0.3;
-      p.relationships['PREFECT_NURSE'] = 0.2;
-    }
-    if (p.id === 'PREFECT_OBSESSIVE') {
-      // Hates everyone
-      prefects.forEach(target => {
-        if (target.id !== p.id) p.relationships[target.id] = -0.6;
-      });
-    }
-    if (p.id === 'PREFECT_DISSIDENT') {
-      // Secretly allied with Defectors
-      prefects.forEach(target => {
-        if (target.archetype === 'The Defector') p.relationships[target.id] = 0.7;
-        if (target.archetype === 'The Zealot') p.relationships[target.id] = -0.5;
-      });
-    }
-    if (p.id === 'PREFECT_NURSE') {
-      // Neutral
-      prefects.forEach(target => {
-        if (target.id !== p.id) p.relationships[target.id] = 0.1;
-      });
-    }
+  // Shuffle names
+  const names = [...PROCEDURAL_NAMES];
+  for (let i = names.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [names[i], names[j]] = [names[j], names[i]];
+  }
+
+  const selectedArchetypes = archetypeKeys.slice(0, count);
+  const prefects: PrefectDNA[] = [];
+
+  selectedArchetypes.forEach((archKey, index) => {
+    const template = PROCEDURAL_ARCHETYPES[archKey];
+    const traitVector = template.bias(rand);
+    
+    // Pick random drive and weakness
+    const drive = template.drives[Math.floor(rand() * template.drives.length)];
+    const weakness = template.weaknesses[Math.floor(rand() * template.weaknesses.length)];
+    
+    const id = `PREFECT_${names[index].toUpperCase()}`;
+
+    prefects.push({
+      id,
+      displayName: `Prefect ${names[index]}`,
+      archetype: archKey as PrefectArchetype,
+      isCanon: false,
+      traitVector,
+      drive,
+      secretWeakness: weakness,
+      favorScore: 50, // Start neutral
+      relationships: {}, // Initialize empty, can be populated later
+      currentEmotionalState: {
+        paranoia: 0.2,
+        desperation: 0.1,
+        confidence: 0.5,
+        arousal: 0,
+        dominance: 0.5
+      },
+      psychometrics: template.psychometrics,
+      appearanceDescription: template.appearanceDescription,
+      narrativeFunctionDescription: template.narrativeFunctionDescription,
+      promptKeywords: template.promptKeywords,
+      visualDNA: template.visualDNA,
+      somaticSignature: template.somaticSignature
+    });
+  });
+
+  // Initialize relationships (random affinity)
+  prefects.forEach(p1 => {
+    prefects.forEach(p2 => {
+      if (p1.id !== p2.id) {
+        // -1.0 to 1.0
+        p1.relationships[p2.id] = (rand() * 2) - 1;
+      }
+    });
   });
 
   return prefects;

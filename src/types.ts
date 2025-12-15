@@ -242,7 +242,11 @@ export type PrefectArchetype =
   | 'The Perfectionist'
   | 'The Martyr'
   | 'The Wildcard'
-  | 'The Mimic';
+  | 'The Mimic'
+  | 'The Confessor'
+  | 'The Logician'
+  | 'The Provost'
+  | 'The Pain Broker';
 
 export interface TraitVector {
   cruelty: number;
@@ -250,6 +254,23 @@ export interface TraitVector {
   cunning: number;
   submission_to_authority: number;
   ambition: number;
+}
+
+/**
+ * @interface PrefectPsychometrics
+ * @description Defines specific psychological "tells" and somatic signatures for Prefects,
+ * derived from the lore documents to ensure deeper characterization.
+ */
+export interface PrefectPsychometrics {
+  tortureStyle: 'KINETIC' | 'CLINICAL' | 'EMOTIONAL' | 'RITUALISTIC' | 'INTIMATE' | 'PUBLIC'; 
+  physiologicalTell: string; // e.g., "The Mid-Sentence Snap", "The Predatory Giggle"
+  breakingPointTrigger: string; // What makes them break their mask
+  idleProp: string; // The visual prop they fidget with (e.g., "Spinning dagger", "Adjusting glasses")
+  vocalQuirk?: string; // e.g., "Whispers dangerous secrets", "Manic giggles"
+  visualDNA?: string; // Short descriptor for their unique visual style/appearance
+  somaticSignature?: string; // How their body expresses their internal state (e.g., "Sweat-beaded forehead", "Clenched Jaw")
+  arousal?: number; // Added arousal for emotional state tracking
+  dominance?: number; // Added dominance for emotional state tracking
 }
 
 export interface PrefectDNA {
@@ -266,9 +287,17 @@ export interface PrefectDNA {
       paranoia: number;
       desperation: number;
       confidence: number;
+      arousal?: number; 
+      dominance?: number; 
   };
   lastPublicAction?: string;
   knowledge?: string[];
+  psychometrics?: PrefectPsychometrics; // NEW: Deeper psychological details
+  appearanceDescription?: string; // NEW: More detailed appearance for prompt injection
+  narrativeFunctionDescription?: string; // NEW: More detailed narrative function
+  promptKeywords?: string[]; // NEW: Keywords for specific tone/style
+  visualDNA?: string; // Direct property for easier access and generation
+  somaticSignature?: string; // Direct property for easier access and generation
 }
 
 export interface PrefectDecision {
@@ -276,6 +305,7 @@ export interface PrefectDecision {
     action: string; 
     actionDetail: string;
     publicUtterance: string | null;
+    publicActionSummary: string | null; // NEW: For logging concise public action
     hiddenProposal: string | null;
     targetId: string | null;
     stateDelta: any;
@@ -304,6 +334,8 @@ export interface FilteredSceneContext {
     recentActions: string;
     favorScore: number;
     perceivedThreat: number;
+    psychometrics?: PrefectPsychometrics; // NEW: Include psychometrics
+    appearanceDescription?: string; // NEW: Include appearance
   }>;
   yourFavorScore: number;
   yourRecentActions: string[];
@@ -322,6 +354,9 @@ export interface CharacterVisualState {
   emotionalState: string;
   injuries: string[];
   dominancePosture: number;
+  facialExpression?: string; // e.g., "cold amusement", "predatory smirk"
+  poseDescription?: string; // e.g., "seated on dais", "leaning forward"
+  activeProps?: string[]; // e.g., ["goblet of wine", "dagger"]
 }
 
 export interface EnvironmentState {
@@ -329,6 +364,9 @@ export interface EnvironmentState {
   lightingScheme: string;
   atmosphericEffects: string[];
   dominantColors: string[];
+  keyProps?: string[]; // e.g., ["iron restraints", "steam vents"]
+  surfaceMaterials?: string[]; // e.g., ["sweating stone", "polished basalt"]
+  architecturalStyle?: string; // e.g., "Roman Imperial decay", "Gothic Bedlam"
 }
 
 export interface VisualMemory {
