@@ -16,7 +16,7 @@ function seededRandom(seed: number): () => number {
 const PROCEDURAL_NAMES = [
   "Isadora", "Cressida", "Thalia", "Vivienne", "Lucian", "Cassian",
   "Damien", "Soren", "Vesper", "Nyx", "Lux", "Morrigan",
-  "Seraphine", "Octavia", "Valeria", "Xanthe"
+  "Seraphine", "Octavia", "Valeria", "Xanthe", "Elara", "Rhea"
 ];
 
 // --- 3. Archetype Templates (The Logic Core) ---
@@ -101,6 +101,74 @@ const PROCEDURAL_ARCHETYPES: Record<string, ArchetypeTemplate> = {
     promptKeywords: ["secret_rebel", "code_switcher", "watchful_eyes", "pragmatic_betrayal"],
     visualDNA: "Chameleon, fiery red hair, intense green eyes, worn pragmatic clothes",
     somaticSignature: "Smoker's slouch, eyes dart to the exits, clenched jaw (public), urgent gestures in private (dropping a key)"
+  },
+  'The Dissident': {
+    // Bias: High Cunning, High Charisma, Low Loyalty
+    bias: (rand) => ({
+      cruelty: 0.4 + (rand() * 0.2),
+      charisma: 0.8 + (rand() * 0.1),
+      cunning: 0.9 + (rand() * 0.1),
+      submission_to_authority: 0.1 + (rand() * 0.2),
+      ambition: 0.6 + (rand() * 0.2)
+    }),
+    drives: [
+        "Burn the Forge down from the inside",
+        "Maintain cover as 'The Gray Man' - bored and cynical",
+        "Plant seeds of rebellion in capable Subjects"
+    ],
+    weaknesses: [
+        "One slip in persona means death",
+        "Cannot save everyone, must choose who to sacrifice",
+        "Deeply traumatized by past loss (brother)"
+    ],
+    psychometrics: {
+        tortureStyle: 'PUBLIC',
+        physiologicalTell: "The Mid-Conversation Snap (Public cruelty vs Private signal)",
+        breakingPointTrigger: "Threat of exposure, witnessing total spirit breakage",
+        idleProp: "Lit cigarette (exhaling contemptuously), hidden key",
+        vocalQuirk: "Flat/harsh publicly, rapid/urgent privately",
+        visualDNA: "Chameleon, fiery red hair, intense green eyes, worn pragmatic clothes",
+        somaticSignature: "Smoker's slouch, eyes dart to exits, clenched jaw (public), urgent gestures (private)"
+    },
+    appearanceDescription: "Sharp angular features, messy fiery red hair under a hat. Wears a worn, practical trench coat over uniform. Eyes are intense and darting.",
+    narrativeFunctionDescription: "The Double Agent. Provides narrative contrast between the institution's brutality and hidden resistance. Offers high-risk, high-reward alliances.",
+    promptKeywords: ["double_agent", "coded_signals", "cynical_mask", "hidden_fire"],
+    visualDNA: "Chameleon, fiery red hair, intense green eyes, worn pragmatic clothes",
+    somaticSignature: "Smoker's slouch, eyes dart to exits, clenched jaw (public)"
+  },
+  'The Zealot': {
+    // Bias: High Submission, Low Cunning, High Anxiety
+    bias: (rand) => ({
+      cruelty: 0.6 + (rand() * 0.2),
+      charisma: 0.3 + (rand() * 0.2),
+      cunning: 0.2 + (rand() * 0.2),
+      submission_to_authority: 0.95 + (rand() * 0.05),
+      ambition: 0.7 + (rand() * 0.2)
+    }),
+    drives: [
+        "Enforce the Codex of Yala to the letter",
+        "Suppress internal doubt with louder scripture",
+        "Avoid expulsion at all costs"
+    ],
+    weaknesses: [
+        "Terrified of her own actions",
+        "Hesitates before violence (The Flinch)",
+        "Easy to manipulate by questioning her interpretation of rules"
+    ],
+    psychometrics: {
+        tortureStyle: 'RITUALISTIC',
+        physiologicalTell: "The Flinching Zealot (Hesitation -> Command -> Frantic Justification)",
+        breakingPointTrigger: "Direct challenge to Forge legitimacy, witnessing gratuitous gore",
+        idleProp: "Clutching a worn copy of the Codex, perfectly clean clipboard",
+        vocalQuirk: "Sharp, over-enunciated, slightly too loud (brittle)",
+        visualDNA: "Militant, severe, perfect posture, flinching eyes, pristine uniform",
+        somaticSignature: "Brittle rigidity, jaw clenched, hands trembling behind back"
+    },
+    appearanceDescription: "Severe bun, pristine uniform, pale skin. Hands often clasped tight to hide shaking. Eyes wide with a mix of fervor and terror.",
+    narrativeFunctionDescription: "Represents the cost of compliance. Enforces rules but shows the human crack in the armor. A tragic figure of fear-based loyalty.",
+    promptKeywords: ["brittle_authority", "flinching_cruelty", "desperate_scripture", "trembling_hands"],
+    visualDNA: "Militant, severe, perfect posture, flinching eyes, pristine uniform",
+    somaticSignature: "Brittle rigidity, jaw clenched, hands trembling behind back"
   },
   'The Voyeur': {
     // Bias: Low charisma, Moderate cruelty

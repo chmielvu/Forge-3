@@ -252,11 +252,14 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           // Initialize controller with current graph state to process updates
           const controller = new KGotController(state.kgot);
 
+          // Handle property name mismatch from different sources (legacy vs unified)
+          const simulations = result.prefectSimulations || result.prefect_simulations;
+
           // 1. Identify Primary Actor for Visualization using Fuzzy Resolution
           let primaryActor: PrefectDNA | CharacterId | string = CharacterId.PLAYER; 
           
-          if (result.prefect_simulations && result.prefect_simulations.length > 0) {
-              const sortedSims = [...result.prefect_simulations].sort((a: any, b: any) => 
+          if (simulations && simulations.length > 0) {
+              const sortedSims = [...simulations].sort((a: any, b: any) => 
                   (b.public_action?.length || 0) - (a.public_action?.length || 0)
               );
               const activeId = sortedSims[0].prefect_id;
@@ -283,7 +286,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                     directorDebug: result.agot_trace ? JSON.stringify(result.agot_trace, null, 2) : "No trace.",
                     activeCharacters: typeof primaryActor !== 'string' ? [primaryActor.id] : [primaryActor],
                     location: currentLocation,
-                    simulationLog: result.prefect_simulations ? JSON.stringify(result.prefect_simulations, null, 2) : "No simulation."
+                    simulationLog: simulations ? JSON.stringify(simulations, null, 2) : "No simulation."
                   },
                   result.script // Pass the structured script here
               );
@@ -315,8 +318,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                   content: result.psychosis_text
               });
           }
-          if (result.prefect_simulations) {
-              const simLog = result.prefect_simulations
+          if (simulations) {
+              const simLog = simulations
               .map((s: any) => `${s.prefect_name}: "${s.hidden_motivation.substring(0, 40)}..."`)
               .join(' | ');
             
@@ -327,35 +330,42 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             });
           }
 
-
           // === HANDLING MUTATIONS AND SYNCING TO STORE ===
+          
+          // 3. Apply Prefect Simulations to Graph (Updates agent state, memories, etc.)
+          if (simulations && simulations.length > 0) {
+              controller.applyPrefectSimulations(simulations);
+          }
+
+          // 4. Apply Explicit KGoT Mutations
           if (result.kgot_mutations) {
-             // 1. Process Side Effects (Logs / Subject Updates)
+             // Process Side Effects (Logs / Subject Updates)
              result.kgot_mutations.forEach((mut: any) => {
-                 // Handle 'add_injury' mutations using resolved IDs
-                 if (mut.operation === 'add_injury' && mut.params) {
-                     const rawTargetId = mut.params.target_id || mut.params.subject_id;
+                 // Handle 'add_injury' / 'inflict_somatic_trauma' mutations using resolved IDs
+                 if ((mut.operation === 'add_injury' || mut.operation === 'inflict_somatic_trauma') && (mut.params || mut.target_id || mut.subject_id)) {
+                     const rawTargetId = mut.target_id || mut.params?.target_id || mut.subject_id || mut.params?.subject_id;
                      const finalTarget = controller.resolveEntityId(rawTargetId) || rawTargetId;
                      
                      const subject = get().subjects[finalTarget];
                      if (subject) {
-                         const injuryName = mut.params.injury_name || mut.params.injury;
+                         const injuryName = mut.description || mut.injury || mut.params?.injury_name || mut.params?.injury;
                          const updatedInjuries = [...new Set([...(subject.injuries || []), injuryName])];
                          get().updateSubject(finalTarget, { injuries: updatedInjuries });
                          
+                         const severity = mut.severity || mut.params?.severity || 0;
                          get().addLog({
                              id: `injury-${Date.now()}`,
                              type: 'system',
-                             content: `CRITICAL INJURY LOGGED: ${injuryName} >> SUBJECT ${finalTarget}`
+                             content: `SOMATIC TRAUMA LOGGED: ${injuryName} >> SUBJECT ${finalTarget} (Severity: ${severity})`
                          });
                      }
                  }
                  // Handle 'add_subject_secret' mutations
-                 if ((mut.operation === 'add_subject_secret' || mut.operation === 'add_secret') && mut.params) {
-                     const rawSubjectId = mut.params.subject_id || CharacterId.PLAYER;
+                 if ((mut.operation === 'add_subject_secret' || mut.operation === 'add_secret') && (mut.params || mut.secret_id)) {
+                     const rawSubjectId = mut.subject_id || mut.params?.subject_id || CharacterId.PLAYER;
                      const subjectId = controller.resolveEntityId(rawSubjectId) || rawSubjectId;
-                     const secretName = mut.params.secret_name || mut.params.description || "Hidden Truth"; // Adapt to new schema
-                     const discoveredBy = mut.params.discovered_by || "Unknown";
+                     const secretName = mut.description || mut.params?.secret_name || mut.params?.description || "Hidden Truth";
+                     const discoveredBy = mut.discovered_by || mut.params?.discovered_by || "Unknown";
 
                      const subject = get().subjects[subjectId];
                      if (subject) {
@@ -366,43 +376,42 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                          });
                      }
                  }
-                 // NEW: Handle InflictSomaticTrauma mutation to update subject injuries and ledger
-                 if (mut.operation === 'inflict_somatic_trauma' && mut.target_id) {
-                    const targetId = controller.resolveEntityId(mut.target_id) || mut.target_id;
-                    const subject = get().subjects[targetId];
-                    if (subject) {
-                        const newInjury = `${mut.location}: ${mut.description}`;
-                        const updatedInjuries = [...new Set([...(subject.injuries || []), newInjury])];
-                        get().updateSubject(targetId, { injuries: updatedInjuries });
-                        get().addLog({
-                            id: `trauma-${Date.now()}`,
-                            type: 'system',
-                            content: `SOMATIC TRAUMA: ${newInjury} inflicted on ${subject.name} (Severity: ${mut.severity}).`
-                        });
-                    }
-                 }
              });
 
-             // 2. Apply mutations to the Graph via Controller (which handles ID resolution internally now for mutations)
+             // Apply mutations to the Graph via Controller (which handles ID resolution internally now for mutations)
              controller.applyMutations(result.kgot_mutations);
           }
 
-          // 3. Handle Ledger Updates via Controller
+          // 5. Handle Ledger Updates via Controller
           if (result.ledger_update) {
-              controller.updateLedger('Subject_84', result.ledger_update);
+              controller.updateLedger(CharacterId.PLAYER, result.ledger_update);
           }
           
-          // 4. Update PrefectDNA in store with any changes from simulations or KGotNode updates
+          // 6. Sync PrefectDNA from Graph back to Store
+          // Since graph is the source of truth for agent state (emotions, etc), we sync it back.
           const updatedPrefectsInStore = get().prefects.map(p => {
               const node = controller.getGraph().nodes[p.id];
-              if (node && node.attributes?.prefectDNA) {
-                  return node.attributes.prefectDNA as PrefectDNA; // Sync back full PrefectDNA
+              if (node && node.attributes) {
+                  const nodeAttrs = node.attributes;
+                  // Merge emotional state from node if available (updated by simulation)
+                  const mergedEmotionalState = {
+                      ...p.currentEmotionalState,
+                      ...nodeAttrs.currentEmotionalState,
+                      ...nodeAttrs.agent_state?.emotional_vector // Legacy path check
+                  };
+
+                  return {
+                      ...p,
+                      currentEmotionalState: mergedEmotionalState,
+                      lastPublicAction: nodeAttrs.lastPublicAction || p.lastPublicAction,
+                      // Sync other attributes if needed
+                  };
               }
               return p;
           });
           set({ prefects: updatedPrefectsInStore });
 
-          // 5. Retrieve Updated Graph from Controller
+          // 7. Retrieve Updated Graph from Controller and Update State
           const finalGraph = controller.getGraph();
 
           set((state) => {
@@ -425,7 +434,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                       turn: nextTurn 
                   },
                   // Update debug logs
-                  lastSimulationLog: result.prefect_simulations ? JSON.stringify(result.prefect_simulations, null, 2) : state.lastSimulationLog,
+                  lastSimulationLog: simulations ? JSON.stringify(simulations, null, 2) : state.lastSimulationLog,
                   lastDirectorDebug: result.agot_trace ? JSON.stringify(result.agot_trace, null, 2) : state.lastDirectorDebug,
               };
           });
@@ -473,79 +482,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             state.isLiteMode
           );
           
-          if (result.prefectSimulations && result.prefectSimulations.length > 0) {
-            const updatedPrefects = [...state.prefects];
-            
-            // Instantiate Controller for ID Resolution
-            const controller = new KGotController(state.kgot);
-
-            result.prefectSimulations.forEach((sim: any) => {
-              // Resolve Prefect ID
-              const resolvedId = controller.resolveEntityId(sim.prefect_id) || sim.prefect_id;
-              const prefectIndex = updatedPrefects.findIndex(p => p.id === resolvedId);
-              
-              if (prefectIndex !== -1) {
-                const prefect = updatedPrefects[prefectIndex];
-                
-                // Ensure currentEmotionalState is initialized if it doesn't exist
-                if (!prefect.currentEmotionalState) {
-                  prefect.currentEmotionalState = { paranoia: 0, desperation: 0, confidence: 0 };
-                }
-                prefect.currentEmotionalState = { ...prefect.currentEmotionalState, ...sim.emotional_state };
-                prefect.lastPublicAction = sim.public_actionSummary || sim.public_action; // Use summary if available
-                
-                if (sim.favor_score_delta) {
-                  prefect.favorScore = Math.max(0, Math.min(100, 
-                    prefect.favorScore + sim.favor_score_delta
-                  ));
-                }
-                
-                if (sim.secrets_uncovered?.length) {
-                  prefect.knowledge = [
-                    ...(prefect.knowledge || []),
-                    ...sim.secrets_uncovered
-                  ].slice(-10); 
-                }
-                
-                if (sim.sabotage_attempt) {
-                  // Resolve Target ID for Sabotage
-                  const targetRaw = sim.sabotage_attempt.target;
-                  const targetId = controller.resolveEntityId(targetRaw);
-                  
-                  if (targetId && updatedPrefects.some(p => p.id === targetId)) {
-                    prefect.relationships[targetId] = 
-                      Math.max(-1, (prefect.relationships[targetId] || 0) - 0.3);
-                  }
-                }
-                
-                if (sim.alliance_signal) {
-                  // Resolve Target ID for Alliance
-                  const targetRaw = sim.alliance_signal.target;
-                  const targetId = controller.resolveEntityId(targetRaw);
-                  
-                  if (targetId && updatedPrefects.some(p => p.id === targetId)) {
-                    prefect.relationships[targetId] = 
-                      Math.min(1, (prefect.relationships[targetId] || 0) + 0.2);
-                  }
-                }
-                
-                updatedPrefects[prefectIndex] = prefect;
-              }
-            });
-            
-            set({ prefects: updatedPrefects });
-            
-            const simLog = result.prefectSimulations
-              .map((s: any) => `${s.prefect_name}: "${s.hidden_motivation.substring(0, 40)}..."`)
-              .join(' | ');
-            
-            get().addLog({
-              id: `sim-${Date.now()}`,
-              type: 'system',
-              content: `PREFECT SIMULATION :: ${simLog}`
-            });
-          }
-          
+          // Apply server state handles graph updates, prefect updates, and logs
           get().applyServerState(result);
           
         } catch (e: any) {
