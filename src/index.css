@@ -46,9 +46,6 @@ body {
   80% { transform: translate(2px, -2px) }
   100% { transform: translate(0) }
 }
-.animate-glitch-text {
-  animation: glitch 0.3s cubic-bezier(.25, .46, .45, .94) both infinite;
-}
 
 @keyframes pulse-slow {
   0%, 100% { opacity: 1; }

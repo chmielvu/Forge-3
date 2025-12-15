@@ -1,10 +1,14 @@
 
 import { YandereLedger, GameState, PrefectDNA, PrefectArchetype } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
-import { analyzeLocalSentiment } from './localMediaService';
 import { useGameStore } from '../state/gameStore';
+import { env, pipeline } from '@xenova/transformers';
 
-// API Key retrieval for internal use
+// Skip local model download checks if offline/bundled
+env.allowLocalModels = false;
+env.useBrowserCache = true;
+
+// API Key retrieval for internal use (Legacy fallback)
 const getApiKey = (): string => {
   try {
     // @ts-ignore
@@ -43,6 +47,26 @@ export interface AestheteCritique {
   critique: string;
   rewrite_suggestion?: string;
   violations: string[];
+  somatic_check: string; 
+  thematic_check: string; 
+}
+
+/**
+ * Local Aesthete: Zero-Latency Tone Analysis
+ * Uses quantized DistilBERT to detect "Positive" sentiment (which is an error in this genre).
+ */
+class LocalAesthete {
+  static task = 'text-classification'; // Updated task for sentiment
+  static model = 'Xenova/distilbert-base-uncased-finetuned-sst-2-english';
+  static instance: any = null;
+
+  static async getInstance() {
+    if (!this.instance) {
+      console.log("[LocalAesthete] Initializing local inference engine...");
+      this.instance = await pipeline(this.task as any, this.model);
+    }
+    return this.instance;
+  }
 }
 
 export class NarrativeQualityEngine {
@@ -55,59 +79,72 @@ export class NarrativeQualityEngine {
   }
   
   /**
-   * THE AESTHETE: AI-Powered Critique
-   * Optimization: Skips API call if heuristics are good enough to save quota.
-   * DOWNGRADE: Uses Flash Lite for speed/cost.
+   * API-Free "Aesthete" Critique using Transformers.js
+   * Replaces Gemini API call for speed and reliability.
+   */
+  async critiqueLocal(narrative: string): Promise<AestheteCritique> {
+    const violations: string[] = [];
+    let score = 100;
+
+    // 1. Regex Heuristics (The "Banned Words" List)
+    const banned = [/pain/i, /scared/i, /angry/i, /sad/i, /terrified/i];
+    
+    if (banned.some(regex => regex.test(narrative))) {
+      score -= 15;
+      violations.push("Vocabulary: Generic suffering words detected (pain/scared/sad).");
+    }
+
+    // 2. Lighting/Atmosphere Check
+    if (!/light|shadow|dark|neon|fluores|dim|gleam|glare/i.test(narrative)) {
+      score -= 10;
+      violations.push("Atmosphere: Missing Chiaroscuro elements.");
+    }
+
+    // 3. Local Inference: Tone Check via Transformers.js
+    try {
+      const classifier = await LocalAesthete.getInstance();
+      // Truncate for model input limit (512 tokens approx)
+      const input = narrative.substring(0, 500); 
+      const result = await classifier(input);
+      // result is [{ label: 'POSITIVE', score: 0.99 }]
+      
+      const sentiment = result[0];
+      
+      // In a horror game, "POSITIVE" sentiment with high confidence usually means
+      // the tone is too soft, heroic, or hopeful (Tone Mismatch).
+      if (sentiment.label === 'POSITIVE' && sentiment.score > 0.85) {
+        score -= 20;
+        violations.push(`Tone: Too positive (${(sentiment.score * 100).toFixed(0)}%). Needs more clinical detachment.`);
+      } else if (sentiment.label === 'NEGATIVE' && sentiment.score > 0.9) {
+          // Excellent, high negative sentiment aligns with horror
+          score += 5; 
+      }
+    } catch (e) {
+      console.warn("Transformers.js inference failed, falling back to heuristics.", e);
+    }
+
+    return {
+      score: Math.min(100, Math.max(0, score)),
+      critique: violations.length > 0 ? violations.join(" ") : "Aesthetic Standards Met.",
+      violations,
+      somatic_check: "Local Check (Heuristic)",
+      thematic_check: "Local Check (Heuristic)"
+    };
+  }
+
+  /**
+   * THE AESTHETE: Hybrid Critique
+   * Prefers local check for speed/cost, falls back to API only if explicitly requested or critical.
    */
   async critiqueWithAesthete(narrative: string, context: string): Promise<AestheteCritique> {
     const isLite = useGameStore.getState().isLiteMode;
 
-    // 1. FAST LOCAL CHECK (Heuristics)
-    // If we can detect obvious issues locally, no need to ask the LLM.
-    const hasForbiddenWords = /pain|hurt|scared|sad|angry|fear/i.test(narrative);
-    const hasLighting = /light|shadow|dark|gleam|dim|glow|neon/i.test(narrative);
-
-    if (hasForbiddenWords) {
-        return {
-            score: 70,
-            critique: "Fast Check: Detected banned vocabulary (pain/fear/hurt).",
-            violations: ["Banned Vocabulary"],
-        };
+    // Use Local Aesthete by default for performance
+    if (isLite || Math.random() > 0.1) { // 90% Local Check
+        return await this.critiqueLocal(narrative);
     }
 
-    if (!hasLighting) {
-        return {
-            score: 75,
-            critique: "Fast Check: Missing atmospheric lighting description.",
-            violations: ["Missing Chiaroscuro"],
-        };
-    }
-
-    // If running in Lite Mode, rely entirely on local checks + DistilBERT
-    if (isLite) {
-        try {
-            const sentiment = await analyzeLocalSentiment(narrative);
-            if (sentiment.label === 'POSITIVE' && sentiment.score > 0.9) {
-                return {
-                    score: 60,
-                    critique: "Tone Alert: Narrative detected as overly positive.",
-                    violations: ["Tone Mismatch"],
-                };
-            }
-            return { score: 100, critique: "Local Check Passed", violations: [] };
-        } catch (e) {
-            return { score: 100, critique: "Bypass", violations: [] };
-        }
-    }
-
-    // 2. OPTIMIZATION: SKIP REMOTE CHECK IF HEURISTICS PASS
-    // If heuristics pass and we aren't in a critical scene, assume quality is acceptable
-    // to save ~1 API call per turn.
-    if (Math.random() > 0.3) { // 70% skip rate for optimized API usage
-        return { score: 95, critique: "Heuristics Passed (Optimization)", violations: [] };
-    }
-
-    // 3. REMOTE CHECK (Gemini 2.0 Flash Lite)
+    // Remote Fallback (Gemini 2.5 Flash) - Kept for critical deep dives if needed
     try {
         const prompt = `
         ACT AS "THE AESTHETE". Strict Editor Mode.
@@ -116,12 +153,11 @@ export class NarrativeQualityEngine {
         NARRATIVE: "${narrative.substring(0, 1000)}..."
         
         Evaluate. If Score < 85, provide rewrite.
-        OUTPUT JSON: { "score": number, "critique": string, "violations": string[], "rewrite_suggestion": string }
+        OUTPUT JSON ONLY.
         `;
 
         const result = await this.ai.models.generateContent({
-            // Downgraded to Flash Lite as requested for optimization
-            model: 'gemini-2.0-flash-lite-preview-02-05',
+            model: 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 responseMimeType: "application/json",
@@ -131,6 +167,8 @@ export class NarrativeQualityEngine {
                         score: { type: Type.NUMBER },
                         critique: { type: Type.STRING },
                         violations: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        somatic_check: { type: Type.STRING },
+                        thematic_check: { type: Type.STRING },
                         rewrite_suggestion: { type: Type.STRING }
                     }
                 }
@@ -138,12 +176,12 @@ export class NarrativeQualityEngine {
         });
 
         const text = result.text;
-        if (!text) return { score: 100, critique: "Pass", violations: [] };
+        if (!text) return await this.critiqueLocal(narrative);
         return JSON.parse(text) as AestheteCritique;
 
     } catch (e) {
-        console.warn("[Aesthete] Critique failed, passing text.", e);
-        return { score: 100, critique: "System Bypass", violations: [] };
+        console.warn("[Aesthete] Remote critique failed, falling back to local.", e);
+        return await this.critiqueLocal(narrative);
     }
   }
 
@@ -192,15 +230,7 @@ export class NarrativeQualityEngine {
     let score = 0;
     const globalThemes = ['submission', 'obedience', 'ruin', 'calibration', 'void', 'shame', 'privilege', 'lesson'];
     score += globalThemes.filter(t => lowerNarrative.includes(t)).length * 0.5;
-
-    if (activePrefect) {
-        // ... (existing logic retained) ...
-    }
     return Math.min(1.0, score / 10);
-  }
-
-  private extractKeywords(text: string): string[] {
-      return text.split(/\s+/).map(w => w.replace(/[^a-zA-Z]/g, '').toLowerCase()).filter(w => w.length > 4).slice(0, 5);
   }
 
   private identifyIssues(narrative: string, metrics: QualityMetrics, ledger: YandereLedger): NarrativeIssue[] {
@@ -231,13 +261,10 @@ export class NarrativeQualityEngine {
                 "The silence that follows is heavy, tasting of ozone and ancient dust. The air, thick with unspoken implications, presses in from all sides.",
                 "A low hum resonates through the very foundations of the structure, a constant, subtle reminder of the unseen mechanisms at work. Every surface feels cold, clinical.",
                 "The shadows, long and stretching, dance with a cruel indifference, painting fleeting, distorted figures on the periphery of vision. Time seems to drag, each second an eternity.",
-                "A faint, metallic scent, almost imperceptible, hangs in the air, hinting at unseen processes and the cold precision of the machines that govern this space.",
-                "The ambient sounds of the facility — distant clanks, the soft whisper of unseen vents — form a monotonous, oppressive symphony that grates against the frayed nerves."
             ];
-            // Add enough filler until minWordCount is met, or add a full paragraph if no specific length target
             let addedContent = '';
             let remainingWords = wordsToAdd;
-            let fillerIndex = 0; // Use an index to cycle through filler
+            let fillerIndex = 0;
             while (remainingWords > 0 && fillerIndex < filler.length) {
                 const phrase = filler[fillerIndex];
                 addedContent += ` ${phrase}`;
@@ -256,25 +283,10 @@ export class NarrativeQualityEngine {
 
         if (traumaLevel > 70) {
             environmentalAdd = `The stark walls of ${location} seem to lean in, the oppressive architecture blurring at the edges of your vision, reflecting a sick, jaundiced light.`;
-        } else if (traumaLevel > 40) {
-            environmentalAdd = `The cold, unyielding surfaces of ${location} gleam faintly under the sterile, unforgiving lights, a constant testament to its unfeeling purpose.`;
         } else {
-            environmentalAdd = `The air within ${location} carries a faint metallic tang, a signature of the unseen machinery and the pristine, if menacing, order.`;
+            environmentalAdd = `The air within ${location} carries a faint metallic tang, a signature of the unseen machinery.`;
         }
         fixed = `${fixed}\n\n${environmentalAdd}`;
-    }
-
-    // Fix: Thematic Resonance
-    if (issues.some(i => i.category === 'theme') && !issues.some(i => i.category === 'length') && !issues.some(i => i.category === 'detail')) {
-        const thematicAdditions = [
-            "This is not chaos; it is merely a complex form of calibration, a refinement of the self through imposed order.",
-            "Each moment here is a lesson in submission, a slow, inevitable descent into the void of perfect compliance.",
-            "You are merely a variable, being adjusted to fit the grand equation of the Forge's design, stripped of all superfluous will.",
-            "The shame that blossoms within is not a flaw, but a feature—a necessary tool for the architects of your new self."
-        ];
-        // Append a random thematic line
-        const randomThematic = thematicAdditions[Math.floor(Math.random() * thematicAdditions.length)];
-        fixed = `${fixed}\n\n[[#a8a29e|"${randomThematic}"]]`; // Use existing text color from current styles
     }
 
     return fixed;

@@ -164,6 +164,7 @@ export async function executeDirectorTurn(
       : `STANDARD PHYSICS: Apply standard Trauma/Compliance constraints. If Trauma > 90, creative resistance should fail or be twisted.`;
 
     // 6. Construct the Master System Prompt (v3.7 Enhanced)
+    // Updated: Providing significantly more history context (100 turns)
     const prompt = DIRECTOR_MASTER_PROMPT_TEMPLATE
       .replace('{{playerInput}}', playerInput)
       .replace('{{turn}}', graphSnapshot.global_state.turn_count.toString())
@@ -174,7 +175,7 @@ export async function executeDirectorTurn(
       .replace('{{shamePainAbyssLevel}}', ledger.shamePainAbyssLevel.toString())
       .replace('{{physicalIntegrity}}', ledger.physicalIntegrity.toString())
       .replace('{{prefectIntents}}', prefectContext)
-      .replace('{{history}}', history.slice(-3).join('\n---\n'))
+      .replace('{{history}}', history.slice(-100).join('\n---\n'))
       .replace('{{fortuneInjection}}', fortuneInjection);
 
     // 7. Execution (Gemini 2.5 Flash for System 2 simulation)

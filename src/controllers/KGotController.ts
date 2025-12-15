@@ -82,6 +82,11 @@ const MutationSchemas = {
     secret_name: z.string().min(1),
     secret_description: z.string().min(1),
     discovered_by: z.string().optional()
+  }),
+  apply_vicarious_trauma: z.object({
+    victim_id: z.string().min(1),
+    intensity: z.number().min(0),
+    witness_ids: z.array(z.string()).optional()
   })
 };
 
@@ -655,6 +660,55 @@ export class KGotController {
                     this.addEdge(secretNodeId, subId, 'ABOUT', 1.0, { type: 'SECRET_RELATION' });
                 }
             }
+            break;
+          }
+
+          case 'apply_vicarious_trauma': {
+            let valid;
+            try { valid = MutationSchemas.apply_vicarious_trauma.parse(params); }
+            catch(e) { console.warn(`[KGot] Mutation ${idx} (apply_vicarious_trauma) invalid params:`, e); return; }
+
+            const victim = this.resolveTargetId(valid.victim_id);
+            // Resolve optional witnesses, filtering out nulls
+            const witnesses = (valid.witness_ids || []).map(id => this.resolveTargetId(id)).filter(id => id !== null) as string[];
+            
+            witnesses.forEach(witnessId => {
+                if (witnessId === victim) return; // Don't apply to self
+                
+                // Retrieve node to check for ledger capability (Subjects have ledgers)
+                if (this.graph.hasNode(witnessId)) {
+                    const nodeAttrs = this.graph.getNodeAttributes(witnessId);
+                    if (nodeAttrs.attributes?.ledger) {
+                        // Base Calculation: 30% of raw intensity transfers vicariously
+                        const baseIncrease = valid.intensity * 0.3; 
+                        
+                        // Archetype Modifiers
+                        const archetype = nodeAttrs.attributes.agent_state?.archetype || nodeAttrs.attributes.archetype || '';
+                        let modifier = 1.0;
+                        if (archetype.includes('Fragile') || archetype.includes('Bird')) modifier = 1.5; // High empathy/fear
+                        if (archetype.includes('Defiant') || archetype.includes('Spark')) modifier = 0.8; // Resistance
+                        if (archetype.includes('Broken')) modifier = 1.2; // Already sensitized
+                        if (archetype.includes('Calculator')) modifier = 0.5; // Detached
+
+                        const finalDelta = Math.ceil(baseIncrease * modifier);
+                        
+                        // Apply update via standard ledger method which clamps 0-100
+                        this.updateLedger(witnessId, { traumaLevel: finalDelta });
+                        
+                        // Log the ripple effect
+                        console.log(`[KGot] Vicarious Trauma Applied: ${witnessId} +${finalDelta} (Witnessed violence on ${victim})`);
+                        
+                        // Optionally add a memory of the event
+                        this.addMemory(witnessId, {
+                            id: `mem_vt_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
+                            description: `Witnessed extreme violence against ${victim}`,
+                            emotional_imprint: 'Vicarious Trauma',
+                            involved_entities: [victim || 'Unknown'],
+                            timestamp: this.globalState.turn_count
+                        });
+                    }
+                }
+            });
             break;
           }
           

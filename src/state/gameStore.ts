@@ -1,5 +1,4 @@
 
-
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { KnowledgeGraph } from '../lib/types/kgot';
@@ -536,22 +535,46 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         }
       },
 
-      // Implement saveSnapshot and loadSnapshot
+      /**
+       * Optimized Save Snapshot:
+       * 1. Decouples heavy graph save (KGoT) from lightweight state save.
+       * 2. Compresses graph data by stripping transient visualization props (x, y, vx, vy) from nodes.
+       */
       saveSnapshot: async () => {
         const state = get();
         try {
+          // 1. Save Lightweight State (UI-blocking risk if large)
+          // We omit KGoT here to be saved separately.
+          const { kgot, ...lightweightState } = state;
+          
           await forgeStorage.saveGameState('forge-snapshot', {
-            gameState: state.gameState,
-            kgot: state.kgot,
-            logs: state.logs,
-            prefects: state.prefects,
-            multimodalTimeline: state.multimodalTimeline,
-            audioPlayback: state.audioPlayback,
-            // Only save serializable parts, omit functions
+            gameState: lightweightState.gameState,
+            logs: lightweightState.logs,
+            prefects: lightweightState.prefects,
+            multimodalTimeline: lightweightState.multimodalTimeline,
+            audioPlayback: lightweightState.audioPlayback,
+            isLiteMode: lightweightState.isLiteMode
           });
-          console.log("Game state saved to IndexedDB.");
+
+          // 2. Compress KGoT Graph (Strip Force-Layout Params)
+          const compressedNodes: Record<string, any> = {};
+          Object.values(state.kgot.nodes).forEach((node: any) => {
+              const { x, y, vx, vy, index, ...cleanNode } = node; // Destructure to remove D3 props
+              compressedNodes[node.id] = cleanNode;
+          });
+          
+          const compressedGraph: KnowledgeGraph = {
+              nodes: compressedNodes,
+              edges: state.kgot.edges,
+              global_state: state.kgot.global_state
+          };
+
+          // 3. Save Heavy Graph State (Async IndexedDB)
+          await forgeStorage.saveGraphState('forge-snapshot-graph', compressedGraph);
+
+          console.log("Game state archived (Split-Storage Optimization).");
           get().addLog({ id: `system-save-${Date.now()}`, type: 'system', content: 'SYSTEM STATE ARCHIVED.' });
-        } catch (error) {
+        } catch (error: any) {
           console.error("Failed to save game state:", error);
           get().addLog({ id: `system-save-error-${Date.now()}`, type: 'system', content: `ERROR: Failed to archive system state: ${error.message}` });
         }
@@ -559,31 +582,30 @@ export const useGameStore = create<GameStoreWithPrefects>()(
 
       loadSnapshot: async () => {
         try {
-          const snapshot = await forgeStorage.loadGameState('forge-snapshot');
-          if (snapshot) {
+          // 1. Parallel Load
+          const [baseState, graphData] = await Promise.all([
+              forgeStorage.loadGameState('forge-snapshot'),
+              forgeStorage.loadGraphState('forge-snapshot-graph')
+          ]);
+
+          if (baseState && graphData) {
             set((state) => ({
               ...state,
-              gameState: snapshot.gameState,
-              kgot: snapshot.kgot,
-              logs: snapshot.logs,
-              prefects: snapshot.prefects,
-              multimodalTimeline: snapshot.multimodalTimeline,
-              audioPlayback: snapshot.audioPlayback,
-              // Restore sessionActive based on loaded state if desired, or keep false until user interaction
+              ...baseState, // Restore lightweight state
+              kgot: graphData, // Restore active graph
               sessionActive: true, 
-              isThinking: false, // Always reset thinking state
-              // Other transient states
-              currentTurnId: snapshot.multimodalTimeline[snapshot.multimodalTimeline.length - 1]?.id || null,
-              choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'], // Reset choices
+              isThinking: false,
+              currentTurnId: baseState.multimodalTimeline?.[baseState.multimodalTimeline.length - 1]?.id || null,
+              choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
             }));
-            console.log("Game state loaded from IndexedDB.");
+            console.log("Game state restored (Split-Storage).");
             get().addLog({ id: `system-load-${Date.now()}`, type: 'system', content: 'SYSTEM STATE RESTORED FROM ARCHIVE.' });
           } else {
-            console.warn("No saved state found.");
+            console.warn("No saved state found (Partial or Missing).");
             get().addLog({ id: `system-load-none-${Date.now()}`, type: 'system', content: 'NO SYSTEM ARCHIVE FOUND. STARTING NEW SESSION.' });
             get().resetGame();
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error("Failed to load game state:", error);
           get().addLog({ id: `system-load-error-${Date.now()}`, type: 'system', content: `ERROR: Failed to restore system state: ${error.message}` });
           get().resetGame();
@@ -592,11 +614,11 @@ export const useGameStore = create<GameStoreWithPrefects>()(
     }),
     {
       name: 'forge-game-state',
-      // Fix: wrap string-based storage in createJSONStorage to match PersistStorage expectation
       storage: createJSONStorage(() => createIndexedDBStorage()), 
       partialize: (state) => ({
         gameState: state.gameState,
-        kgot: state.kgot,
+        // We do NOT persist kgot here anymore, it is handled manually in saveSnapshot via forgeStorage.saveGraphState
+        // to prevent duplicate storage or blocking the main thread with massive stringify ops.
         logs: state.logs,
         prefects: state.prefects,
         multimodalTimeline: state.multimodalTimeline,
@@ -604,9 +626,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         isLiteMode: state.isLiteMode,
       }),
       merge: (persistedState, currentState) => {
-        // Handle potential versioning or schema changes in persisted state
         const state = persistedState as Partial<CombinedGameStoreState>;
-        return { ...currentState, ...state, sessionActive: false, isThinking: false }; // Ensure session isn't active on reload
+        return { ...currentState, ...state, sessionActive: false, isThinking: false }; 
       },
     }
   )

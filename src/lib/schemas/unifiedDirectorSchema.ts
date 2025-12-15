@@ -1,42 +1,52 @@
 
-
 import { Type } from "@google/genai";
 
 /**
- * UNIFIED DIRECTOR OUTPUT SCHEMA
- * Combines prefect simulation + narrative generation in ONE API call
+ * UNIFIED DIRECTOR OUTPUT SCHEMA (AGoT v2025)
+ * Implements Adaptive Graph-of-Thoughts for separation of Causal Physics (Fabula) 
+ * and Narrative Discourse (Sjuzhet).
  */
 export const UnifiedDirectorOutputSchema = {
   type: Type.OBJECT,
   properties: {
-    // === PART 1: COGNITIVE GRAPH TRACE (System 2 Deep Think) ===
-    reasoning_trace: { // Renamed from cognitive_graph
+    // === PART 1: ADAPTIVE GRAPH-OF-THOUGHTS (AGoT) ===
+    agot_trace: { 
       type: Type.OBJECT,
-      description: "MANDATORY: Structured trace of the internal reasoning process (System 2) BEFORE generation.",
+      description: "The cognitive graph structure separating simulation from rendering.",
       properties: {
-        analysis: { 
+        complexity: { 
             type: Type.STRING, 
-            description: "Node 1: Input Analysis. Deconstruct player intent, current narrative beat, and causal impact." 
+            enum: ["LINEAR_CHAIN", "BRANCHING_TREE", "ENTANGLED_GRAPH"],
+            description: "Assessment of scene complexity based on ledger deltas and rivalries." 
         },
-        hypotheses: { 
+        fabula: { 
             type: Type.ARRAY, 
-            description: "Node 2: Generate 3 distinct narrative branch hypotheses (Trauma, Subversion, Novelty).",
-            items: { type: Type.STRING } 
+            description: "PHASE 1: The 'Physics' of the scene. Chronological, raw causal events. NO FLUFF.",
+            items: { 
+              type: Type.OBJECT,
+              properties: {
+                event_id: { type: Type.STRING },
+                cause: { type: Type.STRING },
+                effect: { type: Type.STRING },
+                state_impact: { type: Type.STRING } // e.g. "Trauma +5"
+              }
+            } 
         },
-        evaluation: { 
-            type: Type.STRING, 
-            description: "Node 3: Evaluation & Scoring. Select optimal path based on Tension/Coherence/Novelty." 
+        sjuzhet_strategy: { 
+            type: Type.OBJECT, 
+            description: "PHASE 2: The 'Discourse'. How the Fabula is distorted for the Subject.",
+            properties: {
+              focalization: { type: Type.STRING, enum: ["Lucid", "Somatic_Fixation", "Dissociated", "Psychotic"] },
+              time_distortion: { type: Type.STRING, description: "e.g., 'Slow motion during impact', 'Time skip'" },
+              aesthetic_focus: { type: Type.STRING, description: "Which motif governs this beat? (e.g., 'Volcanic Haze')" }
+            }
         },
-        self_critique: { 
+        critique: { 
           type: Type.STRING,
-          description: "Node 4: Self-Critique. Check for Tone/Aesthetic adherence (No banned words like 'pain')."
-        },
-        selected_path: { 
-          type: Type.STRING,
-          description: "Node 5: Final Execution Plan. Outline the scene beats."
+          description: "Final check against Aesthete's Rules (Banned words, Lighting)."
         }
       },
-      required: ["analysis", "hypotheses", "evaluation", "self_critique", "selected_path"]
+      required: ["complexity", "fabula", "sjuzhet_strategy", "critique"]
     },
 
     // === PART 2: PREFECT SIMULATION ===
@@ -87,7 +97,7 @@ export const UnifiedDirectorOutputSchema = {
       }
     },
     
-    // === PART 3: NARRATIVE SCRIPT (New) ===
+    // === PART 3: NARRATIVE OUTPUT ===
     script: {
       type: Type.ARRAY,
       description: "The scene formatted as a screenplay script. Separate narration from dialogue.",
@@ -114,7 +124,7 @@ export const UnifiedDirectorOutputSchema = {
     
     narrative_text: { 
       type: Type.STRING,
-      description: "The full combined narrative text for legacy logs."
+      description: "The final Sjuzhet-rendered prose. Must adhere to the 'Banned Words' list."
     },
     
     visual_prompt: { type: Type.STRING },
@@ -140,7 +150,7 @@ export const UnifiedDirectorOutputSchema = {
         properties: {
           operation: { 
             type: Type.STRING, 
-            enum: ['add_edge', 'update_node', 'add_memory', 'update_grudge', 'add_trauma_bond', 'update_ledger', 'add_injury', 'add_subject_secret'] 
+            enum: ['add_edge', 'update_node', 'add_memory', 'update_grudge', 'add_trauma_bond', 'update_ledger', 'add_injury', 'add_subject_secret', 'apply_vicarious_trauma'] 
           },
           params: { type: Type.OBJECT, nullable: true }
         }
@@ -165,7 +175,7 @@ export const UnifiedDirectorOutputSchema = {
     audio_markup: { type: Type.STRING, nullable: true, description: "Narrative text formatted with SSML-like tags for TTS." }
   },
   required: [
-    "reasoning_trace", 
+    "agot_trace", 
     "prefect_simulations",
     "script",
     "narrative_text", 
@@ -177,12 +187,11 @@ export const UnifiedDirectorOutputSchema = {
 
 // Type definition for TypeScript
 export interface UnifiedDirectorOutput {
-  reasoning_trace: { // Renamed from cognitive_graph
-    analysis: string;
-    hypotheses: string[];
-    evaluation: string;
-    self_critique: string; // NEW
-    selected_path: string; // NEW
+  agot_trace: { 
+    complexity: string;
+    fabula: Array<{ event_id: string; cause: string; effect: string; state_impact: string }>;
+    sjuzhet_strategy: { focalization: string; time_distortion: string; aesthetic_focus: string };
+    critique: string;
   };
   prefect_simulations: Array<{
     prefect_id: string;
