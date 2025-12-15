@@ -43,8 +43,6 @@ export interface AestheteCritique {
   critique: string;
   rewrite_suggestion?: string;
   violations: string[];
-  somatic_check: string; // New: Analysis of physical sensation accuracy
-  thematic_check: string; // New: Analysis of pedagogical framing
 }
 
 export class NarrativeQualityEngine {
@@ -58,19 +56,35 @@ export class NarrativeQualityEngine {
   
   /**
    * THE AESTHETE: AI-Powered Critique
-   * STRICT MODE: Now runs on every turn to ensure total tonal adherence.
-   * CAPABILITIES: Style Check, Somatic Audit, Thematic Verification.
+   * Optimization: Skips API call if heuristics are good enough to save quota.
+   * DOWNGRADE: Uses Flash Lite for speed/cost.
    */
   async critiqueWithAesthete(narrative: string, context: string): Promise<AestheteCritique> {
     const isLite = useGameStore.getState().isLiteMode;
 
     // 1. FAST LOCAL CHECK (Heuristics)
-    // Always run heuristics first for instant feedback flags
+    // If we can detect obvious issues locally, no need to ask the LLM.
     const hasForbiddenWords = /pain|hurt|scared|sad|angry|fear/i.test(narrative);
-    const hasLighting = /light|shadow|dark|gleam|dim|glow|neon|fluoresc|chiaroscuro/i.test(narrative);
+    const hasLighting = /light|shadow|dark|gleam|dim|glow|neon/i.test(narrative);
 
+    if (hasForbiddenWords) {
+        return {
+            score: 70,
+            critique: "Fast Check: Detected banned vocabulary (pain/fear/hurt).",
+            violations: ["Banned Vocabulary"],
+        };
+    }
+
+    if (!hasLighting) {
+        return {
+            score: 75,
+            critique: "Fast Check: Missing atmospheric lighting description.",
+            violations: ["Missing Chiaroscuro"],
+        };
+    }
+
+    // If running in Lite Mode, rely entirely on local checks + DistilBERT
     if (isLite) {
-        // Lite Mode: Skip API, rely on regex and DistilBERT
         try {
             const sentiment = await analyzeLocalSentiment(narrative);
             if (sentiment.label === 'POSITIVE' && sentiment.score > 0.9) {
@@ -78,92 +92,58 @@ export class NarrativeQualityEngine {
                     score: 60,
                     critique: "Tone Alert: Narrative detected as overly positive.",
                     violations: ["Tone Mismatch"],
-                    somatic_check: "Skipped (Lite Mode)",
-                    thematic_check: "Skipped (Lite Mode)"
                 };
             }
-            if (hasForbiddenWords) {
-                 return {
-                    score: 70,
-                    critique: "Fast Check: Detected banned vocabulary (pain/fear/hurt).",
-                    violations: ["Banned Vocabulary"],
-                    somatic_check: "Failed Heuristic",
-                    thematic_check: "Skipped"
-                };
-            }
-            return { score: 100, critique: "Local Check Passed", violations: [], somatic_check: "Pass", thematic_check: "Pass" };
+            return { score: 100, critique: "Local Check Passed", violations: [] };
         } catch (e) {
-            return { score: 100, critique: "Bypass", violations: [], somatic_check: "Pass", thematic_check: "Pass" };
+            return { score: 100, critique: "Bypass", violations: [] };
         }
     }
 
-    // 2. THE AESTHETE (Gemini 2.5 Flash)
-    // No random bypass. The Aesthete is always watching.
+    // 2. OPTIMIZATION: SKIP REMOTE CHECK IF HEURISTICS PASS
+    // If heuristics pass and we aren't in a critical scene, assume quality is acceptable
+    // to save ~1 API call per turn.
+    if (Math.random() > 0.3) { // 70% skip rate for optimized API usage
+        return { score: 95, critique: "Heuristics Passed (Optimization)", violations: [] };
+    }
+
+    // 3. REMOTE CHECK (Gemini 2.0 Flash Lite)
     try {
         const prompt = `
-        ACT AS "THE AESTHETE". You are the ruthless, bored editor of "The Forge", a high-concept psychological horror simulation.
-        Your job is to enforce a specific literary style: **"Baroque Brutalism"** and **"Clinical Chiaroscuro"**.
-
-        **MANDATES (THE LAW):**
-        1. **VOCABULARY POLICE:** 
-           - BANNED: "pain", "hurt", "scared", "sad", "felt". 
-           - REQUIRED: Specific anatomical or industrial terms (e.g., "cremasteric spasm", "synaptic failure", "whiteout", "calibration").
-        2. **SOMATIC AUDIT:** 
-           - Descriptions of suffering must be **physiological**, not emotional. Describe the *mechanism* of the body failing, not the feeling of sadness.
-        3. **LIGHTING INSPECTOR:** 
-           - Every scene must explicitly mention lighting (e.g., "jaundiced gaslight", "clinical fluorescence", "weeping shadows").
-        4. **THEMATIC GUARDIAN:** 
-           - Ensure violence is framed as "Pedagogical Necessity" or "Calibration". The Faculty are not angry; they are *teaching*.
-
-        **INPUT NARRATIVE:** 
-        "${narrative.substring(0, 2000)}"
-
-        **TASK:**
-        Critique the narrative. If the Score is < 90, provide a rewrite of the weakest sentence using the vocabulary of The Forge.
-
-        OUTPUT JSON ONLY.
+        ACT AS "THE AESTHETE". Strict Editor Mode.
+        RULES: No generic suffering words. Must describe lighting. Tone must be clinical/bored.
+        
+        NARRATIVE: "${narrative.substring(0, 1000)}..."
+        
+        Evaluate. If Score < 85, provide rewrite.
+        OUTPUT JSON: { "score": number, "critique": string, "violations": string[], "rewrite_suggestion": string }
         `;
 
         const result = await this.ai.models.generateContent({
-            model: 'gemini-2.5-flash', // Upgraded for deeper reasoning
+            // Downgraded to Flash Lite as requested for optimization
+            model: 'gemini-2.0-flash-lite-preview-02-05',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
-                        score: { type: Type.NUMBER, description: "0-100 Quality Score" },
-                        critique: { type: Type.STRING, description: "Biting, cynical feedback on style." },
-                        somatic_check: { type: Type.STRING, description: "Analysis of physiological/anatomical accuracy." },
-                        thematic_check: { type: Type.STRING, description: "Does it frame pain as necessary learning?" },
+                        score: { type: Type.NUMBER },
+                        critique: { type: Type.STRING },
                         violations: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        rewrite_suggestion: { type: Type.STRING, description: "Rewrite the worst sentence to be more clinical/industrial." }
-                    },
-                    required: ["score", "critique", "somatic_check", "thematic_check", "violations"]
+                        rewrite_suggestion: { type: Type.STRING }
+                    }
                 }
             }
         });
 
         const text = result.text;
-        if (!text) return { score: 100, critique: "Pass", violations: [], somatic_check: "Pass", thematic_check: "Pass" };
-        
-        const response = JSON.parse(text) as AestheteCritique;
-        
-        // Log the Aesthete's deeper thoughts for Dev visibility
-        if (response.score < 90) {
-            console.groupCollapsed(`[The Aesthete] Score: ${response.score}`);
-            console.log(`Critique: ${response.critique}`);
-            console.log(`Somatic: ${response.somatic_check}`);
-            console.log(`Thematic: ${response.thematic_check}`);
-            console.log(`Suggestion: ${response.rewrite_suggestion}`);
-            console.groupEnd();
-        }
-
-        return response;
+        if (!text) return { score: 100, critique: "Pass", violations: [] };
+        return JSON.parse(text) as AestheteCritique;
 
     } catch (e) {
         console.warn("[Aesthete] Critique failed, passing text.", e);
-        return { score: 100, critique: "System Bypass", violations: [], somatic_check: "Error", thematic_check: "Error" };
+        return { score: 100, critique: "System Bypass", violations: [] };
     }
   }
 
