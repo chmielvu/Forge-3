@@ -8,7 +8,6 @@ import { PrefectDNA, YandereLedger, GameState } from "../types";
 import { INITIAL_LEDGER } from "../constants";
 import { callGeminiWithRetry } from "../utils/apiRetry";
 import { selectNarratorMode, NARRATOR_VOICES } from '../services/narratorEngine';
-import { LORE_CONSTITUTION } from '../config/loreInjection';
 import { TensionManager } from "../services/TensionManager";
 
 const getApiKey = (): string => {
@@ -334,7 +333,12 @@ export async function executeUnifiedDirectorTurn(
     
     // 3.5 Calculate Narrative Beat (Pacing) - NEW
     const turnCount = graphSnapshot.global_state.turn_count;
-    const currentBeat = TensionManager.calculateNarrativeBeat(turnCount, 0); // Assuming delta 0 for now
+    
+    // Fetch recent trauma delta from graph state (tracked by KGotController)
+    const recentTraumaDelta = graphSnapshot.nodes['Subject_84']?.attributes?.last_trauma_delta || 0;
+    
+    // INTEGRATE TENSION MANAGER
+    const currentBeat = TensionManager.calculateNarrativeBeat(turnCount, recentTraumaDelta);
     const beatInstruction = TensionManager.getBeatInstructions(currentBeat);
 
     // 3.6 Get Spotlight Context - NEW
@@ -345,13 +349,25 @@ export async function executeUnifiedDirectorTurn(
     );
 
     // 3.7 Replace Placeholders in Master Template - NEW
+    // Include long-term summary if available to fix Narrative Amnesia
+    const narrativeSummary = currentGraphData.global_state.narrative_summary || "The subject has recently arrived at the institute.";
+    
+    // Unleash Context Window: Use 50 turns history to fix Narrative Amnesia (Flash 1M window)
+    const contextHistory = `
+    PREVIOUSLY ON THE FORGE: ${narrativeSummary}
+    
+    RECENT EVENTS:
+    ${history.slice(-50).join('\n---\n')}
+    `;
+
     const unifiedPrompt = DIRECTOR_MASTER_PROMPT_TEMPLATE
       .replace('{{narrative_beat}}', currentBeat)
       .replace('{{beat_instruction}}', beatInstruction)
       .replace('{{ledger}}', JSON.stringify(ledger, null, 2))
       .replace('{{narrative_spotlight}}', JSON.stringify(spotlight, null, 2))
-      .replace('{{active_prefects}}', JSON.stringify(activePrefects.map(p => ({ id: p.id, archetype: p.archetype, drive: p.drive, favor: p.favorScore })), null, 2))
-      .replace('{{history}}', history.slice(-3).join('\n---\n'))
+      // FIX: Use the detailed prefect context block instead of the JSON summary
+      .replace('{{active_prefects}}', prefectContextBlock)
+      .replace('{{history}}', contextHistory)
       .replace('{{player_input}}', playerInput);
     
     const ai = getAI();

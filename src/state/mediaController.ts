@@ -5,6 +5,7 @@ import { MediaQueueItem, MediaStatus, MultimodalTurn, CharacterId, YandereLedger
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
 import { INITIAL_LEDGER } from '../constants';
 import { selectNarratorMode, NARRATOR_VOICES } from '../services/narratorEngine';
+import { TensionManager } from '../services/TensionManager';
 
 // Use number for browser-compatible timer type
 let mediaProcessingTimeout: number | null = null;
@@ -39,9 +40,15 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
     let duration: number | undefined = undefined;
     let alignment: any[] | undefined = undefined;
 
+    // Calculate Narrative Beat for visual context
+    const kgot = store.kgot;
+    // Approximate delta using graph node if available, otherwise 0
+    const lastTraumaDelta = kgot.nodes['Subject_84']?.attributes?.last_trauma_delta || 0;
+    const beat = TensionManager.calculateNarrativeBeat(turn.turnIndex, lastTraumaDelta);
+
     switch (item.type) {
       case 'image':
-        // Generate image using full context, passing the Director's specific prompt
+        // Generate image using full context, passing the Director's specific prompt AND the narrative beat
         dataUrl = await generateNarrativeImage(
             item.target || CharacterId.PLAYER,
             turn.text, // Use narrative text as scene context
@@ -49,7 +56,8 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
             item.narrativeText || turn.text,
             item.previousTurn,
             0, // Initial retry count
-            item.prompt // Pass the Director's specific visual prompt (stored in item.prompt)
+            item.prompt, // Pass the Director's specific visual prompt (stored in item.prompt)
+            beat // Pass the calculated beat
         );
         break;
       case 'audio':
@@ -77,7 +85,8 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
                   ledger,
                   item.narrativeText || item.prompt, // Use item.prompt for TTS if narrativeText is empty
                   item.previousTurn,
-                  item.prompt
+                  item.prompt,
+                  beat // Pass beat here as well
               );
 
               // Prioritize the coherence engine's ttsPrompt, fallback to raw text

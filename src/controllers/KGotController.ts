@@ -825,7 +825,17 @@ export class KGotController {
            (updatedLedger[k] as any) = val; // Direct assignment for non-number types or new values
         }
     });
-    this.graph.mergeNodeAttributes(subjectId, { attributes: { ...nodeAttrs.attributes, ledger: updatedLedger } });
+
+    // Capture Trauma Delta for TensionManager
+    const traumaDelta = (typeof deltas.traumaLevel === 'number') ? deltas.traumaLevel : 0;
+
+    this.graph.mergeNodeAttributes(subjectId, { 
+        attributes: { 
+            ...nodeAttrs.attributes, 
+            ledger: updatedLedger,
+            last_trauma_delta: traumaDelta
+        } 
+    });
   }
 
   public addMemory(nodeId: string, memory: Memory): void {
@@ -932,8 +942,37 @@ export class KGotController {
   }
 
   /**
-   * Resolves fuzzy names/aliases to canonical KGot IDs using Strict Entity Map
-   * UPDATED: Removed fuzzy string matching to prevent ID collisions.
+   * Helper for Levenshtein Distance
+   */
+  private levenshteinDistance(a: string, b: string): number {
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) {
+        matrix[i] = [i];
+    }
+    for (let j = 0; j <= a.length; j++) {
+        matrix[0][j] = j;
+    }
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) == a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1, // substitution
+                    Math.min(
+                        matrix[i][j - 1] + 1, // insertion
+                        matrix[i - 1][j] + 1  // deletion
+                    )
+                );
+            }
+        }
+    }
+    return matrix[b.length][a.length];
+  }
+
+  /**
+   * Resolves fuzzy names/aliases to canonical KGot IDs using Strict Entity Map + Fuzzy Matching
+   * Updated to handle LLM typos robustly.
    */
   private resolveTargetId(nameOrId: string | undefined): string | null {
     if (!nameOrId) return null;
@@ -948,8 +987,54 @@ export class KGotController {
         return this.ENTITY_MAP[lower];
     }
 
-    // 3. No Fuzzy Fallback
-    // We strictly fail if not found in the map or graph to preserve data integrity.
+    // 3. Fuzzy Matching against Map Keys and Graph Labels
+    // Combine map keys and graph node labels into search space
+    const searchSpace: Array<{ key: string, targetId: string }> = [];
+    
+    // Add Entity Map
+    Object.entries(this.ENTITY_MAP).forEach(([alias, id]) => {
+        searchSpace.push({ key: alias, targetId: id });
+    });
+    
+    // Add Graph Nodes
+    this.graph.forEachNode((id, attrs) => {
+        searchSpace.push({ key: (attrs.label as string).toLowerCase(), targetId: id });
+        searchSpace.push({ key: id.toLowerCase(), targetId: id });
+    });
+
+    let bestMatch: string | null = null;
+    let minDistance = 3; // Allow small typos (e.g. 1-2 chars)
+
+    for (const entry of searchSpace) {
+        const dist = this.levenshteinDistance(lower, entry.key);
+        if (dist < minDistance) {
+            minDistance = dist;
+            bestMatch = entry.targetId;
+        }
+        // Optimization: Exact substring match if length is decent
+        if (entry.key.length > 4 && lower.includes(entry.key)) {
+             return entry.targetId;
+        }
+    }
+
+    if (bestMatch) {
+        console.log(`[KGot] Fuzzy Resolved: "${nameOrId}" -> ${bestMatch}`);
+        return bestMatch;
+    }
+
+    // 4. Fuzzy Fallback (NEW: Reverse Search for containment)
+    // Find node with label containing name, or vice versa if no direct match found
+    const candidate = this.graph.nodes().find(id => {
+        const attrs = this.graph.getNodeAttributes(id);
+        const label = (attrs.label as string).toLowerCase();
+        return label.includes(lower) || lower.includes(label);
+    });
+    
+    if (candidate) {
+        console.warn(`[KGot] Fuzzy fallback resolved '${nameOrId}' to '${candidate}'`);
+        return candidate;
+    }
+
     return null;
   }
 }

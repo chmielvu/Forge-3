@@ -4,6 +4,7 @@ import { VISUAL_PROFILES } from '../constants';
 import { LIGHTING_PRESETS } from '../config/visualMandate';
 import { CHARACTER_VOICE_MAP } from '../config/voices';
 import { FORGE_MOTIFS, ARCHETYPE_VISUAL_MAP } from '../data/motifs'; // NEW: Import ARCHETYPE_VISUAL_MAP
+import { NarrativeBeat } from '../services/TensionManager';
 
 /**
  * AudioCoherenceEngine v2
@@ -174,9 +175,63 @@ class VisualCoherenceEngine {
   }
 
   // NEW: Method to dynamically select motifs based on ledger and narrative
-  private _selectMotifs(ledger: YandereLedger, narrativeText: string): string[] {
+  private _selectMotifs(ledger: YandereLedger, narrativeText: string, sceneContext: string, beat?: NarrativeBeat): string[] {
     const motifs: string[] = [];
     const lowerNarrative = narrativeText.toLowerCase();
+    const lowerContext = sceneContext.toLowerCase();
+
+    // Narrative Beat Prioritization
+    if (beat) {
+        switch (beat) {
+            case 'SETUP':
+                motifs.push(FORGE_MOTIFS.VolcanicHaze);
+                motifs.push(FORGE_MOTIFS.SweatingStone);
+                motifs.push(FORGE_MOTIFS.VampireNoirShadows);
+                motifs.push(FORGE_MOTIFS.AnticipatoryThrum);
+                break;
+            case 'ESCALATION':
+                motifs.push(FORGE_MOTIFS.TenseFrames);
+                motifs.push(FORGE_MOTIFS.GrammarOfSuffering);
+                motifs.push(FORGE_MOTIFS.ClingingVelvet);
+                motifs.push(FORGE_MOTIFS.RigidPosture);
+                break;
+            case 'CLIMAX':
+                motifs.push(FORGE_MOTIFS.EgoShatter);
+                motifs.push(FORGE_MOTIFS.BaroqueCanvas);
+                motifs.push(FORGE_MOTIFS.RhythmSpike);
+                motifs.push(FORGE_MOTIFS.VisibleWince);
+                motifs.push(FORGE_MOTIFS.BodilyBetrayal);
+                break;
+            case 'RELIEF':
+                motifs.push(FORGE_MOTIFS.DissonantWarmth);
+                motifs.push(FORGE_MOTIFS.ConflictingSignals);
+                motifs.push(FORGE_MOTIFS.WeaponizedNurture);
+                motifs.push(FORGE_MOTIFS.GlisteningSweat); // Post-exertion
+                break;
+        }
+    }
+
+    // Scene Context Prioritization
+    if (lowerContext.includes('infirmary') || lowerContext.includes('clinic') || lowerContext.includes('hospital')) {
+        motifs.push(FORGE_MOTIFS.ClinicalLine);
+        motifs.push(FORGE_MOTIFS.FlickeringFluorescents);
+        motifs.push(FORGE_MOTIFS.SensoryHyperFocus);
+    }
+    else if (lowerContext.includes('confessional') || lowerContext.includes('velvet') || lowerContext.includes('church')) {
+        motifs.push(FORGE_MOTIFS.VelvetCurtains);
+        motifs.push(FORGE_MOTIFS.RimLitCleavage);
+        motifs.push(FORGE_MOTIFS.VelvetShadowPool);
+    }
+    else if (lowerContext.includes('dock') || lowerContext.includes('arrival') || lowerContext.includes('outside')) {
+        motifs.push(FORGE_MOTIFS.VolcanicHaze);
+        motifs.push(FORGE_MOTIFS.SweatingStone);
+        motifs.push(FORGE_MOTIFS.GodRaysDust);
+    }
+    else if (lowerContext.includes('chamber') || lowerContext.includes('cell') || lowerContext.includes('calibration')) {
+        motifs.push(FORGE_MOTIFS.BaroqueBrutalism);
+        motifs.push(FORGE_MOTIFS.SweatingStone);
+        motifs.push(FORGE_MOTIFS.IronRestraints);
+    }
 
     // Ledger-based motif triggers
     if (ledger.traumaLevel > 70) {
@@ -227,7 +282,7 @@ class VisualCoherenceEngine {
     return Array.from(new Set(motifs));
   }
 
-  private buildSubjectDescription(target: PrefectDNA | CharacterId | string, ledger: YandereLedger, narrativeText: string): string {
+  private buildSubjectDescription(target: PrefectDNA | CharacterId | string, ledger: YandereLedger, narrativeText: string, sceneContext: string, beat?: NarrativeBeat): string {
     let base = "";
     
     // Attempt to resolve base description from Archetype Map or Visual Profiles
@@ -255,7 +310,7 @@ class VisualCoherenceEngine {
     }
 
     const somatic = this.inferSomaticDetails(ledger, narrativeText);
-    const dynamicMotifs = this._selectMotifs(ledger, narrativeText); 
+    const dynamicMotifs = this._selectMotifs(ledger, narrativeText, sceneContext, beat); 
 
     const combinedDetails = Array.from(new Set([...somatic, ...dynamicMotifs]));
 
@@ -268,11 +323,12 @@ class VisualCoherenceEngine {
     ledger: YandereLedger,
     narrativeText: string,
     previousTurn?: MultimodalTurn,
-    directorVisualInstruction?: string
+    directorVisualInstruction?: string,
+    beat?: NarrativeBeat
   ): { imagePrompt: string; ttsPrompt: string } {
     const camera = this.calculateCameraDynamics(ledger, narrativeText);
     const lighting = this.calculateLightingDynamics(ledger);
-    const subject = directorVisualInstruction || this.buildSubjectDescription(target, ledger, narrativeText);
+    const subject = directorVisualInstruction || this.buildSubjectDescription(target, ledger, narrativeText, sceneContext, beat);
 
     const env = this.memory.environmentState;
 
@@ -282,7 +338,7 @@ class VisualCoherenceEngine {
       camera,
       lighting,
       subject,
-      environment: `${env.location}, sweating ancient stone, ${env.atmosphericEffects.join(', ')}, dominant colors #050505 #881337 #facc15`,
+      environment: `${sceneContext || env.location}, sweating ancient stone, ${env.atmosphericEffects.join(', ')}, dominant colors #050505 #881337 #facc15`,
       mood: "bored clinical inevitability | ontological exposure under scrutinizing gaze | somatic vulnerability",
       technical: "high resolution, sharp focus on eyes and skin texture, subtle film grain, 16:9 wide cinematic aspect ratio, no text or overlays"
     };

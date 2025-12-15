@@ -1,5 +1,6 @@
 
 
+
 import { YandereLedger } from '../../types';
 
 // Knowledge Graph of Thoughts (KGoT) Schema
@@ -102,5 +103,6 @@ export interface KnowledgeGraph {
     turn_count: number;
     tension_level: number;
     narrative_phase: 'ACT_1' | 'ACT_2' | 'ACT_3';
+    narrative_summary?: string; // New: Long-term narrative memory vector
   };
 }

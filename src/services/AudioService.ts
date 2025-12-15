@@ -7,15 +7,30 @@ export class AudioService {
   private pausedAt: number = 0;
 
   constructor() {
-    // Lazy initialization
+    // Lazy initialization in getContext()
   }
 
-  private getContext(): AudioContext {
-    if (!this.context) {
-      this.context = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+  /**
+   * Returns the shared Singleton AudioContext.
+   * Re-initializes if the context is null or closed.
+   */
+  public getContext(): AudioContext {
+    // Check if context is missing or closed (garbage collected or released)
+    if (!this.context || this.context.state === 'closed') {
+      const AudioCtor = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!AudioCtor) {
+          throw new Error("Web Audio API is not supported in this browser.");
+      }
+      this.context = new AudioCtor({ sampleRate: 24000 });
       this.gainNode = this.context.createGain();
       this.gainNode.connect(this.context.destination);
     }
+    
+    // Always attempt to resume if suspended (common browser policy)
+    if (this.context.state === 'suspended') {
+      this.context.resume().catch(e => console.error("Audio Context resume failed", e));
+    }
+    
     return this.context;
   }
 
@@ -39,28 +54,34 @@ export class AudioService {
   public async play(base64Data: string, volume: number, playbackRate: number, onEnded: () => void) {
     this.stop(); // Ensure clean slate
     const ctx = this.getContext();
-    const buffer = this.decodePCM(base64Data);
+    
+    // Decode logic wrapped in try/catch for safety
+    try {
+        const buffer = this.decodePCM(base64Data);
 
-    this.source = ctx.createBufferSource();
-    this.source.buffer = buffer;
-    
-    // Apply playback rate
-    this.source.playbackRate.value = playbackRate;
-    
-    // Ensure gain node exists and is connected
-    if (!this.gainNode) {
-        this.gainNode = ctx.createGain();
-        this.gainNode.connect(ctx.destination);
+        this.source = ctx.createBufferSource();
+        this.source.buffer = buffer;
+        
+        // Apply playback rate
+        this.source.playbackRate.value = playbackRate;
+        
+        // Ensure gain node exists and is connected
+        if (!this.gainNode) {
+            this.gainNode = ctx.createGain();
+            this.gainNode.connect(ctx.destination);
+        }
+        this.source.connect(this.gainNode);
+        
+        this.gainNode.gain.value = volume;
+        
+        this.source.onended = onEnded;
+        this.source.start(0, this.pausedAt); // Support resume
+        this.startTime = ctx.currentTime - this.pausedAt;
+        
+    } catch (e) {
+        console.error("Audio playback error:", e);
+        onEnded(); // Trigger end callback to avoid UI hanging
     }
-    this.source.connect(this.gainNode);
-    
-    this.gainNode.gain.value = volume;
-    
-    this.source.onended = onEnded;
-    this.source.start(0, this.pausedAt); // Support resume
-    this.startTime = ctx.currentTime - this.pausedAt;
-    
-    if (ctx.state === 'suspended') await ctx.resume();
   }
 
   public stop() {

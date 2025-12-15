@@ -5,6 +5,8 @@ import { visualCoherenceEngine } from './visualCoherenceEngine';
 import { CharacterId as CId } from '../types';
 import { generateImageAction, generateSpeechAction, distortImageAction } from './geminiMediaService';
 import { CHARACTER_VOICE_MAP, resolveVoiceForSpeaker } from '../config/voices';
+import { audioService } from './AudioService';
+import { NarrativeBeat } from "./TensionManager";
 
 // Re-export for compatibility
 export { CHARACTER_VOICE_MAP, resolveVoiceForSpeaker };
@@ -17,7 +19,8 @@ export function buildVisualPrompt(
   ledger: YandereLedger,
   narrativeText: string,
   previousTurn?: MultimodalTurn,
-  directorVisualPrompt?: string 
+  directorVisualPrompt?: string,
+  beat?: NarrativeBeat
 ): { imagePrompt: string; ttsPrompt: string } {
   return visualCoherenceEngine.buildCoherentPrompt(
     target, 
@@ -25,7 +28,8 @@ export function buildVisualPrompt(
     ledger, 
     narrativeText,
     previousTurn,
-    directorVisualPrompt
+    directorVisualPrompt,
+    beat
   );
 }
 
@@ -40,7 +44,8 @@ export const generateNarrativeImage = async (
   narrativeText: string,
   previousTurn?: MultimodalTurn,
   retryCount: number = 0,
-  directorVisualPrompt?: string 
+  directorVisualPrompt?: string,
+  beat?: NarrativeBeat
 ): Promise<string | undefined> => {
   
   if (!BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableImages) {
@@ -49,7 +54,7 @@ export const generateNarrativeImage = async (
   }
 
   // Use the image prompt part of the coherence engine output
-  const coherenceOutput = buildVisualPrompt(target, sceneContext, ledger, narrativeText, previousTurn, directorVisualPrompt);
+  const coherenceOutput = buildVisualPrompt(target, sceneContext, ledger, narrativeText, previousTurn, directorVisualPrompt, beat);
   const finalCoherentPrompt = coherenceOutput.imagePrompt;
 
   try {
@@ -69,7 +74,7 @@ export const generateNarrativeImage = async (
     if (retryCount < MAX_IMAGE_RETRIES) {
       console.warn(`[mediaService] Image generation error on attempt ${retryCount + 1}, retrying...`, error);
       await new Promise(resolve => setTimeout(resolve, 2000 + (retryCount * 2000))); 
-      return generateNarrativeImage(target, sceneContext, ledger, narrativeText, previousTurn, retryCount + 1, directorVisualPrompt);
+      return generateNarrativeImage(target, sceneContext, ledger, narrativeText, previousTurn, retryCount + 1, directorVisualPrompt, beat);
     }
     
     console.error(`[mediaService] Image generation failed after ${MAX_IMAGE_RETRIES + 1} attempts.`, error);
@@ -127,8 +132,8 @@ export const generateDramaticAudio = async (
 
         const clips = await Promise.all(clipsPromise);
         
-        // Context for decoding
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        // Use Singleton Context to prevent resource exhaustion (Leak Fix)
+        const ctx = audioService.getContext();
         
         // Decode all valid clips to buffers
         const buffers = await Promise.all(clips.map(async (clip) => {
@@ -138,7 +143,17 @@ export const generateDramaticAudio = async (
             const len = binaryString.length;
             const bytes = new Uint8Array(len);
             for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-            return ctx.decodeAudioData(bytes.buffer.slice(0)); 
+            
+            // Note: ctx.decodeAudioData usually expects a complete file buffer (like ArrayBuffer from fetch)
+            // But we have raw PCM/WAV bytes in base64. Ensure decodeAudioData supports it.
+            // If ctx is closed, this might throw, but AudioService.getContext() ensures it's open.
+            try {
+                // IMPORTANT: decodeAudioData detaches the buffer, so we slice it just in case
+                return await ctx.decodeAudioData(bytes.buffer.slice(0)); 
+            } catch (decodeErr) {
+                console.error("Audio Decode Error:", decodeErr);
+                return null;
+            }
         }));
 
         // Calculate total duration and construct master buffer
