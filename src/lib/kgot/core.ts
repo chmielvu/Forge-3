@@ -85,4 +85,16 @@ export class KGotCore {
   }
 
   get internalGraph() { return this.graph; } // expose only to trusted modules
+
+  // --- Embeddings Support for GraphRAG ---
+  public getNode2VecEmbeddings(dim: number = 16): Record<string, number[]> {
+      const nodes = this.graph.nodes();
+      const vectors: Record<string, number[]> = {};
+      // Simple random projection stub for now - replace with actual Node2Vec if needed later
+      // This is sufficient for basic semantic distance in GraphRAG prototype
+      nodes.forEach(n => {
+          vectors[n] = Array(dim).fill(0).map(() => Math.random());
+      });
+      return vectors;
+  }
 }

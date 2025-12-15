@@ -141,6 +141,36 @@ export class AudioService {
       this.droneNodes.masterGain?.gain.linearRampToValueAtTime(targetGain, ctx.currentTime + 2);
   }
 
+  /**
+   * Triggers a momentary audio "Pulse" or "Drop" to signify somatic impact.
+   * Creates a visceral low-end thud or distortion.
+   */
+  public triggerSomaticPulse(intensity: number = 0.5) {
+      if (!this.isDronePlaying || !this.droneNodes.filter) return;
+      const ctx = this.getContext();
+      const now = ctx.currentTime;
+
+      // Momentary low-pass drop (The "Void" sensation)
+      this.droneNodes.filter.frequency.cancelScheduledValues(now);
+      this.droneNodes.filter.frequency.exponentialRampToValueAtTime(50, now + 0.1); // Drop deep
+      this.droneNodes.filter.frequency.exponentialRampToValueAtTime(150, now + 2.0); // Recover slowly
+
+      // Create a sub-bass impact
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(60, now);
+      osc.frequency.exponentialRampToValueAtTime(10, now + 0.5); // Pitch drop
+      
+      gain.gain.setValueAtTime(0.5 * intensity, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 1.0);
+  }
+
   public stopDrone() {
       if (!this.isDronePlaying) return;
       const ctx = this.getContext();

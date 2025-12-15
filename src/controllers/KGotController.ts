@@ -8,6 +8,9 @@ import { fuzzyResolve } from '../lib/kgot/search';
 import { runLayoutAsync } from '../lib/kgot/layout';
 import { updateCentrality, detectCommunities, calculateDominancePath, pruneGraph } from '../lib/kgot/metrics';
 import { INITIAL_LEDGER } from '../constants';
+import { GraphRAGIndexer } from '../lib/kgot/graphrag';
+import { KGOT_CONFIG } from '../config/behaviorTuning';
+import { applyDecayMutation } from '../lib/kgot/decay-mut';
 
 /**
  * KGotController Facade
@@ -18,9 +21,11 @@ import { INITIAL_LEDGER } from '../constants';
  * - Search (Fuzzy Resolution)
  * - Metrics (Analysis)
  * - Layout (Worker)
+ * - GraphRAG (Indexing & Retrieval)
  */
 export class KGotController {
   private core: KGotCore;
+  private graphRAG: GraphRAGIndexer;
 
   constructor(initialGraph: KnowledgeGraph) {
     this.core = new KGotCore(initialGraph);
@@ -29,6 +34,13 @@ export class KGotController {
     if (Object.keys(this.core.getGraph().nodes).length === 0) {
       this.initializeCanonicalNodes();
     }
+
+    // Initialize GraphRAG
+    this.graphRAG = new GraphRAGIndexer(this.core);
+    this.graphRAG.setDecayHook((event) => {
+      // Lore hook: e.g., low_grudge → inject MASQUERADE motif logic in future
+      console.log(`[Controller] Decay event: ${event}`);
+    });
   }
 
   // --- Core Delegation ---
@@ -116,6 +128,17 @@ export class KGotController {
   public applyMutations(mutations: any[]): void {
     const currentTurn = this.core.getGraph().global_state.turn_count || 0;
 
+    // Periodic decay: Every X turns (modular call)
+    if (currentTurn > 0 && currentTurn % KGOT_CONFIG.DECAY.INTERVAL === 0) {
+      const decayConfig = { 
+          rate: KGOT_CONFIG.DECAY.RATE, 
+          minWeight: KGOT_CONFIG.DECAY.MIN_WEIGHT, 
+          types: KGOT_CONFIG.DECAY.TYPES 
+      }; 
+      // Apply decay to Subject interactions primarily
+      applyDecayMutation(this.core.internalGraph, 'Subject_84', decayConfig, currentTurn); 
+    }
+
     // Pre-process params to resolve fuzzy IDs before passing to strict mutation handler
     const resolvedMutations = mutations.map(m => {
         const resolved = { ...m };
@@ -157,6 +180,10 @@ export class KGotController {
 
     applyMutations(this.core, resolvedMutations, currentTurn);
     
+    // GraphRAG incremental: Pass delta for threshold
+    // Async, non-blocking build
+    this.graphRAG.buildIndex(false, mutations.length).catch(e => console.warn("GraphRAG build failed:", e));
+
     // Auto-prune and Layout periodically
     if (Math.random() < 0.1) {
         this.pruneGraph();
@@ -178,7 +205,6 @@ export class KGotController {
 
   /**
    * Updates an agent's attributes based on PrefectDNA.
-   * This is used to sync PrefectDNA changes from the gameStore to the KGotNode attributes.
    */
   public updateAgentAttributes(prefect: PrefectDNA): void {
       const turn = this.core.getGraph().global_state.turn_count;
@@ -187,16 +213,13 @@ export class KGotController {
           id: prefect.id,
           updates: {
               attributes: { 
-                  // Directly store the full PrefectDNA attributes for rich context
-                  // Avoid direct circular references if PrefectDNA has deep graph objects
                   prefectDNA: { ...prefect, relationships: { ...prefect.relationships } }, 
-                  psychometrics: prefect.psychometrics, // Ensure psychometrics are carried over
+                  psychometrics: prefect.psychometrics, 
                   appearanceDescription: prefect.appearanceDescription,
                   narrativeFunctionDescription: prefect.narrativeFunctionDescription,
                   promptKeywords: prefect.promptKeywords,
                   visualDNA: prefect.visualDNA,
                   somaticSignature: prefect.somaticSignature,
-                  // Add other specific attributes as needed
               }
           }
       };
@@ -228,16 +251,11 @@ export class KGotController {
   // --- Analysis & AI ---
 
   public getNode2VecEmbeddings(dim: number = 16): Record<string, number[]> {
-      const nodes = this.core.internalGraph.nodes();
-      const vectors: Record<string, number[]> = {};
-      nodes.forEach(n => {
-          vectors[n] = Array(dim).fill(0).map(() => Math.random());
-      });
-      return vectors;
+      return this.core.getNode2VecEmbeddings(dim);
   }
 
   public applyPrefectSimulations(simulations: UnifiedDirectorOutput['prefect_simulations']): void {
-      if (!simulations) return; // Guard for optional simulations
+      if (!simulations) return; 
 
       const muts: any[] = [];
       const turn = this.core.getGraph().global_state.turn_count;
@@ -245,7 +263,6 @@ export class KGotController {
       simulations.forEach(sim => {
           const pid = this.resolveEntityId(sim.prefect_id) || sim.prefect_id;
           
-          // Update State
           muts.push({
               operation: 'update_node',
               id: pid,
@@ -255,14 +272,12 @@ export class KGotController {
                           emotional_vector: sim.emotional_state,
                           last_action: sim.public_action
                       },
-                      // Also update specific emotional states for potential psychometrics
-                      currentEmotionalState: sim.emotional_state, // Direct update to PrefectDNA part
-                      lastPublicAction: sim.public_actionSummary || sim.public_action, // Use summary if available
+                      currentEmotionalState: sim.emotional_state, 
+                      lastPublicAction: sim.public_actionSummary || sim.public_action, 
                   }
               }
           });
 
-          // Memory
           muts.push({
               operation: 'add_memory',
               memory: {
@@ -274,7 +289,6 @@ export class KGotController {
               }
           });
 
-          // Interactions
           if (sim.sabotage_attempt) {
               muts.push({
                   operation: 'update_grudge',
@@ -288,8 +302,8 @@ export class KGotController {
                   operation: 'update_relationship',
                   source: pid,
                   target: this.resolveEntityId(sim.alliance_signal.target) || sim.alliance_signal.target,
-                  category: 'TRUST', // Or 'LOVE', 'SYMPATHY' based on context
-                  delta: 0.2 // Small positive delta for alliance
+                  category: 'TRUST', 
+                  delta: 0.2 
               });
           }
           if (sim.secrets_uncovered && sim.secrets_uncovered.length > 0) {
@@ -309,10 +323,19 @@ export class KGotController {
 
   // --- Search & Utils ---
 
-  /**
-   * Public wrapper for fuzzy ID resolution to be used by store side-effects.
-   */
   public resolveEntityId(nameOrId: string | undefined): string | null {
       return fuzzyResolve(this.core, nameOrId || '');
+  }
+
+  // --- GraphRAG Access ---
+  
+  public async getRAGAugmentedPrompt(query: string): Promise<string> {
+      try {
+          const retrieval = await this.graphRAG.retrieve(query);
+          return this.graphRAG.augmentPrompt(retrieval);
+      } catch (e) {
+          console.warn("[KGotController] RAG augmentation failed:", e);
+          return "";
+      }
   }
 }

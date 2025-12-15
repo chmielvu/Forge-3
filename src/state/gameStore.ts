@@ -12,6 +12,7 @@ import { KGotController } from '../controllers/KGotController';
 import { enqueueTurnForMedia } from './mediaController';
 import { createIndexedDBStorage, forgeStorage } from '../utils/indexedDBStorage';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
+import { audioService } from '../services/AudioService'; 
 
 // Use a factory function for initial graph to avoid global state pollution
 const getInitialGraph = (): KnowledgeGraph => {
@@ -418,6 +419,18 @@ export const useGameStore = create<GameStoreWithPrefects>()(
               let nextLedger = state.gameState.ledger;
               if (result.ledger_update) {
                  nextLedger = updateLedgerHelper(state.gameState.ledger, result.ledger_update);
+                 
+                 // --- UPDATED AUDIO LOGIC ---
+                 audioService.updateDrone(nextLedger.traumaLevel);
+              }
+
+              // --- NEW: Somatic Feedback Integration ---
+              if (result.somatic_state) {
+                  // Trigger visceral impact sound if provided
+                  if (result.somatic_state.impact_sensation || result.somatic_state.internal_collapse) {
+                      audioService.triggerSomaticPulse(0.8);
+                      audioService.playSfx('glitch'); // Optional digital tearing sound
+                  }
               }
 
               const nextTurn = finalGraph.global_state?.turn_count 
@@ -515,6 +528,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           lastSimulationLog: undefined,
           lastDirectorDebug: undefined,
         });
+        audioService.stopDrone(); // Stop drone on reset
       },
 
       startSession: async (isLiteMode = false) => {
@@ -531,6 +545,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         const controller = new KGotController(get().kgot);
         get().prefects.forEach(p => controller.updateAgentAttributes(p));
         set({ kgot: controller.getGraph() });
+        
+        audioService.startDrone(); // Start drone on session start
       },
 
       saveSnapshot: async () => {
@@ -588,6 +604,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             }));
             console.log("Game state restored (Split-Storage).");
             get().addLog({ id: `system-load-${Date.now()}`, type: 'system', content: 'SYSTEM STATE RESTORED FROM ARCHIVE.' });
+            audioService.startDrone(); // Ensure drone restarts on load
           } else {
             console.warn("No saved state found (Partial or Missing).");
             get().addLog({ id: `system-load-none-${Date.now()}`, type: 'system', content: 'NO SYSTEM ARCHIVE FOUND. STARTING NEW SESSION.' });

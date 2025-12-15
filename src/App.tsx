@@ -1,22 +1,4 @@
 
-import React, { useEffect, useState } from 'react';
-import { 
-  Skull, 
-  Minimize2, 
-  Maximize2, 
-  Terminal, 
-  Brain, 
-  Database, 
-  Scroll, 
-  Loader2, 
-  Power, 
-  Feather,
-  LayoutTemplate,
-  Film,
-  Zap,
-  BookOpen,
-  Send
-} from 'lucide-react';
 import NetworkGraph from './components/NetworkGraph';
 import NarrativeLog from './components/NarrativeLog';
 import MediaPanel from './components/MediaPanel';
@@ -67,6 +49,9 @@ const THEME = {
   }
 };
 
+// --- CONSTANTS ---
+const START_SCREEN_BACKGROUND_URL = "https://images.unsplash.com/photo-1544716278-ca5e3f4abd87?q=80&w=2938&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"; // Example Dark Academia library image
+
 // --- ATMOSPHERIC COMPONENTS ---
 
 const GrainOverlay = () => (
@@ -116,53 +101,61 @@ const StartScreen = ({ onStart }: { onStart: (liteMode: boolean) => void }) => {
     };
 
     return (
-    <div className={`absolute inset-0 z-50 flex flex-col items-center justify-center ${THEME.colors.bg} ${THEME.colors.textMain} animate-fade-in font-serif overflow-hidden`}>
+    <div className={`w-screen h-screen flex flex-col items-center justify-center ${THEME.colors.bg} ${THEME.colors.textMain} animate-fade-in font-serif overflow-hidden`}>
       
       {/* Background Layers */}
-      <div className="absolute inset-0 z-0 opacity-40">
-         <MediaPanel variant="background" className="w-full h-full object-cover" />
+      <div className="absolute inset-0 z-0 opacity-80"> {/* Changed opacity-60 to opacity-80 */}
+         <MediaPanel 
+           variant="background" 
+           className="w-full h-full object-cover grayscale contrast-125 sepia-[0.3]" 
+           backgroundImageUrl={START_SCREEN_BACKGROUND_URL}
+         />
       </div>
-      <div className="scanline z-[1]" />
+      <div className="scanline z-[1] opacity-10" />
       <GrainOverlay />
       <Vignette />
       
-      {/* Content Container - Using Analytical Panel Aesthetics */}
-      <div className={`relative z-10 text-center max-w-2xl w-full mx-4 px-8 py-12 md:px-12 md:py-16 ${THEME.colors.panel} ${THEME.classes.glass} ${THEME.colors.border} shadow-2xl rounded-sm`}>
-        {/* Decorative Brackets matching Analytical Panels */}
-        <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-[#78350f]/60" />
-        <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-[#78350f]/60" />
-        <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-[#78350f]/60" />
-        <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-[#78350f]/60" />
+      {/* Content Container - Dark Academia Aesthetic */}
+      <div className={`relative z-10 text-center max-w-xl w-full mx-auto px-8 py-20 bg-[#0f0e0d] shadow-2xl border-y border-[#292524]`}> {/* Re-added mx-auto */}
+        
+        {/* Inner Frame */}
+        <div className="absolute top-4 bottom-4 left-4 right-4 border border-[#292524] pointer-events-none opacity-50 flex flex-col justify-between items-center py-2">
+             <div className="w-1 h-1 bg-[#44403c] rounded-full" />
+             <div className="w-1 h-1 bg-[#44403c] rounded-full" />
+        </div>
 
-        <div className="mb-8 md:mb-10 animate-pulse-slow">
-          <Skull size={56} className="mx-auto text-[#78350f]/80 drop-shadow-[0_0_15px_rgba(120,53,15,0.5)]" />
+        {/* Header Icon */}
+        <div className="mb-10 opacity-90 relative z-20">
+             <div className="flex items-center justify-center gap-4 text-[#78716c] mb-4">
+                <div className="h-px w-8 bg-[#44403c]" />
+                <BookOpen size={14} />
+                <div className="h-px w-8 bg-[#44403c]" />
+             </div>
+             <Skull size={40} className="mx-auto text-[#d6d3d1]" strokeWidth={1} />
         </div>
         
-        <h1 className="font-display text-5xl md:text-8xl tracking-[0.15em] uppercase text-transparent bg-clip-text bg-gradient-to-b from-[#e7e5e4] via-[#d6d3d1] to-[#78350f] mb-6 md:mb-8 drop-shadow-2xl">
+        <h1 className="relative z-20 font-display text-6xl md:text-7xl tracking-[0.15em] uppercase text-[#e7e5e4] mb-4 drop-shadow-xl">
           The Forge
         </h1>
         
-        <div className="flex items-center justify-center gap-4 mb-8 md:mb-10 opacity-70">
-            <div className="h-px w-16 md:w-20 bg-gradient-to-r from-transparent via-[#78350f] to-transparent" />
-            <Feather size={14} className="text-[#a8a29e]" />
-            <div className="h-px w-16 md:w-20 bg-gradient-to-r from-transparent via-[#78350f] to-transparent" />
+        <div className="relative z-20 flex items-center justify-center gap-3 mb-10 opacity-60">
+            <span className="font-mono text-[10px] tracking-[0.4em] uppercase text-[#a8a29e]">Department of Correction</span>
         </div>
         
-        <p className="font-serif text-xl md:text-2xl text-[#a8a29e] italic mb-10 md:mb-14 leading-relaxed max-w-lg mx-auto">
-          "Chaos must be refined.<br/>Welcome to the calibration."
+        <p className="relative z-20 font-serif text-xl md:text-2xl text-[#a8a29e] italic mb-14 leading-relaxed max-w-sm mx-auto">
+          "Chaos must be refined.<br/><span className="text-[#78716c] text-lg">Welcome to the calibration.</span>"
         </p>
   
-        <div className="flex flex-col md:flex-row gap-4 md:gap-6 justify-center items-center">
+        <div className="relative z-20 flex flex-col gap-4 justify-center items-center">
           <button 
             onClick={() => handleStart(false)}
             onMouseEnter={() => audioService.playSfx('hover')}
-            className="group relative px-8 py-3 md:px-10 md:py-4 bg-[#292524]/80 border border-[#78350f]/40 hover:border-[#991b1b] hover:bg-[#451a03]/40 transition-all duration-500 ease-out shadow-lg hover:shadow-[#991b1b]/20 rounded-sm"
+            className="group w-64 py-4 bg-[#1c1917] border border-[#292524] hover:border-[#b45309]/50 hover:bg-[#292524] transition-all duration-700 ease-out"
           >
-            <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#78350f] opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className="flex items-center gap-3 relative z-10">
-              <Power size={16} className="text-[#991b1b] group-hover:text-red-500 transition-colors" />
-              <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#d6d3d1] group-hover:text-white transition-colors">
-                Initialize System
+            <div className="flex items-center justify-center gap-3">
+              <Feather size={14} className="text-[#78716c] group-hover:text-[#b45309] transition-colors" />
+              <span className="font-display text-xs tracking-[0.25em] uppercase text-[#d6d3d1] group-hover:text-[#e7e5e4] transition-colors">
+                Begin Session
               </span>
             </div>
           </button>
@@ -170,19 +163,18 @@ const StartScreen = ({ onStart }: { onStart: (liteMode: boolean) => void }) => {
           <button 
             onClick={() => handleStart(true)}
             onMouseEnter={() => audioService.playSfx('hover')}
-            className="group relative px-6 py-3 md:px-8 md:py-4 bg-transparent border border-emerald-900/30 hover:border-emerald-600/50 hover:bg-emerald-950/20 transition-all duration-500 ease-out rounded-sm"
+            className="group w-64 py-3 bg-transparent border-b border-[#292524] hover:border-[#57534e] transition-all duration-500 ease-out"
           >
-            <div className="flex items-center gap-3 relative z-10">
-              <Zap size={16} className="text-emerald-500/60 group-hover:text-emerald-400 transition-colors" />
-              <span className="font-mono text-xs tracking-[0.2em] uppercase text-emerald-500/60 group-hover:text-emerald-300 transition-colors">
-                Local Protocol
+            <div className="flex items-center justify-center gap-3">
+              <span className="font-mono text-[10px] tracking-[0.15em] uppercase text-[#57534e] group-hover:text-[#78716c] transition-colors">
+                Access Local Protocol
               </span>
             </div>
           </button>
         </div>
 
-        <div className="mt-6 md:mt-8 text-[8px] md:text-[9px] font-mono text-[#57534e] uppercase tracking-widest opacity-60">
-            System v3.7.1 :: Neural Link Standby
+        <div className="relative z-20 mt-16 text-[9px] font-mono text-[#292524] uppercase tracking-widest">
+            Vol. III • MMXXIV
         </div>
       </div>
     </div>
@@ -280,7 +272,7 @@ export default function App() {
                     </h1>
                     <div className="flex items-center gap-2 mt-1">
                         <span className={`w-1.5 h-1.5 rounded-full ${isThinking ? 'bg-amber-500 animate-pulse' : 'bg-[#991b1b]'}`}></span>
-                        <span className="text-[9px] font-mono text-[#78350f] tracking-[0.2em] uppercase opacity-90">
+                        <span className="text-[9px] font-mono text-[#78716c] tracking-[0.2em] uppercase opacity-90">
                             {gameState.location} // Turn {gameState.turn}
                         </span>
                     </div>

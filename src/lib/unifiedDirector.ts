@@ -2,7 +2,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { KGotController } from "../controllers/KGotController";
 import { DIRECTOR_SYSTEM_INSTRUCTIONS } from "../config/directorCore";
-import { LORE_APPENDIX, LORE_CONSTITUTION } from "../config/loreInjection"; // Import Lore
+import { LORE_APPENDIX, LORE_CONSTITUTION } from "../config/loreInjection"; 
 import { THEMATIC_ENGINES, MOTIF_LIBRARY } from "../config/directorEngines";
 import { UnifiedDirectorOutputSchema } from "./schemas/unifiedDirectorSchema";
 import { PrefectDNA, YandereLedger } from "../types";
@@ -77,7 +77,11 @@ export async function executeUnifiedDirectorTurn(
   const engineData = THEMATIC_ENGINES[activeEngineKey];
   const beatInstruction = TensionManager.getBeatInstructions(narrativeBeat as any);
 
-  // 3. PROMPT CONSTRUCTION
+  // 3. GRAPHRAG RETRIEVAL
+  // Retrieve relevant past memories and faded grudges to augment the context
+  const ragContext = await controller.getRAGAugmentedPrompt(playerInput + " " + currentLocation);
+
+  // 4. PROMPT CONSTRUCTION
   const finalPrompt = `
 ${DIRECTOR_SYSTEM_INSTRUCTIONS}
 
@@ -90,6 +94,9 @@ INPUT: "${playerInput}"
 INTENT: ${telemetry.intent.toUpperCase()}
 SUBTEXT: ${telemetry.subtext.toUpperCase()}
 INTENSITY: ${telemetry.intensity}/10
+
+=== GRAPHRAG CONTEXT (MEMORY & DECAY) ===
+${ragContext}
 
 === NARRATIVE COORDINATES ===
 X-AXIS: ${xAxis} (Function)
@@ -114,13 +121,14 @@ HISTORY:
 ${history.slice(-5).join('\n')}
 
 === TASK ===
-Generate the JSON response.
-1. **THINK**: Plan the scene using the "Rhythm of Escalation".
-2. **NARRATE**: Focus on *Anticipation* and *Textures*. Use the Engine Vocabulary and the Vernacular of Diminution.
-3. **UPDATE**: Modify the YandereLedger.
+Generate the JSON response strictly adhering to the schema.
+1. **THINK**: Plan the scene using the "Rhythm of Escalation" and retrieved memory evidence.
+2. **NARRATE**: Use the **NARRATIVE TEXTURE** guidelines. Focus on SOMATIC SENSATION (taste, smell, internal collapse). No generic emotions.
+3. **SOMATIC STATE**: Populate the 'somatic_state' field to trigger audio/visual feedback for visceral moments (e.g., 'impact_sensation', 'internal_collapse').
+4. **UPDATE**: Modify the YandereLedger.
 `;
 
-  // 4. EXECUTE FLASH-LITE (New SDK Syntax)
+  // 5. EXECUTE FLASH-LITE (New SDK Syntax)
   try {
     const response = await callGeminiWithRetry(async () => {
       return await ai.models.generateContent({

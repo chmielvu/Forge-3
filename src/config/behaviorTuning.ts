@@ -45,3 +45,18 @@ export const BEHAVIOR_CONFIG = {
     INCLUDE_FULL_CONTEXT: true
   }
 };
+
+export const KGOT_CONFIG = {
+  DECAY: {
+    RATE: 0.05, // 5% loss/turn
+    MIN_WEIGHT: 0.05, // Eternal scar
+    INTERVAL: 5, // Turns
+    TYPES: ['GRUDGE', 'TRAUMA_BOND', 'OBSESSION']
+  },
+  GRAPHRAG: {
+    REBUILD_THRESHOLD: 0.1, // 10% change
+    SUBGRAPH_CAP: 20, // Nodes
+    TTL_HOURS: 1, // Cache
+    COMMUNITY_CAP: 5 // Summaries
+  }
+};

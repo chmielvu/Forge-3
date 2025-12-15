@@ -16,9 +16,10 @@ const formatTime = (seconds: number) => {
 interface MediaPanelProps {
   variant?: 'full' | 'background';
   className?: string;
+  backgroundImageUrl?: string; // NEW PROP
 }
 
-const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '' }) => {
+const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '', backgroundImageUrl }) => {
   const {
     multimodalTimeline,
     currentTurnId,
@@ -110,14 +111,20 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
   // Initial State: Waiting for Narrative
   if (!currentTurn) {
     if (variant === 'background') {
+        const backgroundStyle = backgroundImageUrl 
+            ? { backgroundImage: `url(${backgroundImageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            : {};
+
         return (
-            <div className={`relative w-full h-full bg-[#0c0a09] overflow-hidden ${className}`}>
-                {/* Abstract Atmospheric Background for Start Screen */}
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#292524_0%,#0c0a09_100%)] opacity-60" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] rounded-full border border-[#78350f]/10 animate-[spin_60s_linear_infinite]" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60%] h-[60%] rounded-full border border-[#991b1b]/10 animate-[spin_45s_linear_infinite_reverse]" />
-                {/* Subtle Grid */}
-                <div className="absolute inset-0 bg-[linear-gradient(rgba(120,53,15,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(120,53,15,0.03)_1px,transparent_1px)] bg-[size:40px_40px] opacity-30"></div>
+            <div className={`relative w-full h-full bg-[#0c0a09] overflow-hidden ${className}`} style={backgroundStyle}>
+                {!backgroundImageUrl && (
+                    <>
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#292524_0%,#0c0a09_100%)] opacity-60" />
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] rounded-full border border-[#78350f]/10 animate-[spin_60s_linear_infinite]" />
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60%] h-[60%] rounded-full border border-[#991b1b]/10 animate-[spin_45s_linear_infinite_reverse]" />
+                        <div className="absolute inset-0 bg-[linear-gradient(rgba(120,53,15,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(120,53,15,0.03)_1px,transparent_1px)] bg-[size:40px_40px] opacity-30"></div>
+                    </>
+                )}
             </div>
         );
     }
@@ -245,4 +252,3 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
 };
 
 export default MediaPanel;
-    

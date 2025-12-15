@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../state/gameStore';
-import { X, Activity, Terminal, Database, FileText, Layout, Clock, Play, RefreshCw, ChevronRight, Loader2 } from 'lucide-react';
+import { X, Activity, Terminal, Database, FileText, Layout, Clock, Play, RefreshCw, ChevronRight, Loader2, Network } from 'lucide-react';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
 import { CoherenceReport, MediaStatus } from '../types';
 import { regenerateMediaForTurn } from '../state/mediaController';
+import { KGotController } from '../controllers/KGotController';
 
 interface MediaStatusIndicatorProps {
   status: MediaStatus;
@@ -54,6 +55,7 @@ const DevOverlay: React.FC = () => {
   const executedCode = useGameStore(s => s.executedCode);
   const simulationLog = useGameStore(s => s.lastSimulationLog);
   const debugTrace = useGameStore(s => s.lastDirectorDebug);
+  const kgot = useGameStore(s => s.kgot);
 
   // Multimodal state
   const {
@@ -72,7 +74,21 @@ const DevOverlay: React.FC = () => {
     processPlayerTurn // Direct access to action processor
   } = useGameStore();
 
-  const [activeTab, setActiveTab] = useState<'state' | 'sim' | 'logs' | 'multimodal'>('state');
+  const [activeTab, setActiveTab] = useState<'state' | 'sim' | 'logs' | 'multimodal' | 'rag'>('state');
+  const [ragQuery, setRagQuery] = useState('');
+  const [ragResult, setRagResult] = useState<string>('');
+
+  const runRagQuery = async () => {
+      if (!ragQuery) return;
+      setRagResult("Querying GraphRAG Index...");
+      try {
+          const controller = new KGotController(kgot);
+          const result = await controller.getRAGAugmentedPrompt(ragQuery);
+          setRagResult(result);
+      } catch (e) {
+          setRagResult(`Error: ${(e as Error).message}`);
+      }
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -142,25 +158,31 @@ const DevOverlay: React.FC = () => {
             onClick={() => setActiveTab('state')}
             className={`px-4 py-2 border-r border-green-900 hover:bg-green-900/20 flex gap-2 transition-colors ${activeTab === 'state' ? 'bg-green-900/30 text-white' : ''}`}
           >
-            <Database size={12} /> STATE MATRIX
+            <Database size={12} /> STATE
           </button>
           <button 
             onClick={() => setActiveTab('sim')}
             className={`px-4 py-2 border-r border-green-900 hover:bg-green-900/20 flex gap-2 transition-colors ${activeTab === 'sim' ? 'bg-green-900/30 text-white' : ''}`}
           >
-            <Activity size={12} /> SIMULATION LOG
+            <Activity size={12} /> SIM
           </button>
           <button 
             onClick={() => setActiveTab('logs')}
             className={`px-4 py-2 border-r border-green-900 hover:bg-green-900/20 flex gap-2 transition-colors ${activeTab === 'logs' ? 'bg-green-900/30 text-white' : ''}`}
           >
-            <FileText size={12} /> DIRECTOR TRACE
+            <FileText size={12} /> TRACE
           </button>
           <button 
             onClick={() => setActiveTab('multimodal')}
             className={`px-4 py-2 border-r border-green-900 hover:bg-green-900/20 flex gap-2 transition-colors ${activeTab === 'multimodal' ? 'bg-green-900/30 text-white' : ''}`}
           >
-            <Layout size={12} /> MULTIMODAL TIMELINE
+            <Layout size={12} /> TIMELINE
+          </button>
+          <button 
+            onClick={() => setActiveTab('rag')}
+            className={`px-4 py-2 border-r border-green-900 hover:bg-green-900/20 flex gap-2 transition-colors ${activeTab === 'rag' ? 'bg-green-900/30 text-white' : ''}`}
+          >
+            <Network size={12} /> GRAPHRAG
           </button>
         </div>
 
@@ -221,14 +243,6 @@ const DevOverlay: React.FC = () => {
                 </div>
               </div>
 
-              {/* Audio Playback State */}
-              <div>
-                <h3 className="text-white mb-2 border-b border-green-800 pb-1 font-bold">AUDIO_PLAYBACK_STATE</h3>
-                <pre className="text-[10px] leading-tight opacity-80 whitespace-pre-wrap">
-                  {JSON.stringify(audioPlayback, null, 2)}
-                </pre>
-              </div>
-
               {/* Media Queue */}
               <div>
                 <h3 className="text-white mb-2 border-b border-green-800 pb-1 font-bold">MEDIA_QUEUE</h3>
@@ -272,7 +286,6 @@ const DevOverlay: React.FC = () => {
                         <th className="p-2 border-r border-green-800">Text Snippet</th>
                         <th className="p-2 border-r border-green-800">Image</th>
                         <th className="p-2 border-r border-green-800">Audio</th>
-                        <th className="p-2 border-r border-green-800">Video</th>
                         <th className="p-2 border-r border-green-800">Coherence</th>
                         <th className="p-2">Actions</th>
                       </tr>
@@ -288,7 +301,6 @@ const DevOverlay: React.FC = () => {
                             <td className="p-2 border-r border-green-900 max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap">{turn.text.substring(0, 50)}...</td>
                             <td className="p-2 border-r border-green-900"><MediaStatusIndicator status={turn.imageStatus} type="Img" /></td>
                             <td className="p-2 border-r border-green-900"><MediaStatusIndicator status={turn.audioStatus} type="Aud" /></td>
-                            <td className="p-2 border-r border-green-900"><MediaStatusIndicator status={turn.videoStatus} type="Vid" /></td>
                             <td className="p-2 border-r border-green-900">{renderCoherence(coherenceReport)}</td>
                             <td className="p-2 flex gap-1">
                               <button 
@@ -322,6 +334,30 @@ const DevOverlay: React.FC = () => {
                 </div>
               </div>
             </div>
+          )}
+
+          {activeTab === 'rag' && (
+              <div className="space-y-4">
+                  <div>
+                      <h3 className="text-white mb-2 border-b border-green-800 pb-1 font-bold">SEMANTIC RETRIEVAL TEST</h3>
+                      <div className="flex gap-2">
+                          <input 
+                            type="text" 
+                            className="flex-1 bg-black border border-green-800 p-2 text-green-400 focus:outline-none focus:border-green-500" 
+                            placeholder="Enter query (e.g. 'history of Subject 84')" 
+                            value={ragQuery}
+                            onChange={(e) => setRagQuery(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && runRagQuery()}
+                          />
+                          <button onClick={runRagQuery} className="px-4 py-2 bg-green-900/30 border border-green-800 hover:bg-green-800/50">
+                              QUERY
+                          </button>
+                      </div>
+                  </div>
+                  <div className="h-[300px] border border-green-900 bg-black/30 p-2 overflow-auto">
+                      <pre className="text-[10px] whitespace-pre-wrap">{ragResult}</pre>
+                  </div>
+              </div>
           )}
 
         </div>
