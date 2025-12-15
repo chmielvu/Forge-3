@@ -1,7 +1,8 @@
+
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Activity, Brain, Zap, Image as ImageIcon, MessageCircle } from 'lucide-react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { Activity, Brain, Zap, Image as ImageIcon, MessageCircle, Terminal } from 'lucide-react';
 import { LogEntry, YandereLedger, MediaStatus, MultimodalTurn, ScriptItem } from '../types';
 import { useGameStore } from '../state/gameStore';
 import { 
@@ -17,22 +18,16 @@ import { audioService } from '../services/AudioService';
 const SPEAKER_STYLES: Record<string, string> = {
     'Narrator': 'text-stone-300 font-serif leading-relaxed',
     'System': 'text-stone-500 font-mono text-xs uppercase tracking-widest border-l border-stone-700 pl-2',
-    
-    // Faculty - Aristocratic, imposing, distinct borders
     'Selene': 'text-red-900 font-display text-lg tracking-wide border-l-2 border-red-900 pl-4 bg-red-950/10 py-2 italic',
     'Petra': 'text-amber-600 font-sans font-bold tracking-tighter uppercase animate-pulse-slow border-l-2 border-amber-700 pl-4 py-1',
     'Lysandra': 'text-cyan-800 font-mono text-sm leading-tight pl-4 border-l-2 border-cyan-900 py-1 bg-cyan-950/10',
     'Calista': 'text-rose-400 font-serif italic text-lg leading-relaxed drop-shadow-sm pl-4 border-l-2 border-rose-900 py-1',
     'Astra': 'text-stone-400 font-serif text-sm italic pl-4 opacity-80 border-l-2 border-stone-600',
     'Physicus': 'text-emerald-800 font-mono text-xs pl-4 border-l-2 border-emerald-900',
-
-    // Prefects - Intense, varied but grounded
     'Elara': 'text-emerald-700 font-sans text-sm tracking-tight border-l border-emerald-900 pl-2 bg-emerald-950/5',
     'Kaelen': 'text-pink-500 font-serif text-sm tracking-widest pl-2 border-l border-pink-900 bg-pink-950/5',
     'Anya': 'text-teal-600 font-serif text-base italic pl-2 border-l border-teal-900 bg-teal-950/5',
     'Rhea': 'text-orange-800 font-mono text-xs uppercase tracking-widest pl-2 border-l border-orange-900 bg-orange-950/5',
-    
-    // Remedial Class - Subdued, desperate
     'Subject_84': 'text-blue-300/80 font-serif italic pl-4 border-l border-blue-900/30 py-1',
     'Nico': 'text-amber-500 font-sans font-bold tracking-wide border-l-2 border-amber-500/50 pl-2',
     'Darius': 'text-blue-800 font-serif text-lg tracking-wide opacity-90 pl-2',
@@ -42,38 +37,76 @@ const SPEAKER_STYLES: Record<string, string> = {
 
 const getStyleForSpeaker = (speaker: string) => {
     const upper = speaker.toUpperCase();
-    
-    // Fuzzy match for robust styling
     if (upper.includes("SELENE") || upper.includes("PROVOST")) return SPEAKER_STYLES['Selene'];
     if (upper.includes("PETRA") || upper.includes("INQUISITOR")) return SPEAKER_STYLES['Petra'];
     if (upper.includes("LYSANDRA") || upper.includes("LOGICIAN")) return SPEAKER_STYLES['Lysandra'];
     if (upper.includes("CALISTA") || upper.includes("CONFESSOR")) return SPEAKER_STYLES['Calista'];
     if (upper.includes("ASTRA")) return SPEAKER_STYLES['Astra'];
-    
-    if (upper.includes("ELARA") || upper.includes("ZEALOT") || upper.includes("LOYALIST")) return SPEAKER_STYLES['Elara'];
-    if (upper.includes("KAELEN") || upper.includes("YANDERE") || upper.includes("OBSESSIVE")) return SPEAKER_STYLES['Kaelen'];
+    if (upper.includes("ELARA") || upper.includes("ZEALOT")) return SPEAKER_STYLES['Elara'];
+    if (upper.includes("KAELEN") || upper.includes("YANDERE")) return SPEAKER_STYLES['Kaelen'];
     if (upper.includes("ANYA") || upper.includes("NURSE")) return SPEAKER_STYLES['Anya'];
     if (upper.includes("RHEA") || upper.includes("DISSIDENT")) return SPEAKER_STYLES['Rhea'];
-    
     if (upper.includes("PLAYER") || upper.includes("SUBJECT_84")) return SPEAKER_STYLES['Subject_84'];
-    if (upper.includes("NICO")) return SPEAKER_STYLES['Nico'];
-    if (upper.includes("DARIUS")) return SPEAKER_STYLES['Darius'];
-    if (upper.includes("SILAS")) return SPEAKER_STYLES['Silas'];
-    if (upper.includes("THEO")) return SPEAKER_STYLES['Theo'];
-    
     if (upper.includes("SYSTEM")) return SPEAKER_STYLES['System'];
-    
     return SPEAKER_STYLES['Narrator'];
 };
 
-interface Props {
-  logs: LogEntry[];
-  thinking: boolean;
-  choices: string[];
-  onChoice: (c: string) => void;
-  ledger: YandereLedger;
-}
+// --- TYPEWRITER COMPONENT ---
+const TypewriterText: React.FC<{ content: string; onComplete?: () => void; speed?: number }> = ({ content, onComplete, speed = 20 }) => {
+    const [displayed, setDisplayed] = useState('');
+    const indexRef = useRef(0);
+    const timeoutRef = useRef<number | null>(null);
 
+    // Pre-parse the content to handle custom tags [[COLOR|TEXT]]
+    // We will render chunks. If it's a tag, we render it fully instantly (or type it if ambitious, but instant is safer for styles)
+    // For simplicity in this version: We strip tags for typing logic or handle them as atomic blocks.
+    // Simpler approach: Regular typing, but use a parser for final display.
+    
+    useEffect(() => {
+        setDisplayed('');
+        indexRef.current = 0;
+        
+        const typeChar = () => {
+            if (indexRef.current < content.length) {
+                const nextChar = content.charAt(indexRef.current);
+                setDisplayed(prev => prev + nextChar);
+                indexRef.current++;
+                
+                // Speed variation for realism
+                let nextDelay = speed;
+                if (nextChar === '.' || nextChar === '?' || nextChar === '!') nextDelay = speed * 15;
+                else if (nextChar === ',') nextDelay = speed * 8;
+                else if (Math.random() > 0.9) nextDelay = speed * 3; // Slight hesitation
+
+                timeoutRef.current = window.setTimeout(typeChar, nextDelay);
+            } else {
+                if (onComplete) onComplete();
+            }
+        };
+
+        timeoutRef.current = window.setTimeout(typeChar, speed);
+        return () => {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        };
+    }, [content, speed]);
+
+    // Custom Parser for [[COLOR|TEXT]] tags
+    const renderParsed = (text: string) => {
+        const parts = text.split(/(\[\[#[0-9a-fA-F]{6}\|.*?\]\])/g);
+        return parts.map((part, idx) => {
+            const match = part.match(/^\[\[(#[0-9a-fA-F]{6})\|(.*?)\]\]$/);
+            if (match) {
+                const [_, color, innerText] = match;
+                return <span key={idx} style={{ color }} className="font-italic tracking-wide">{innerText}</span>;
+            }
+            return <span key={idx} dangerouslySetInnerHTML={{ __html: part.replace(/\n/g, '<br/>') }} />;
+        });
+    };
+
+    return <span>{renderParsed(displayed)}<span className="animate-pulse inline-block w-2 h-4 bg-stone-500/50 align-middle ml-1" /></span>;
+};
+
+// --- SCRIPT RENDERER ---
 const ScriptRenderer: React.FC<{ 
     script: ScriptItem[], 
     audioAlignment?: Array<{ index: number, start: number, end: number }> 
@@ -118,6 +151,7 @@ const ScriptRenderer: React.FC<{
     );
 };
 
+// --- INLINE PREVIEW ---
 const InlineMediaPreview: React.FC<{ turn?: MultimodalTurn }> = ({ turn }) => {
   if (!turn) return null;
   const isImageReady = turn.imageStatus === MediaStatus.ready && turn.imageData;
@@ -141,6 +175,15 @@ const InlineMediaPreview: React.FC<{ turn?: MultimodalTurn }> = ({ turn }) => {
   );
 };
 
+// --- MAIN COMPONENT ---
+interface Props {
+  logs: LogEntry[];
+  thinking: boolean;
+  choices: string[];
+  onChoice: (c: string) => void;
+  ledger: YandereLedger;
+}
+
 const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledger }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -148,13 +191,20 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
   const [showNarratorIndicator, setShowNarratorIndicator] = useState(false);
   
   const multimodalTimeline = useGameStore(s => s.multimodalTimeline);
-  const audioPlayback = useGameStore(s => s.audioPlayback);
+  
+  // Ambient Sound Trigger based on Ledger
+  useEffect(() => {
+      if (ledger.traumaLevel > 0) {
+          audioService.startDrone();
+          audioService.updateDrone(ledger.traumaLevel);
+      }
+  }, [ledger.traumaLevel]);
 
   // Robust scrolling logic
   const scrollToBottom = () => {
     if (containerRef.current) {
         const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-        const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 200;
         if (isNearBottom || thinking) {
              bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
@@ -162,19 +212,8 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
   };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    scrollToBottom();
   }, [logs.length, thinking]);
-
-  // Use ResizeObserver to handle images loading late or content expanding
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver(() => {
-        scrollToBottom();
-    });
-    const contentWrapper = containerRef.current.firstElementChild;
-    if (contentWrapper) observer.observe(contentWrapper);
-    return () => observer.disconnect();
-  }, [logs]);
 
   useEffect(() => {
     const latestLog = logs[logs.length - 1];
@@ -197,7 +236,7 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
         const timer = setTimeout(() => setShowNarratorIndicator(false), 4000);
         return () => clearTimeout(timer);
     }
-  }, [showNarratorIndicator, narratorMode]);
+  }, [showNarratorIndicator]);
 
   const narratorVoice = NARRATOR_VOICES[narratorMode];
 
@@ -222,9 +261,9 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
 
       <div ref={containerRef} className="flex-1 overflow-y-auto custom-scrollbar pr-2 relative scroll-smooth">
         <div className="space-y-6 pb-2 min-h-full flex flex-col justify-end">
-          {logs.map((log) => {
+          {logs.map((log, idx) => {
             const turn = multimodalTimeline.find(t => t.id === log.id);
-            const isPlaying = audioPlayback.isPlaying && audioPlayback.currentPlayingTurnId === log.id;
+            const isLatest = idx === logs.length - 1;
             
             // Prefer script rendering if available
             if (log.type === 'narrative' && turn?.script && turn.script.length > 0) {
@@ -236,7 +275,7 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
                 );
             }
 
-            // Legacy / Fallback Rendering
+            // Fallback / Legacy Rendering
             const enhancedContent = log.type === 'narrative' 
               ? injectNarratorCommentary(log.content, narratorMode, ledger)
               : log.content;
@@ -251,6 +290,7 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
 
                 {log.type === 'system' && (
                   <div className="font-mono text-[9px] text-stone-500 uppercase border-l border-stone-800 pl-3 py-1 tracking-wider opacity-70">
+                    <Terminal size={10} className="inline mr-2" />
                     {log.content}
                   </div>
                 )}
@@ -268,7 +308,7 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
                         <Zap size={10} className="animate-pulse" />
                         <span>ABYSS_NARRATOR::INTERVENTION</span>
                     </div>
-                    <p className="text-sm text-red-200/90 italic font-serif leading-relaxed animate-glitch-text" style={{ fontFamily: 'Cinzel, serif' }}>
+                    <p className="text-sm text-red-200/90 italic font-serif leading-relaxed animate-glitch-text">
                         "{log.content}"
                     </p>
                   </div>
@@ -276,11 +316,17 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
                 
                 {log.type === 'narrative' && (
                   <div className="space-y-4">
-                    <p 
+                    <div 
                       className={`text-lg md:text-xl leading-relaxed drop-shadow-md ${isPsychosis ? 'text-stone-300' : 'text-stone-200'}`} 
                       style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
-                      dangerouslySetInnerHTML={{ __html: enhancedContent.replace(/\n/g, '<br/>') }}
-                    />
+                    >
+                        {isLatest && !turn?.script ? (
+                            <TypewriterText content={enhancedContent} onComplete={scrollToBottom} />
+                        ) : (
+                            // Render previously fully typed logs normally (with formatting parsing)
+                            <span dangerouslySetInnerHTML={{ __html: enhancedContent.replace(/\n/g, '<br/>').replace(/\[\[(#[0-9a-fA-F]{6})\|(.*?)\]\]/g, '<span style="color:$1" class="font-italic tracking-wide">$2</span>') }} />
+                        )}
+                    </div>
                     <InlineMediaPreview turn={turn} />
                   </div>
                 )}

@@ -6,6 +6,17 @@ export class AudioService {
   private startTime: number = 0;
   private pausedAt: number = 0;
 
+  // --- AMBIENT DRONE ENGINE ---
+  private droneNodes: {
+    source: AudioBufferSourceNode | null;
+    filter: BiquadFilterNode | null;
+    lfo: OscillatorNode | null;
+    lfoGain: GainNode | null;
+    masterGain: GainNode | null;
+  } = { source: null, filter: null, lfo: null, lfoGain: null, masterGain: null };
+  
+  private isDronePlaying: boolean = false;
+
   constructor() {
     // Lazy initialization in getContext()
   }
@@ -35,8 +46,119 @@ export class AudioService {
   }
 
   /**
+   * Generates a buffer of Brownian noise for the ambient drone.
+   */
+  private createBrownNoise(ctx: AudioContext): AudioBuffer {
+    const bufferSize = ctx.sampleRate * 5; // 5 seconds loop
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let lastOut = 0;
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      data[i] = (lastOut + (0.02 * white)) / 1.02;
+      lastOut = data[i];
+      data[i] *= 3.5; // Compensate for gain loss
+    }
+    return buffer;
+  }
+
+  /**
+   * Starts the procedural ambient drone ("The Thrum").
+   */
+  public startDrone() {
+    if (this.isDronePlaying) return;
+    const ctx = this.getContext();
+
+    // 1. Noise Source
+    const noiseBuffer = this.createBrownNoise(ctx);
+    const droneSource = ctx.createBufferSource();
+    droneSource.buffer = noiseBuffer;
+    droneSource.loop = true;
+
+    // 2. Low Pass Filter (Muffled atmosphere)
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 150; // Deep rumble start
+
+    // 3. LFO for "Breathing" effect
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 0.1; // Slow breath (10s cycle)
+    
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 50; // Modulate filter freq by +/- 50Hz
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(filter.frequency);
+
+    // 4. Master Drone Gain
+    const droneGain = ctx.createGain();
+    droneGain.gain.value = 0.0; // Start silent, fade in
+
+    // Connect Graph: Source -> Filter -> Gain -> Destination
+    droneSource.connect(filter);
+    filter.connect(droneGain);
+    droneGain.connect(ctx.destination);
+
+    droneSource.start();
+    lfo.start();
+
+    // Fade in
+    droneGain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 5);
+
+    this.droneNodes = {
+        source: droneSource,
+        filter: filter,
+        lfo: lfo,
+        lfoGain: lfoGain,
+        masterGain: droneGain
+    };
+    this.isDronePlaying = true;
+  }
+
+  /**
+   * Modulates the drone based on game tension.
+   * @param tension 0 to 100
+   */
+  public updateDrone(tension: number) {
+      if (!this.isDronePlaying || !this.droneNodes.filter || !this.droneNodes.lfo) return;
+      
+      const ctx = this.getContext();
+      const t = Math.max(0, Math.min(100, tension)) / 100;
+
+      // Tension increases filter cutoff (brightness/harshness)
+      // Base: 100Hz -> Max: 600Hz
+      const targetFreq = 100 + (t * 500); 
+      this.droneNodes.filter.frequency.linearRampToValueAtTime(targetFreq, ctx.currentTime + 2);
+
+      // Tension increases LFO speed (breathing becomes panting)
+      // Base: 0.1Hz -> Max: 2.0Hz
+      const targetLfo = 0.1 + (t * 2.0);
+      this.droneNodes.lfo.frequency.linearRampToValueAtTime(targetLfo, ctx.currentTime + 2);
+      
+      // Slight volume boost with tension
+      const targetGain = 0.1 + (t * 0.1);
+      this.droneNodes.masterGain?.gain.linearRampToValueAtTime(targetGain, ctx.currentTime + 2);
+  }
+
+  public stopDrone() {
+      if (!this.isDronePlaying) return;
+      const ctx = this.getContext();
+      
+      // Fade out
+      this.droneNodes.masterGain?.gain.linearRampToValueAtTime(0, ctx.currentTime + 2);
+      
+      setTimeout(() => {
+          this.droneNodes.source?.stop();
+          this.droneNodes.lfo?.stop();
+          this.droneNodes.source?.disconnect();
+          this.droneNodes.masterGain?.disconnect();
+          this.isDronePlaying = false;
+      }, 2000);
+  }
+
+  /**
    * Decodes raw PCM data (Gemini format) into an AudioBuffer.
-   * This is made public for reuse in other services (e.g., mediaService.ts)
    */
   public decodePCM(base64: string): AudioBuffer {
     const ctx = this.getContext();
@@ -58,32 +180,27 @@ export class AudioService {
     this.stop(); // Ensure clean slate
     const ctx = this.getContext();
     
-    // Decode logic wrapped in try/catch for safety
     try {
         const buffer = this.decodePCM(base64Data);
 
         this.source = ctx.createBufferSource();
         this.source.buffer = buffer;
-        
-        // Apply playback rate
         this.source.playbackRate.value = playbackRate;
         
-        // Ensure gain node exists and is connected
         if (!this.gainNode) {
             this.gainNode = ctx.createGain();
             this.gainNode.connect(ctx.destination);
         }
         this.source.connect(this.gainNode);
-        
         this.gainNode.gain.value = volume;
         
         this.source.onended = onEnded;
-        this.source.start(0, this.pausedAt); // Support resume
+        this.source.start(0, this.pausedAt); 
         this.startTime = ctx.currentTime - this.pausedAt;
         
     } catch (e) {
         console.error("Audio playback error:", e);
-        onEnded(); // Trigger end callback to avoid UI hanging
+        onEnded(); 
     }
   }
 
@@ -92,9 +209,7 @@ export class AudioService {
       try {
         this.source.stop();
         this.source.disconnect();
-      } catch (e) {
-        // Ignore errors if already stopped
-      }
+      } catch (e) {}
       this.source = null;
     }
     this.pausedAt = 0;
@@ -103,11 +218,7 @@ export class AudioService {
   public pause() {
     if (this.context && this.source) {
       this.pausedAt = this.context.currentTime - this.startTime;
-      try {
-        this.source.stop();
-      } catch (e) {
-        // Ignore
-      }
+      try { this.source.stop(); } catch (e) {}
       this.source = null;
     }
   }
@@ -118,7 +229,6 @@ export class AudioService {
     }
   }
 
-  // Returns precise current time for UI animation
   public getCurrentTime(): number {
     if (!this.context || !this.source) return this.pausedAt;
     return this.context.currentTime - this.startTime;

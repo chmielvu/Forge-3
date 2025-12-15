@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { YandereLedger } from '../types';
 
 interface Props {
@@ -8,13 +8,27 @@ interface Props {
 }
 
 const DistortionLayer: React.FC<Props> = ({ children, ledger }) => {
-  // If ledger is missing, render children without effects to prevent crash
   if (!ledger) {
     return <div className="relative w-full h-full overflow-hidden">{children}</div>;
   }
 
   const trauma = ledger.traumaLevel || 0;
   const shame = ledger.shamePainAbyssLevel || 0;
+  const [glitchActive, setGlitchActive] = useState(false);
+
+  // Trigger Somatic Feedback (Glitch) on trauma spikes or high levels
+  useEffect(() => {
+      if (trauma > 70) {
+          // Random glitches at high trauma
+          const interval = setInterval(() => {
+              if (Math.random() > 0.7) {
+                  setGlitchActive(true);
+                  setTimeout(() => setGlitchActive(false), 150);
+              }
+          }, 3000);
+          return () => clearInterval(interval);
+      }
+  }, [trauma]);
 
   // Dynamic styles based on stats
   const blurAmount = Math.max(0, (trauma - 50) / 20); // Starts blurring after 50 trauma
@@ -25,6 +39,11 @@ const DistortionLayer: React.FC<Props> = ({ children, ledger }) => {
     filter: `blur(${blurAmount}px) saturate(${saturateAmount}%) contrast(${contrastAmount}%)`,
     transition: 'filter 2s ease-in-out'
   };
+
+  const glitchStyle: React.CSSProperties = glitchActive ? {
+      transform: `translate(${Math.random() * 4 - 2}px, ${Math.random() * 4 - 2}px) scale(1.01)`,
+      filter: 'hue-rotate(90deg) contrast(200%)'
+  } : {};
 
   return (
     <div className="relative w-full h-full overflow-hidden">
@@ -50,10 +69,10 @@ const DistortionLayer: React.FC<Props> = ({ children, ledger }) => {
         </svg>
       )}
       
-      {/* Shake Animation Wrapper */}
+      {/* Main Content with Glitch & Shake */}
       <div 
-        style={containerStyle}
-        className={`w-full h-full ${trauma > 80 ? 'animate-[pulse-slow_0.2s_infinite]' : ''}`}
+        style={{ ...containerStyle, ...glitchStyle }}
+        className={`w-full h-full transition-transform duration-75 ${trauma > 80 ? 'animate-[pulse-slow_0.2s_infinite]' : ''}`}
       >
         {children}
       </div>

@@ -24,7 +24,8 @@ export const THEMATIC_ENGINES = {
       "malchik", "drama queen", "game", "prize", "toy", "gentle", "shh", "unravel",
       "therapy", "fixing", "cleansing", "repair", "purification", "salve", "trust", 
       "lesson", "protection", "shrimp", "worm", "twig", "soft-boiled eggs", 
-      "vienna sausage", "stress ball", "pin cushion", "grape", "fragility", "the grapes"
+      "vienna sausage", "stress ball", "pin cushion", "grape", "fragility", "the grapes",
+      "yaytsa"
     ],
     archetype_focus: "The Siren (Prefect Petra/Calista/Anya)"
   },
