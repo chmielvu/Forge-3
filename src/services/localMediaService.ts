@@ -1,20 +1,12 @@
-
 // Worker Instance Singleton
 let mediaWorker: Worker | null = null;
 const pendingRequests = new Map<string, { resolve: Function, reject: Function }>();
 
 function getWorker() {
     if (!mediaWorker) {
-        // Safe check for import.meta.url availability
-        const metaUrl = import.meta.url;
-        if (!metaUrl) {
-            console.error("[LocalMediaService] Worker initialization failed: import.meta.url is undefined");
-            return null;
-        }
-
         try {
-            // Initialize worker using standard Vite syntax
-            mediaWorker = new Worker(new URL('../workers/media.worker.ts', metaUrl), { type: 'module' });
+            // Initialize worker using Vite's explicit worker import with URL constructor
+            mediaWorker = new Worker(new URL('../workers/media.worker.ts', import.meta.url));
             
             mediaWorker.onmessage = (e) => {
                 const { type, id, payload, error } = e.data;
@@ -188,7 +180,10 @@ export async function generateLocalImage(prompt: string): Promise<string> {
 
 export async function generateLocalSpeech(text: string): Promise<{ audioData: string; duration: number }> {
     const worker = getWorker();
-    if (!worker) return { audioData: "", duration: 0 };
+    if (!worker) {
+        console.warn("[LocalMediaService] Worker unavailable for speech generation. Returning empty audio data.");
+        return { audioData: "", duration: 0 };
+    }
 
     try {
         const data = await dispatchToWorker('GENERATE_SPEECH', { text });
@@ -198,6 +193,7 @@ export async function generateLocalSpeech(text: string): Promise<{ audioData: st
             duration: data.audio.length / data.sampling_rate
         };
     } catch (e) {
+        console.warn("[LocalMediaService] Local speech generation failed, returning empty audio data.", e);
         return { audioData: "", duration: 0 };
     }
 }
@@ -219,6 +215,7 @@ function encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
   writeString(view, 0, 'RIFF');
   view.setUint32(4, 36 + samples.length * 2, true);
   writeString(view, 8, 'WAVE');
+  // Fix: Use writeString to write the 'fmt ' chunk ID
   writeString(view, 12, 'fmt ');
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);

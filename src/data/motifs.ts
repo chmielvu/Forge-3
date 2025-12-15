@@ -84,7 +84,13 @@ export const FORGE_MOTIFS = {
   EtymologicalInversion: "Symbolic hand-on-thigh oath inverted, lines showing seizure of vulnerability, testis as forced testimony locus.",
   WeaponizedNurture: "Soft, caring gestures with underlying cruelty, velvet textures over iron restraints, evoking conflicting signals.",
   MoralCallous: "Faculty figures with hardening lines over time, eyes shifting from empathetic to assessing, symbolizing corruption of innocence.",
-  PredatoryGaze: "Eyes locked downward, rim-lit to emphasize fixation on vulnerability, inverting male gaze to matriarchal scrutiny."
+  PredatoryGaze: "Eyes locked downward, rim-lit to emphasize fixation on vulnerability, inverting male gaze to matriarchal scrutiny.",
+
+  // --- Missing Motifs added for visualCoherenceEngine.ts compatibility ---
+  OntologicalVertigo: "Dutch angle, distorted perspective. The architecture of the room seems to twist. The Subject clutching the floor as if falling.",
+  SomaticBetrayal: "Macro shot of flushed skin, sweat beads, and dilated pupils. Visual evidence of unwilling physiological arousal or terror.",
+  ToxicLullaby: "Intimate close-up. Lips whispering into an ear. A tear track catching the light. The 'Whump' aesthetic of vulnerable comfort.",
+  HealersBind: "Soft, manicured hands applying a stinging salve to a bruise. The juxtaposition of care and recent violence. Warm candlelight battling cold shadows."
 };
 
 export const ARCHETYPE_VISUAL_MAP: Record<string, { mood: string; physique: string; face: string; attire: string; visualDNA?: string; somaticSignature?: string; idleProp?: string; } | undefined> = {
@@ -104,7 +110,7 @@ export const ARCHETYPE_VISUAL_MAP: Record<string, { mood: string; physique: stri
     face: "ash-blonde braid, icy blue eyes, pale angular face", 
     attire: "stark lab attire, cream silk blouse, high-waisted trousers",
     visualDNA: "Bookish, severe, always carrying a data slate. Dark Academia aesthetic, clinical detachment, icy blue eyes.",
-    somaticSignature: "Steady, deft hands that move with unnerving precision. Neutral, observational lips. Body language like a surgeon.",
+    somaticSignature: "Steady, deft hands that move with unnerving precision. Neutral, observational lips. Body language like a surgeon about to make an incision.",
     idleProp: "Stylus tapping on data slate, adjusting rimless glasses"
   },
   'The Inquisitor': { 
@@ -113,7 +119,8 @@ export const ARCHETYPE_VISUAL_MAP: Record<string, { mood: string; physique: stri
     face: "wild auburn hair, cruel green eyes, predatory grin", 
     attire: "cropped tactical jacket, tight leather combat trousers, heavy boots",
     visualDNA: "Feral, athletic, coiled, predatory grin, scarred midriff, tight leather. Visceral horror.",
-    somaticSignature: "Muscles tense like a spring, darting eyes, restless energy, body language like a coiled viper.",
+    somaticSignature: "Muscles tense like a spring, darting eyes, restless energy, body language like a coiled viper."
+,
     idleProp: "Dagger, lit cigarette, leather whip"
   },
   'The Confessor': { 
@@ -121,8 +128,8 @@ export const ARCHETYPE_VISUAL_MAP: Record<string, { mood: string; physique: stri
     physique: "voluptuous, enveloping", 
     face: "olive skin, sultry brown eyes, heavy-lidded gaze", 
     attire: "Victorian-inspired lace and velvet, sapphire bodice, provocative",
-    visualDNA: "Soft curves, lace, velvet, alluring, false sanctuary, knowing smirk. Weaponized Nurturing.",
-    somaticSignature: "Languid grace, movements like a predator in silk, body language designed to invite trust.",
+    visualDNA: "Soft curves, lace, velvet, alluring, false sanctuary, heavy-lidded eyes, knowing smirk. Weaponized Nurturing.",
+    somaticSignature: "Languid grace, movements like a predator in silk, body language designed to invite trust and suggest maternal gentleness.",
     idleProp: "Cup of poppy-seed tea, subtly toying with ornate jewelry"
   },
   'The Custodian': { // Replaces/Augments 'The Nurse' or 'The Healer'
@@ -142,7 +149,7 @@ export const ARCHETYPE_VISUAL_MAP: Record<string, { mood: string; physique: stri
     face: "stern conviction, flinching eyes (internal conflict)", 
     attire: "immaculate Dark Academia uniform, blazer, pleated skirt",
     visualDNA: "Militant, severe, perfect posture. Dark Academia uniform, stern conviction, flinching eyes.",
-    somaticSignature: "Brittle rigidity in posture, jaw clenched from internal conflict, hands subtly trembling.",
+    somaticSignature: "Brittle rigidity in posture, jaw clenched from internal conflict, hands subtly trembling beneath clasped grip.",
     idleProp: "Clutching Codex, perfectly clean clipboard"
   },
   'The Siren': { 
@@ -160,8 +167,8 @@ export const ARCHETYPE_VISUAL_MAP: Record<string, { mood: string; physique: stri
     face: "sanpaku eyes, cold demeanor masking manic heat", 
     attire: "edgy style, modified uniform, red ribbon choker",
     visualDNA: "Unsettling genius, edgy style, cold demeanor, obsessive gaze. Yandere fusion.",
-    somaticSignature: "Clinging gestures, sudden jerky movements, blush of feverish obsession.",
-    idleProp: "Lock of hair, small needle, personal token of the Subject"
+    somaticSignature: "Clinging gestures, sudden, jerky movements in 'Yan' mode. Blush of feverish obsession on cheeks. Obsessive stare.",
+    idleProp: "Fidgets neurotically with a lock of hair, a ribbon choker, or a small, gleaming needle"
   },
   'The Contender': { // Replaces 'The Athlete'
     mood: "disciplined, ambitious, competitive", 
@@ -178,8 +185,8 @@ export const ARCHETYPE_VISUAL_MAP: Record<string, { mood: string; physique: stri
     face: "neutral mask, intense eyes when unseen", 
     attire: "standard uniform worn loosely, practical layers",
     visualDNA: "Chameleon, blending in, unassuming, hidden intensity. The Gray Man.",
-    somaticSignature: "Eyes darting to exits, smoker's slouch, clenched jaw (public), urgent gestures (private).",
-    idleProp: "Hidden note, lit cigarette (hidden)"
+    somaticSignature: "Eyes darting to exits, smoker's slouch, clenched jaw (public), urgent gestures in private (dropping a key).",
+    idleProp: "Lit cigarette (often exhaling contemptuously), hidden key or folded note"
   },
 
   // --- Subject Archetypes (The Raw Material - Vulnerable/Worn) ---
@@ -188,5 +195,3 @@ export const ARCHETYPE_VISUAL_MAP: Record<string, { mood: string; physique: stri
   'The Silent Calculator': { mood: "blank, watchful, internal", physique: "average, still", face: "neutral mask, recording eyes", attire: "surgical neatness, shadows" },
   'The Fragile Bird': { mood: "terrified, trembling, fragile", physique: "small, trembling", face: "large tear-filled eyes, pale", attire: "loose hanging uniform, clutching" }
 };
-
-export type MotifKey = keyof typeof FORGE_MOTIFS;

@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { KGotController } from "../controllers/KGotController";
 import { DIRECTOR_SYSTEM_INSTRUCTIONS } from "../config/directorCore";
@@ -122,10 +121,19 @@ ${history.slice(-5).join('\n')}
 
 === TASK ===
 Generate the JSON response strictly adhering to the schema.
+
 1. **THINK**: Plan the scene using the "Rhythm of Escalation" and retrieved memory evidence.
-2. **NARRATE**: Use the **NARRATIVE TEXTURE** guidelines. Focus on SOMATIC SENSATION (taste, smell, internal collapse). No generic emotions.
-3. **SOMATIC STATE**: Populate the 'somatic_state' field to trigger audio/visual feedback for visceral moments (e.g., 'impact_sensation', 'internal_collapse').
-4. **UPDATE**: Modify the YandereLedger.
+2. **NARRATE**: Use the **NARRATIVE TEXTURE** guidelines. Focus on SOMATIC SENSATION.
+3. **SOMATIC STATE**: Populate the 'somatic_state' field.
+4. **MEMORY & RELATIONAL STORAGE (CRITICAL)**:
+   You are the Co-Writer. You MUST store internal state changes using 'kgot_mutations':
+   - If an agent is insulted or defied -> 'update_grudge' (+10 to +30).
+   - If an agent is obeyed or manipulated -> 'update_relationship' (Trust/Favor).
+   - If a significant plot event occurs -> 'add_memory' (Describe the event clearly).
+   - If the player is injured -> 'add_injury'.
+   *DO NOT leave the graph static. Every turn must impact the web of relationships.*
+
+5. **UPDATE**: Modify the YandereLedger.
 `;
 
   // 5. EXECUTE FLASH-LITE (New SDK Syntax)

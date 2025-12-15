@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useRef, useEffect, useState, useMemo, Suspense } from 'react';
@@ -13,13 +12,23 @@ interface Props {
 }
 
 const NODE_COLORS = {
-  SUBJECT: '#f59e0b', // Amber-500 (Player/Victims)
-  FACULTY: '#881337', // Rose-900 (The Oppressors)
-  PREFECT: '#10b981', // Emerald-500 (The Enforcers)
+  SUBJECT: '#f59e0b', // Amber-500
+  FACULTY: '#881337', // Rose-900
+  PREFECT: '#10b981', // Emerald-500
   LOCATION: '#3b82f6', // Blue-500
   EVENT: '#eab308',   // Yellow-500
   CONCEPT: '#a855f7', // Purple-500
-  ENTITY: '#ef4444',  // Red-500 (Fallback)
+  ENTITY: '#ef4444',  // Red-500
+};
+
+const EDGE_COLORS: Record<string, string> = {
+    'GRUDGE': '#ef4444', // Red-500
+    'OBSESSION': '#a855f7', // Purple-500
+    'TRAUMA_BONDS': '#db2777', // Pink-600
+    'ALLIANCE': '#3b82f6', // Blue-500
+    'OWNS_SOUL': '#991b1b', // Red-800
+    'HUNTS_RIVAL': '#f97316', // Orange-500
+    'RELATIONSHIP': '#475569' // Slate-600 (Default)
 };
 
 const NetworkGraph: React.FC<Props> = ({ graphData, onNodeClick }) => {
@@ -48,23 +57,29 @@ const NetworkGraph: React.FC<Props> = ({ graphData, onNodeClick }) => {
       id: n.id,
       label: n.label,
       group: n.type,
-      val: n.type === 'FACULTY' ? 30 : n.type === 'SUBJECT' ? 20 : 10, // Size hierarchy
+      val: n.type === 'FACULTY' ? 30 : n.type === 'SUBJECT' ? 20 : 10,
       color: NODE_COLORS[n.type as keyof typeof NODE_COLORS] || '#78716c'
     }));
 
-    const links = graphData.edges.map((e: any) => ({
-      source: e.source,
-      target: e.target,
-      name: e.label,
-      color: e.weight > 0.7 ? '#ef4444' : '#475569', // Red for high tension/weight
-      width: e.weight * 2
-    }));
+    const links = graphData.edges.map((e: any) => {
+        // Fallback or explicit type color
+        let color = EDGE_COLORS[e.type] || EDGE_COLORS[e.label.toUpperCase().replace(/\s/g, '_')] || '#475569';
+        if (e.weight > 0.8 && color === '#475569') color = '#e2e8f0'; // High weight generic edges get brighter
+
+        return {
+            source: e.source,
+            target: e.target,
+            name: e.label,
+            color: color,
+            width: Math.max(1, e.weight * 3)
+        };
+    });
 
     return { nodes, links };
   }, [graphData]);
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-[#020617] border border-[#1e293b] rounded-sm overflow-hidden relative">
+    <div ref={containerRef} className="w-full h-full bg-[#020617] border border-[#1e293b] rounded-sm overflow-hidden relative group">
       {dimensions.width > 0 && (
         <Suspense fallback={<div className="flex items-center justify-center h-full text-xs text-stone-500 font-mono">INITIALIZING NEURO-SYMBOLIC MATRIX...</div>}>
           <ForceGraph2D
@@ -79,14 +94,22 @@ const NetworkGraph: React.FC<Props> = ({ graphData, onNodeClick }) => {
             linkDirectionalArrowLength={3.5}
             linkDirectionalArrowRelPos={1}
             linkCurvature={0.2}
-            backgroundColor="#020617" // Matches Forge Black
-            d3VelocityDecay={0.4} // Adds "weight" to the physics
+            backgroundColor="#020617"
+            d3VelocityDecay={0.4}
             cooldownTicks={100}
             onNodeClick={onNodeClick}
-            enableNodeDrag={false} // Lock nodes for stability or enable if preferred
+            enableNodeDrag={false} 
           />
         </Suspense>
       )}
+      
+      {/* Interactive Legend Overlay */}
+      <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-sm border border-stone-800 p-2 rounded-sm text-[9px] font-mono text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <div className="flex items-center gap-2 mb-1"><span className="w-2 h-2 rounded-full bg-[#ef4444]"></span> GRUDGE</div>
+          <div className="flex items-center gap-2 mb-1"><span className="w-2 h-2 rounded-full bg-[#a855f7]"></span> OBSESSION</div>
+          <div className="flex items-center gap-2 mb-1"><span className="w-2 h-2 rounded-full bg-[#db2777]"></span> TRAUMA BOND</div>
+          <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#3b82f6]"></span> ALLIANCE</div>
+      </div>
     </div>
   );
 };

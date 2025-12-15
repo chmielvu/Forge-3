@@ -1,11 +1,20 @@
-
 import type { KGotCore } from './core';
 
 let worker: Worker | null = null;
 
-function getWorker(): Worker {
+function getWorker(): Worker | null {
   if (!worker) {
-    worker = new Worker(new URL('./layout.worker.ts', import.meta.url), { type: 'module' });
+    try {
+        // Use new URL(..., import.meta.url) for reliable worker loading in Vite
+        worker = new Worker(new URL('./layout.worker.ts', import.meta.url));
+        
+        worker.onerror = (e) => {
+            console.error("[Layout] Worker error:", e);
+        };
+    } catch (e) {
+        console.error("[Layout] Failed to initialize layout worker:", e);
+        return null;
+    }
   }
   return worker;
 }
@@ -29,6 +38,13 @@ export async function runLayoutAsync(core: KGotCore, iterations = 50): Promise<v
 
   return new Promise((resolve, reject) => {
     const w = getWorker();
+    
+    if (!w) {
+        console.warn("[Layout] Worker not available, skipping layout.");
+        resolve(); // resolve gracefully to not block app
+        return;
+    }
+
     const handler = (e: MessageEvent) => {
       if (e.data.type === 'done') {
         const positions = e.data.positions;

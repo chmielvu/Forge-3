@@ -315,8 +315,8 @@ export class AudioService {
   }
 
   public setPlaybackRate(val: number) {
-    if (this.source) {
-        this.source.playbackRate.value = val;
+    if (this.source && this.context) {
+        this.source.playbackRate.setValueAtTime(val, this.context.currentTime);
     }
   }
 

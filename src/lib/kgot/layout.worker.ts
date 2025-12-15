@@ -1,4 +1,3 @@
-
 import Graph from 'graphology';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
 
@@ -6,7 +5,7 @@ self.onmessage = (e) => {
   const { graph: exported, iterations = 50 } = e.data;
   
   // Rehydrate graph from serialized data
-  const graph = new Graph();
+  const graph = new Graph({ multi: true, type: 'directed' });
   if (exported.nodes) {
       Object.keys(exported.nodes).forEach(k => {
           graph.addNode(k, exported.nodes[k]);

@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, Brain, Zap, Image as ImageIcon, MessageCircle, Terminal } from 'lucide-react';
+import { Activity, Brain, Zap, Image as ImageIcon, MessageCircle, Terminal, Mic } from 'lucide-react';
 import { LogEntry, YandereLedger, MediaStatus, MultimodalTurn, ScriptItem } from '../types';
 import { useGameStore } from '../state/gameStore';
 import { 
@@ -154,7 +154,7 @@ const ScriptRenderer: React.FC<{
     }, []);
 
     return (
-        <div className="space-y-4 my-4">
+        <div className="space-y-6 my-4 pl-2">
             {script.map((item, idx) => {
                 const isActive = audioAlignment?.some(
                     a => a.index === idx && currentTime >= a.start && currentTime <= a.end
@@ -164,14 +164,17 @@ const ScriptRenderer: React.FC<{
                 return (
                     <div 
                         key={idx} 
-                        className={`transition-all duration-300 ${isActive ? 'opacity-100 scale-[1.01]' : 'opacity-80'}`}
+                        className={`transition-all duration-300 ease-out transform ${isActive ? 'opacity-100 scale-[1.02] translate-x-1' : 'opacity-70 scale-100'}`}
                     >
                         {item.speaker !== 'Narrator' && (
-                            <span className="text-[10px] uppercase font-mono tracking-widest opacity-50 block mb-1">
-                                {item.speaker}
-                            </span>
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[9px] uppercase font-mono tracking-widest text-stone-500">
+                                    {item.speaker}
+                                </span>
+                                {isActive && <Mic size={8} className="text-red-500 animate-pulse" />}
+                            </div>
                         )}
-                        <p className={`${style} ${isActive ? 'text-shadow-glow' : ''}`}>
+                        <p className={`${style} ${isActive ? 'brightness-125 drop-shadow-md' : ''}`}>
                             {item.text}
                         </p>
                     </div>
@@ -189,16 +192,20 @@ const InlineMediaPreview: React.FC<{ turn?: MultimodalTurn }> = ({ turn }) => {
   if (!isImageReady) return null;
 
   return (
-    <div className="mt-4 mb-2 animate-fade-in group relative overflow-hidden rounded-sm border border-stone-800 bg-stone-950/50 max-w-sm">
+    <div className="mt-6 mb-4 animate-fade-in group relative overflow-hidden rounded-sm border border-stone-800 bg-stone-950/50 max-w-md mx-auto shadow-2xl">
       <div className="relative aspect-video">
         <img 
           src={turn.imageData?.startsWith('data:') ? turn.imageData : `data:image/jpeg;base64,${turn.imageData}`} 
           alt="Narrative Visualization" 
-          className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500 hover:scale-105 transform duration-700 ease-in-out"
+          className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-700 hover:scale-105 transform ease-in-out"
         />
-        <div className="absolute bottom-2 right-2 bg-black/60 px-2 py-1 flex items-center gap-1 rounded-sm border border-white/10 backdrop-blur-sm">
-          <ImageIcon size={10} className="text-stone-300" />
-          <span className="text-[9px] font-mono text-stone-300 uppercase tracking-wider">Visual Record</span>
+        
+        {/* Overlay Vignette */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 pointer-events-none" />
+
+        <div className="absolute bottom-3 right-3 bg-black/70 px-3 py-1.5 flex items-center gap-2 rounded-sm border border-white/10 backdrop-blur-md">
+          <ImageIcon size={12} className="text-stone-300" />
+          <span className="text-[10px] font-mono text-stone-300 uppercase tracking-widest">Visual Log</span>
         </div>
       </div>
     </div>
@@ -226,9 +233,12 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
   const scrollToBottom = () => {
     if (containerRef.current) {
         const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-        const isNearBottom = scrollHeight - scrollTop - clientHeight < 200;
+        // If user is near bottom or it's a new message, scroll
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 300;
         if (isNearBottom || thinking) {
-             bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+             setTimeout(() => {
+                 bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+             }, 100);
         }
     }
   };
@@ -266,7 +276,7 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
     <div className="flex h-full w-full gap-4 md:gap-8 font-serif relative">
       {showNarratorIndicator && (
         <div 
-          className="absolute top-0 right-0 z-50 px-3 py-2 rounded-sm border animate-fade-in shadow-2xl backdrop-blur-md transition-all duration-500"
+          className="absolute top-4 right-4 z-50 px-4 py-2 rounded-sm border animate-fade-in shadow-2xl backdrop-blur-md transition-all duration-500"
           style={{
             backgroundColor: 'rgba(5, 5, 5, 0.95)',
             borderColor: narratorVoice.borderColor,
@@ -274,81 +284,81 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
             borderLeftWidth: '3px'
           }}
         >
-          <div className="flex items-center gap-2 font-mono text-[9px] mb-1 uppercase tracking-widest">
+          <div className="flex items-center gap-2 font-mono text-[9px] mb-1 uppercase tracking-widest opacity-80">
             <MessageCircle size={10} />
-            <span>Voice: {narratorMode.replace(/_/g, ' ')}</span>
+            <span>Voice Shift Detected</span>
           </div>
+          <span className="font-display text-xs tracking-wide uppercase font-bold">{narratorMode.replace(/_/g, ' ')}</span>
         </div>
       )}
 
-      <div ref={containerRef} className="flex-1 overflow-y-auto custom-scrollbar pr-2 relative scroll-smooth">
-        <div className="space-y-6 pb-2 min-h-full flex flex-col justify-end">
+      <div ref={containerRef} className="flex-1 overflow-y-auto custom-scrollbar pr-2 relative scroll-smooth mask-linear-fade">
+        <div className="space-y-8 pb-4 min-h-full flex flex-col justify-end">
           {logs.map((log, idx) => {
             const turn = multimodalTimeline.find(t => t.id === log.id);
             const isLatest = idx === logs.length - 1;
             
-            // Prefer script rendering if available
-            if (log.type === 'narrative' && turn?.script && turn.script.length > 0) {
-                return (
-                    <div key={log.id} className="animate-fade-in">
-                        <ScriptRenderer script={turn.script} audioAlignment={turn.audioAlignment} />
-                        <InlineMediaPreview turn={turn} />
-                    </div>
-                );
-            }
+            const isPsychosis = log.type === 'psychosis' || (log.type === 'narrative' && ledger.traumaLevel > 80);
+            
+            // PRIORITY CHECK: Script property existence
+            const hasScript = log.type === 'narrative' && turn?.script && turn.script.length > 0;
 
-            // Fallback / Legacy Rendering
-            const enhancedContent = log.type === 'narrative' 
+            // Fallback content prep if no script
+            const enhancedContent = !hasScript && log.type === 'narrative' 
               ? injectNarratorCommentary(log.content, narratorMode, ledger)
               : log.content;
-
-            const isPsychosis = log.type === 'psychosis' || (log.type === 'narrative' && ledger.traumaLevel > 80);
 
             return (
               <div key={log.id} className={`prose prose-invert max-w-none animate-fade-in ${isPsychosis ? 'relative' : ''}`}>
                 {isPsychosis && log.type === 'narrative' && (
-                    <div className="absolute -inset-1 opacity-20 bg-red-900/10 blur-sm pointer-events-none animate-pulse"></div>
+                    <div className="absolute -inset-4 opacity-10 bg-red-900/20 blur-xl pointer-events-none animate-pulse"></div>
                 )}
 
                 {log.type === 'system' && (
-                  <div className="font-mono text-[9px] text-stone-500 uppercase border-l border-stone-800 pl-3 py-1 tracking-wider opacity-70">
-                    <Terminal size={10} className="inline mr-2" />
+                  <div className="font-mono text-[9px] text-stone-500 uppercase border-l border-stone-800 pl-3 py-1 tracking-wider opacity-60 hover:opacity-100 transition-opacity">
+                    <Terminal size={10} className="inline mr-2 text-stone-600" />
                     {log.content}
                   </div>
                 )}
                 
                 {log.type === 'thought' && (
-                  <div className="flex gap-2 items-center text-[10px] font-mono text-cyan-800/80 pl-1">
-                    <Brain size={10} />
-                    <span>{log.content}</span>
+                  <div className="flex gap-2 items-start text-[10px] font-mono text-cyan-800/80 pl-2 border-l border-cyan-900/20 py-1">
+                    <Brain size={12} className="mt-0.5 shrink-0" />
+                    <span className="leading-tight">{log.content}</span>
                   </div>
                 )}
 
                 {log.type === 'psychosis' && (
-                  <div className="relative overflow-hidden py-3 px-4 border-l-2 border-red-900 bg-red-950/20 my-2 shadow-[0_0_10px_rgba(220,38,38,0.1)]">
-                    <div className="flex items-center gap-2 text-red-400 font-mono text-[9px] tracking-widest mb-1 opacity-80">
+                  <div className="relative overflow-hidden py-4 px-6 border-l-2 border-red-900 bg-red-950/10 my-4 shadow-[0_0_15px_rgba(220,38,38,0.05)]">
+                    <div className="flex items-center gap-2 text-red-500 font-mono text-[9px] tracking-[0.2em] mb-2 opacity-80">
                         <Zap size={10} className="animate-pulse" />
-                        <span>ABYSS_NARRATOR::INTERVENTION</span>
+                        <span>NEURAL_INTERRUPTION</span>
                     </div>
-                    <p className="text-sm text-red-200/90 italic font-serif leading-relaxed animate-glitch-text">
+                    <p className="text-base text-red-200/90 italic font-serif leading-relaxed animate-glitch-text drop-shadow-sm">
                         "{log.content}"
                     </p>
                   </div>
                 )}
                 
                 {log.type === 'narrative' && (
-                  <div className="space-y-4">
-                    <div 
-                      className={`text-lg md:text-xl leading-relaxed drop-shadow-md ${isPsychosis ? 'text-stone-300' : 'text-stone-200'}`} 
-                      style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
-                    >
-                        {isLatest && !turn?.script ? (
-                            <TypewriterText content={enhancedContent} onComplete={scrollToBottom} />
-                        ) : (
-                            // Render previously fully typed logs normally (with formatting parsing)
-                            <span dangerouslySetInnerHTML={{ __html: enhancedContent.replace(/\n/g, '<br/>').replace(/\[\[(#[0-9a-fA-F]{6})\|(.*?)\]\]/g, '<span style="color:$1" class="font-italic tracking-wide">$2</span>') }} />
-                        )}
-                    </div>
+                  <div className="space-y-6">
+                    {hasScript ? (
+                        // 1. Script Rendering (Prioritized)
+                        <ScriptRenderer script={turn!.script!} audioAlignment={turn?.audioAlignment} />
+                    ) : (
+                        // 2. Standard Text Rendering (Fallback)
+                        <div 
+                          className={`text-lg md:text-xl leading-relaxed drop-shadow-md ${isPsychosis ? 'text-stone-300 font-bold' : 'text-stone-200'}`} 
+                          style={{ textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}
+                        >
+                            {isLatest ? (
+                                <TypewriterText content={enhancedContent} onComplete={scrollToBottom} />
+                            ) : (
+                                <span dangerouslySetInnerHTML={{ __html: enhancedContent.replace(/\n/g, '<br/>').replace(/\[\[(#[0-9a-fA-F]{6})\|(.*?)\]\]/g, '<span style="color:$1" class="font-italic tracking-wide text-shadow-glow">$2</span>') }} />
+                            )}
+                        </div>
+                    )}
+                    {/* Media Preview always rendered after text/script */}
                     <InlineMediaPreview turn={turn} />
                   </div>
                 )}
@@ -358,7 +368,7 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
 
           {thinking && <DiegeticLoader />}
           
-          <div ref={bottomRef} className="h-2" />
+          <div ref={bottomRef} className="h-4" />
         </div>
       </div>
     </div>

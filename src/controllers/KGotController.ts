@@ -1,4 +1,3 @@
-
 import { KnowledgeGraph, KGotNode, KGotEdge } from '../lib/types/kgot';
 import { UnifiedDirectorOutput } from '../lib/schemas/unifiedDirectorSchema';
 import { YandereLedger, PrefectDNA } from '../types';
@@ -7,7 +6,7 @@ import { applyMutations } from '../lib/kgot/mutations';
 import { fuzzyResolve } from '../lib/kgot/search';
 import { runLayoutAsync } from '../lib/kgot/layout';
 import { updateCentrality, detectCommunities, calculateDominancePath, pruneGraph } from '../lib/kgot/metrics';
-import { INITIAL_LEDGER } from '../constants';
+import { INITIAL_LEDGER, INITIAL_NODES, INITIAL_LINKS } from '../constants';
 import { GraphRAGIndexer } from '../lib/kgot/graphrag';
 import { KGOT_CONFIG } from '../config/behaviorTuning';
 import { applyDecayMutation } from '../lib/kgot/decay-mut';
@@ -30,7 +29,7 @@ export class KGotController {
   constructor(initialGraph: KnowledgeGraph) {
     this.core = new KGotCore(initialGraph);
     
-    // Auto-bootstrap if empty
+    // Auto-bootstrap if empty (Initial Session Start)
     if (Object.keys(this.core.getGraph().nodes).length === 0) {
       this.initializeCanonicalNodes();
     }
@@ -110,17 +109,47 @@ export class KGotController {
   }
 
   public initializeCanonicalNodes(): void {
-    const nodes = [
-        { id: "Subject_84", type: "SUBJECT", label: "Subject 84", attributes: { ledger: INITIAL_LEDGER, currentLocation: "The Calibration Chamber" } },
-        { id: "FACULTY_SELENE", type: "FACULTY", label: "Provost Selene", attributes: {} },
-        { id: "loc_calibration", type: "LOCATION", label: "The Calibration Chamber", attributes: {} }
-    ];
+    const muts: any[] = [];
+
+    // 1. Add Nodes from Constants
+    INITIAL_NODES.forEach(node => {
+        muts.push({
+            operation: 'add_node',
+            node: {
+                id: node.id,
+                type: node.group.toUpperCase(), // Map 'faculty' -> 'FACULTY'
+                label: node.label,
+                attributes: {
+                    ...node,
+                    // Ensure Ledger is attached to Subject
+                    ledger: node.id === 'Subject_84' ? INITIAL_LEDGER : undefined
+                }
+            }
+        });
+    });
+
+    // 2. Add Links from Constants
+    INITIAL_LINKS.forEach(link => {
+        muts.push({
+            operation: 'add_edge',
+            edge: {
+                source: link.source,
+                target: link.target,
+                type: link.relation.toUpperCase(), // Map 'trauma_bonds' -> 'TRAUMA_BONDS'
+                label: link.relation,
+                weight: (link.weight || 5) / 10, // Normalize 0-10 to 0.0-1.0
+                meta: {
+                    tension: link.weight
+                }
+            }
+        });
+    });
     
     // Apply initial mutations with turn 0
-    applyMutations(this.core, nodes.map(n => ({
-        operation: 'add_node',
-        node: n
-    })), 0);
+    applyMutations(this.core, muts, 0);
+    
+    // Initial Layout Calculation
+    runLayoutAsync(this.core, 100);
   }
 
   // --- Mutation Handling ---

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useGameStore } from '../state/gameStore';
 import { Play, Pause, FastForward, Rewind, Volume2, VolumeX, Loader2, RefreshCw, Speaker, Power, ImageOff, MicOff } from 'lucide-react';
@@ -65,12 +64,8 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
   }, [currentTurnId]);
 
   useEffect(() => {
-    if (currentTurn && currentTurn.audioStatus === MediaStatus.ready && audioPlayback.autoAdvance && audioPlayback.hasUserInteraction) {
-      if (audioPlayback.currentPlayingTurnId !== currentTurn.id) {
-        playTurn(currentTurn.id);
-      }
-    }
-  }, [currentTurn, audioPlayback.autoAdvance, audioPlayback.hasUserInteraction, audioPlayback.currentPlayingTurnId, playTurn]);
+    // Removed redundant auto-advance logic. Rely on multimodalSlice.ts logic inside playTurn's onEnded callback.
+  }, []);
 
   const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const vol = parseFloat(e.target.value);

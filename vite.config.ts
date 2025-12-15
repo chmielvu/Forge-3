@@ -16,9 +16,8 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
-        // Removing explicit 'buffer' and 'long' aliases to allow standard node module resolution
-        // via optimizeDeps or installed packages.
+        // Removed explicit '@' alias to prevent module resolution conflicts with workers.
+        // If other aliases are needed, they should be added carefully or configured in tsconfig.json.
       },
     },
     optimizeDeps: {

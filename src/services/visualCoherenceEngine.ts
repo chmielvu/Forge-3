@@ -107,6 +107,7 @@ class VisualCoherenceEngine {
         targetArchetype = target;
     }
 
+    // Archetype-specific camera dynamics
     if (targetArchetype) {
         const visualArchetypeData = ARCHETYPE_VISUAL_MAP[targetArchetype];
         if (visualArchetypeData?.visualDNA?.includes("feline eyes") || visualArchetypeData?.visualDNA?.includes("predatory grin")) {
@@ -117,19 +118,26 @@ class VisualCoherenceEngine {
         }
     }
 
+    // Ledger-based camera dynamics
+    if (ledger.traumaLevel > 85 || ledger.shamePainAbyssLevel > 80) {
+      dirs.push("violent handheld camera shake, extreme macro 100mm lens, shallow depth f/1.2, aggressive 45° Dutch tilt, blurred periphery, focus on dilated pupils");
+    } else if (ledger.traumaLevel > 60 || ledger.shamePainAbyssLevel > 60) {
+      dirs.push("Dutch angle 20°, subtle handheld tremor, low-angle power shot, slightly distorted perspective");
+    } else if (ledger.arousalLevel > 50) {
+      dirs.push("intimate close-up, shallow depth of field, focus on glistening skin and trembling lips");
+    } else if (ledger.hopeLevel < 30) {
+      dirs.push("high-angle shot, wide to emphasize isolation, subject small in frame");
+    }
+
+    // Phase-specific (general mood)
     if (ledger.phase === 'gamma') {
       dirs.push("anamorphic lens flares, crushed blacks, pulsating breathing vignette, heavy film grain, 35mm look");
     }
 
-    if (ledger.shamePainAbyssLevel > 80 || ledger.traumaLevel > 90) {
-      dirs.push("violent handheld camera shake, extreme macro 100mm lens, shallow depth f/1.2, aggressive 30° Dutch tilt");
-    } else if (ledger.shamePainAbyssLevel > 50 || ledger.traumaLevel > 60) {
-      dirs.push("Dutch angle 20°, slight handheld tremor, low-angle power shot");
-    }
-
+    // Narrative keyword override
     if (lowerText.includes("close-up") || lowerText.includes("face") || lowerText.includes("eyes")) {
-      dirs.unshift("extreme close-up on eyes and mouth, shallow depth");
-    } else {
+      dirs.unshift("extreme close-up on eyes and mouth, shallow depth"); // Prioritize explicit narrative cues
+    } else if (!dirs.length) { // Default if no specific triggers
       dirs.unshift("cinematic medium shot, perfect composition");
     }
 
@@ -144,20 +152,35 @@ class VisualCoherenceEngine {
         targetArchetype = target;
     }
 
+    // Archetype-specific lighting defaults
+    let lightingPreset = "cold clinical overhead fluorescent, flat even illumination, sterile observation";
     if (targetArchetype) {
         switch (targetArchetype) {
-            case 'The Confessor': return LIGHTING_PRESETS.Intimate;
-            case 'The Sadist': return LIGHTING_PRESETS.Harsh;
-            case 'The Logician': return LIGHTING_PRESETS.Clinical;
-            case 'The Nurse': return LIGHTING_PRESETS.WarmCandle; 
-            case 'The Provost': return LIGHTING_PRESETS.Moody;
+            case 'The Confessor': lightingPreset = LIGHTING_PRESETS.Intimate; break;
+            case 'The Sadist': lightingPreset = LIGHTING_PRESETS.Harsh; break;
+            case 'The Logician': lightingPreset = LIGHTING_PRESETS.Clinical; break;
+            case 'The Nurse': lightingPreset = LIGHTING_PRESETS.WarmCandle; break; 
+            case 'The Provost': lightingPreset = LIGHTING_PRESETS.Moody; break;
         }
     }
 
-    if (ledger.traumaLevel > 50) {
+    // Ledger-based lighting dynamics
+    if (ledger.traumaLevel > 80) {
+      // More aggressive crimson rim light, deeper shadows
+      return "single dramatic crimson rim light from above, extreme chiaroscuro, deep crushed blacks, volumetric dust, almost blood-like in intensity";
+    } else if (ledger.shamePainAbyssLevel > 70) {
+      // Shaming spotlight, drowning in shadows
+      return "harsh, isolating overhead spotlight on subject, rest of scene in impenetrable shadow, emphasizing exposure and shame";
+    } else if (ledger.arousalLevel > 50) {
+      // Conflicting sensual and clinical lights
+      return "flickering gaslight warm tones mixed with cold, clinical observation lights, creating an atmosphere of eroticized tension and scrutiny";
+    } else if (ledger.traumaLevel > 50) {
+      // Existing trauma lighting
       return "single dramatic crimson rim light from above, extreme chiaroscuro, deep crushed blacks, volumetric dust";
     }
-    return "cold clinical overhead fluorescent, flat even illumination, sterile observation";
+    
+    // Fallback to determined archetype preset or default
+    return lightingPreset;
   }
 
   private inferSomaticDetails(ledger: YandereLedger, narrativeText: string): string[] {
@@ -165,6 +188,7 @@ class VisualCoherenceEngine {
     const lower = narrativeText.toLowerCase();
 
     if (ledger.traumaLevel > 40) details.push("sweat-beaded forehead, pale complexion");
+    if (ledger.arousalLevel > 50) details.push("unwillingly flushed skin, dilated pupils");
     if (lower.match(/pain|hurt|ache|throb/)) details.push("visible wince, clenched jaw");
     if (lower.match(/trembl|shiver|shak/)) details.push("uncontrollable fine trembling");
     if (lower.match(/sweat|perspir/)) details.push("glistening sweat on exposed skin");
@@ -180,8 +204,16 @@ class VisualCoherenceEngine {
     if (beat === 'CLIMAX') motifs.push(FORGE_MOTIFS.EgoShatter, FORGE_MOTIFS.RhythmSpike);
     if (beat === 'SETUP') motifs.push(FORGE_MOTIFS.VolcanicHaze, FORGE_MOTIFS.AnticipatoryThrum);
 
-    if (ledger.traumaLevel > 70) motifs.push(FORGE_MOTIFS.TearTracks, FORGE_MOTIFS.AvertedGaze);
+    // Ledger-based motif triggers
+    if (ledger.traumaLevel > 70) motifs.push(FORGE_MOTIFS.TearTracks, FORGE_MOTIFS.AvertedGaze, FORGE_MOTIFS.GlisteningSweat);
+    if (ledger.shamePainAbyssLevel > 60) motifs.push(FORGE_MOTIFS.AvertedGaze, FORGE_MOTIFS.TearTracks, FORGE_MOTIFS.OntologicalVertigo);
+    if (ledger.arousalLevel > 50) motifs.push(FORGE_MOTIFS.FlushedSkin, FORGE_MOTIFS.DilatedPupils, FORGE_MOTIFS.SomaticBetrayal);
+    if (ledger.hopeLevel < 30) motifs.push(FORGE_MOTIFS.RigidPosture, FORGE_MOTIFS.OntologicalVertigo, FORGE_MOTIFS.CrushedBlacks);
+
+    // Keyword-based motif triggers
     if (lowerNarrative.includes("kneel")) motifs.push(FORGE_MOTIFS.RigidPosture);
+    if (lowerNarrative.includes("whisper")) motifs.push(FORGE_MOTIFS.ToxicLullaby, FORGE_MOTIFS.ForeignEndearment);
+    if (lowerNarrative.includes("touch")) motifs.push(FORGE_MOTIFS.HealersBind); 
     
     return Array.from(new Set(motifs));
   }
@@ -190,6 +222,7 @@ class VisualCoherenceEngine {
     let base = "";
     let somaticDetails: string[] = this.inferSomaticDetails(ledger, narrativeText);
     let visualDNAKeywords: string[] = [];
+    let poseAndExpression: string[] = [];
 
     if (typeof target === 'object' && 'archetype' in target) {
         const archData = ARCHETYPE_VISUAL_MAP[target.archetype];
@@ -208,8 +241,19 @@ class VisualCoherenceEngine {
         }
     }
 
+    // Dynamic pose and expression based on ledger
+    if (ledger.traumaLevel > 80) poseAndExpression.push("body convulsing slightly, eyes wide with terror and dissociation");
+    else if (ledger.traumaLevel > 60) poseAndExpression.push("trembling posture, eyes fixed on an unseen threat");
+    
+    if (ledger.shamePainAbyssLevel > 70) poseAndExpression.push("head bowed in deep shame, shoulders hunched, attempting to hide");
+    
+    if (ledger.arousalLevel > 50) poseAndExpression.push("pose of unwilling arousal, body subtly arching, eyes half-lidded with conflict");
+    
+    if (ledger.hopeLevel < 30) poseAndExpression.push("defeated slump, eyes dull and vacant, resigned expression");
+    else if (ledger.hopeLevel > 70) poseAndExpression.push("faint spark of defiance in eyes, tense but ready posture");
+
     const dynamicMotifs = this._selectMotifs(ledger, narrativeText, sceneContext, beat); 
-    const combinedDetails = Array.from(new Set([...somaticDetails, ...visualDNAKeywords, ...dynamicMotifs]));
+    const combinedDetails = Array.from(new Set([...somaticDetails, ...visualDNAKeywords, ...dynamicMotifs, ...poseAndExpression]));
 
     return `${base}${combinedDetails.length ? '. Details: ' + combinedDetails.join(', ') : ''}`;
   }
@@ -230,7 +274,7 @@ class VisualCoherenceEngine {
 
     const imageJson = {
       task: "generate_image",
-      style: "((MASTER STYLE LOCK)): Milo Manara style (clean ink lines, fluid contours, impossible elegance, feline eyes, cruel half-smile), high-contrast Neo-Noir, erotic dark academia. Clinical line, unforgiving precision, negative space isolation, wet surfaces, Art Deco geometry, smoke haze, clinical chiaroscuro.",
+      style: "((MASTER STYLE LOCK)): Milo Manara style (clean ink lines, fluid contours, impossible elegance, feline eyes, cruel half-smile, teasing cruelty, liquid strands, languid dominance), high-contrast Neo-Noir, erotic dark academia. Clinical line, unforgiving precision, negative space isolation, wet surfaces, Art Deco geometry, smoke haze, clinical chiaroscuro.",
       camera,
       lighting,
       subject,

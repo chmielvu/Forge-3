@@ -1,5 +1,7 @@
 {
   "name": "Copy of The Forge's Loom",
   "description": "An agentic procedural narrative engine set in a dystopian matriarchal academy. Features real-time knowledge graph generation and psychological state tracking.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }
