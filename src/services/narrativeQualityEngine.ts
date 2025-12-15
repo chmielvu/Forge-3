@@ -2,11 +2,7 @@
 import { YandereLedger, GameState, PrefectDNA, PrefectArchetype } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
 import { useGameStore } from '../state/gameStore';
-import { env, pipeline } from '@xenova/transformers';
-
-// Skip local model download checks if offline/bundled
-env.allowLocalModels = false;
-env.useBrowserCache = true;
+import { localGrunt } from './localMediaService';
 
 // API Key retrieval for internal use (Legacy fallback)
 const getApiKey = (): string => {
@@ -51,24 +47,6 @@ export interface AestheteCritique {
   thematic_check: string; 
 }
 
-/**
- * Local Aesthete: Zero-Latency Tone Analysis
- * Uses quantized DistilBERT to detect "Positive" sentiment (which is an error in this genre).
- */
-class LocalAesthete {
-  static task = 'text-classification'; // Updated task for sentiment
-  static model = 'Xenova/distilbert-base-uncased-finetuned-sst-2-english';
-  static instance: any = null;
-
-  static async getInstance() {
-    if (!this.instance) {
-      console.log("[LocalAesthete] Initializing local inference engine...");
-      this.instance = await pipeline(this.task as any, this.model);
-    }
-    return this.instance;
-  }
-}
-
 export class NarrativeQualityEngine {
   private minWordCount = 300;
   private previousNarratives: string[] = [];
@@ -79,7 +57,7 @@ export class NarrativeQualityEngine {
   }
   
   /**
-   * API-Free "Aesthete" Critique using Transformers.js
+   * API-Free "Aesthete" Critique using Transformers.js via Local Worker
    * Replaces Gemini API call for speed and reliability.
    */
   async critiqueLocal(narrative: string): Promise<AestheteCritique> {
@@ -87,11 +65,11 @@ export class NarrativeQualityEngine {
     let score = 100;
 
     // 1. Regex Heuristics (The "Banned Words" List)
-    const banned = [/pain/i, /scared/i, /angry/i, /sad/i, /terrified/i];
+    const banned = [/felt sad/i, /felt scared/i, /shivered in fear/i, /felt pain/i];
     
     if (banned.some(regex => regex.test(narrative))) {
       score -= 15;
-      violations.push("Vocabulary: Generic suffering words detected (pain/scared/sad).");
+      violations.push("Vocabulary: Use somatic details (e.g. 'spasm', 'void') instead of generic emotional telling.");
     }
 
     // 2. Lighting/Atmosphere Check
@@ -100,35 +78,23 @@ export class NarrativeQualityEngine {
       violations.push("Atmosphere: Missing Chiaroscuro elements.");
     }
 
-    // 3. Local Inference: Tone Check via Transformers.js
+    // 3. Local Inference: Tone Check via localGrunt (Qwen 0.5B in Worker)
     try {
-      const classifier = await LocalAesthete.getInstance();
-      // Truncate for model input limit (512 tokens approx)
-      const input = narrative.substring(0, 500); 
-      const result = await classifier(input);
-      // result is [{ label: 'POSITIVE', score: 0.99 }]
-      
-      const sentiment = result[0];
-      
-      // In a horror game, "POSITIVE" sentiment with high confidence usually means
-      // the tone is too soft, heroic, or hopeful (Tone Mismatch).
-      if (sentiment.label === 'POSITIVE' && sentiment.score > 0.85) {
-        score -= 20;
-        violations.push(`Tone: Too positive (${(sentiment.score * 100).toFixed(0)}%). Needs more clinical detachment.`);
-      } else if (sentiment.label === 'NEGATIVE' && sentiment.score > 0.9) {
-          // Excellent, high negative sentiment aligns with horror
-          score += 5; 
+      const isToneCorrect = await localGrunt.checkTone(narrative);
+      if (!isToneCorrect) {
+        score -= 25;
+        violations.push("Tone Mismatch: Narrative detected as 'LIGHT' (Wholesome/Melodramatic). Require 'DARK' (Clinical/Cynical).");
       }
     } catch (e) {
-      console.warn("Transformers.js inference failed, falling back to heuristics.", e);
+      console.warn("Local worker tone check failed, skipping.", e);
     }
 
     return {
       score: Math.min(100, Math.max(0, score)),
       critique: violations.length > 0 ? violations.join(" ") : "Aesthetic Standards Met.",
       violations,
-      somatic_check: "Local Check (Heuristic)",
-      thematic_check: "Local Check (Heuristic)"
+      somatic_check: "Local Check (Hybrid)",
+      thematic_check: "Local Check (Hybrid)"
     };
   }
 

@@ -28,6 +28,8 @@ function getWorker() {
                 } else if (type === 'progress') {
                     // Optional: handle progress updates
                     // console.debug('[Worker Progress]', payload);
+                } else if (type === 'status') {
+                    console.log(`[Worker Status] ${payload}`);
                 }
             };
             
@@ -44,6 +46,58 @@ function getWorker() {
     }
     return mediaWorker;
 }
+
+// Generic Dispatcher
+async function dispatchToWorker(type: string, payload: any, timeoutMs = 45000): Promise<any> {
+    const worker = getWorker();
+    if (!worker) throw new Error("Worker unavailable");
+
+    const id = crypto.randomUUID();
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            if (pendingRequests.has(id)) {
+                pendingRequests.delete(id);
+                reject(new Error(`Worker task ${type} timed out`));
+            }
+        }, timeoutMs);
+
+        pendingRequests.set(id, {
+            resolve: (res: any) => { clearTimeout(timeout); resolve(res); },
+            reject: (err: any) => { clearTimeout(timeout); reject(err); }
+        });
+
+        worker.postMessage({ type, id, payload });
+    });
+}
+
+// --- LOCAL GRUNT API ---
+export const localGrunt = {
+    // 1. The Aesthete (Qwen) - Tone Check
+    async checkTone(text: string): Promise<boolean> {
+        try {
+            const result = await dispatchToWorker('ANALYZE_TONE', { text });
+            return result.isApproved;
+        } catch (e) {
+            console.warn("[Local Service] Tone check failed/timed out:", e);
+            return true; // Fail open to allow gameplay
+        }
+    },
+
+    // 2. The Grunt (SmolLM) - Summarization
+    async summarizeHistory(text: string): Promise<string> {
+        try {
+            return await dispatchToWorker('SUMMARIZE', { text });
+        } catch (e) {
+            console.warn("[Local Service] Summarization failed:", e);
+            return "";
+        }
+    },
+
+    // 3. The Grunt (SmolLM) - Repair
+    async repairJson(jsonString: string): Promise<string> {
+        return dispatchToWorker('REPAIR_JSON', { jsonString });
+    }
+};
 
 // --- VISUAL ANALYSIS HELPERS (Kept on main thread as they are lightweight canvas ops) ---
 
@@ -277,54 +331,18 @@ export async function generateLocalSpeech(text: string): Promise<{ audioData: st
         return { audioData: "", duration: 0 };
     }
 
-    const id = crypto.randomUUID();
-
-    return new Promise((resolve, reject) => {
-        pendingRequests.set(id, {
-            resolve: (data: any) => {
-                // Convert Float32Array to WAV (Base64) for HTML5 Audio
-                const wavBuffer = encodeWAV(data.audio, data.sampling_rate);
-                resolve({
-                    audioData: arrayBufferToBase64(wavBuffer),
-                    duration: data.audio.length / data.sampling_rate
-                });
-            },
-            reject
-        });
-
-        worker.postMessage({
-            type: 'GENERATE_SPEECH',
-            id,
-            payload: { text }
-        });
-    });
-}
-
-/**
- * Local "Aesthete" Critique using DistilBERT (via Worker).
- * Replaces the cloud API call in Lite Mode.
- */
-export async function analyzeLocalSentiment(text: string): Promise<{ label: string, score: number }> {
-    const worker = getWorker();
-    
-    if (!worker) {
-        return { label: 'UNKNOWN', score: 0 };
+    try {
+        const data = await dispatchToWorker('GENERATE_SPEECH', { text });
+        // Convert Float32Array to WAV (Base64) for HTML5 Audio
+        const wavBuffer = encodeWAV(data.audio, data.sampling_rate);
+        return {
+            audioData: arrayBufferToBase64(wavBuffer),
+            duration: data.audio.length / data.sampling_rate
+        };
+    } catch (e) {
+        console.error("Local Speech Gen failed", e);
+        return { audioData: "", duration: 0 };
     }
-
-    const id = crypto.randomUUID();
-
-    return new Promise((resolve, reject) => {
-        pendingRequests.set(id, {
-            resolve: (data: any) => resolve(data[0]), // Returns { label: 'NEGATIVE', score: 0.99 }
-            reject
-        });
-
-        worker.postMessage({
-            type: 'ANALYZE_SENTIMENT',
-            id,
-            payload: { text }
-        });
-    });
 }
 
 /**

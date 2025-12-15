@@ -9,6 +9,7 @@ import { INITIAL_LEDGER } from "../constants";
 import { callGeminiWithRetry } from "../utils/apiRetry";
 import { selectNarratorMode, NARRATOR_VOICES } from '../services/narratorEngine';
 import { TensionManager } from "../services/TensionManager";
+import { localGrunt } from '../services/localMediaService';
 
 const getApiKey = (): string => {
   try {
@@ -287,13 +288,21 @@ export async function executeUnifiedDirectorTurn(
 
     const narrativeSummary = currentGraphData.global_state.narrative_summary || "The subject has recently arrived at the institute.";
     
-    // UPDATED: Leverage Gemini 2.5 Flash's 1M context window by providing much more history.
-    // Instead of slice(-50), we now provide up to 300 recent turns to prevent narrative amnesia.
-    const contextHistory = `
-    PREVIOUSLY ON THE FORGE: ${narrativeSummary}
-    FULL NARRATIVE HISTORY (CONTEXT RETRIEVAL):
-    ${history.slice(-300).join('\n---\n')}
-    `;
+    // --- PHASE 0: CONTEXT COMPRESSION (The Grunt) ---
+    // Keep last 15 turns raw, summarize anything older.
+    let contextHistory = "";
+    if (history.length > 15) {
+        const oldLogs = history.slice(0, -15).join('\n');
+        const recentLogs = history.slice(-15).join('\n---\n');
+        try {
+            const summary = await localGrunt.summarizeHistory(oldLogs);
+            contextHistory = `ARCHIVE SUMMARY: ${summary}\n\nRECENT LOGS:\n${recentLogs}`;
+        } catch (e) {
+            contextHistory = history.slice(-20).join('\n---\n'); // Fallback
+        }
+    } else {
+        contextHistory = history.join('\n---\n');
+    }
 
     const unifiedPrompt = DIRECTOR_MASTER_PROMPT_TEMPLATE
       .replace('{{narrative_beat}}', currentBeat)
@@ -328,8 +337,16 @@ export async function executeUnifiedDirectorTurn(
     try {
       unifiedOutput = JSON.parse(outputText);
     } catch (parseError) {
-      console.error("Failed to parse Unified Director output JSON:", parseError);
-      throw new Error(`Invalid JSON response from AI.`);
+      console.warn("Director JSON malformed. Invoking Grunt repair...");
+      try {
+          const fixed = await localGrunt.repairJson(outputText);
+          // Clean up any lingering markdown code blocks from the repair output
+          const cleanFixed = fixed.replace(/```json|```/g, '').trim(); 
+          unifiedOutput = JSON.parse(cleanFixed);
+      } catch (err) {
+          console.error("Critical JSON failure:", err);
+          throw new Error(`Invalid JSON response from AI.`);
+      }
     }
 
     // 4. Apply mutations
