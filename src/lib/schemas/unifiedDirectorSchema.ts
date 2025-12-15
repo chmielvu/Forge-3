@@ -145,14 +145,46 @@ export const UnifiedDirectorOutputSchema = {
     
     kgot_mutations: {
       type: Type.ARRAY,
+      description: "List of atomic operations to update the Knowledge Graph of Thoughts.",
       items: {
         type: Type.OBJECT,
         properties: {
           operation: { 
             type: Type.STRING, 
-            enum: ['add_edge', 'update_node', 'add_memory', 'update_grudge', 'add_trauma_bond', 'update_ledger', 'add_injury', 'add_subject_secret', 'apply_vicarious_trauma'] 
+            enum: [
+                'add_node', 'update_node', 'remove_node', 'add_edge', 'update_edge', 'remove_edge',
+                'add_memory', 'update_grudge', 'add_injury', 'add_trauma_bond', 'update_ledger_stat',
+                'add_secret', 'update_phase', 'add_secret_alliance', 'add_trauma_memory', 'update_dominance',
+                'add_psychosis_node'
+            ]
           },
-          params: { type: Type.OBJECT, nullable: true }
+          // Flexible params object - exact shape validated by Zod at runtime
+          node: { type: Type.OBJECT, nullable: true },
+          edge: { type: Type.OBJECT, nullable: true },
+          memory: { type: Type.OBJECT, nullable: true },
+          // Flattened params for simpler mutations
+          id: { type: Type.STRING, nullable: true },
+          updates: { type: Type.OBJECT, nullable: true },
+          source: { type: Type.STRING, nullable: true },
+          target: { type: Type.STRING, nullable: true },
+          delta: { type: Type.NUMBER, nullable: true },
+          subject_id: { type: Type.STRING, nullable: true },
+          injury: { type: Type.STRING, nullable: true },
+          severity: { type: Type.NUMBER, nullable: true },
+          strength: { type: Type.NUMBER, nullable: true },
+          bond_type: { type: Type.STRING, nullable: true },
+          stat: { type: Type.STRING, nullable: true },
+          clamp: { type: Type.BOOLEAN, nullable: true },
+          secret_id: { type: Type.STRING, nullable: true },
+          description: { type: Type.STRING, nullable: true },
+          discovered_by: { type: Type.STRING, nullable: true },
+          turn_discovered: { type: Type.NUMBER, nullable: true },
+          new_phase: { type: Type.STRING, nullable: true },
+          members: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
+          character_id: { type: Type.STRING, nullable: true },
+          node_id: { type: Type.STRING, nullable: true },
+          hallucination: { type: Type.STRING, nullable: true },
+          intensity: { type: Type.NUMBER, nullable: true },
         }
       },
       nullable: true
@@ -230,10 +262,7 @@ export interface UnifiedDirectorOutput {
   visual_prompt: string;
   choices: string[];
   ledger_update?: Partial<any>;
-  kgot_mutations?: Array<{
-    operation: string;
-    params?: any;
-  }>;
+  kgot_mutations?: Array<any>;
   psychosis_text?: string;
   audio_cues?: Array<{
     mode: string;
