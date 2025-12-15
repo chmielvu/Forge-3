@@ -70,8 +70,8 @@ export async function executeUnifiedDirectorTurn(
     prefectSimulations: Array<any>;
     audioMarkup: string | undefined;
 }> {
-  // Use Flash-Lite Preview as requested for speed/cost optimization
-  const modelId = 'gemini-2.0-flash-lite-preview-02-05';
+  // Use Flash-Lite as requested for speed/cost optimization
+  const modelId = 'gemini-2.5-flash-lite';
   console.log(`⚡ [Unified Director] Starting Flash-Lite Turn (${modelId})...`);
 
   try {
