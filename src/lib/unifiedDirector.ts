@@ -1,16 +1,14 @@
 
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { KnowledgeGraph } from "./types/kgot";
 import { KGotController } from "../controllers/KGotController";
-import { DIRECTOR_MASTER_PROMPT_TEMPLATE } from "../config/directorCore";
+import { SYSTEM_INSTRUCTION_FULL } from "../config/loreInjection";
 import { THEMATIC_ENGINES } from "../config/directorEngines";
 import { UnifiedDirectorOutputSchema, UnifiedDirectorOutput } from "./schemas/unifiedDirectorSchema";
 import { PrefectDNA, YandereLedger } from "../types";
 import { INITIAL_LEDGER } from "../constants";
 import { callGeminiWithRetry } from "../utils/apiRetry";
-import { selectNarratorMode } from '../services/narratorEngine';
-import { TensionManager } from "../services/TensionManager";
-import { localGrunt } from '../services/localMediaService';
+import { localMediaService, localGrunt } from "../services/localMediaService";
 
 const getApiKey = (): string => {
   try {
@@ -21,66 +19,38 @@ const getApiKey = (): string => {
     // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
   } catch (e) {}
-  try {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env?.API_KEY) return import.meta.env.API_KEY;
-  } catch (e) {}
   return '';
 };
 
 const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
-// --- HELPER: AGENCY/LUCK CHECK ---
-function checkCriticalSuccess(ledger: YandereLedger): boolean {
-    const chance = 0.05 + (ledger.hopeLevel / 1000);
-    return Math.random() < chance;
+// --- FEW-SHOT EXAMPLES FOR FLASH-LITE OPTIMIZATION ---
+const FEW_SHOT_EXAMPLES = `
+### EXAMPLE 1 (High Trauma, Clinical Tone)
+INPUT: "I... I can't stand up. Please stop."
+OUTPUT:
+{
+  "thought_chain": "Subject is breaking. Switch to Nurse Anya. Frame the pain as a biological failure.",
+  "narrative_prose": "You try to rise, but your legs are water. The nausea is a heavy, cold stone in your gut. Anya leans over you, her white coat pristine against the gloom. She sighs, not with pity, but with mild disappointment. 'Typical,' she murmurs, clicking a pen. 'The autonomic nervous system is rejecting the lesson. Hold still. I need to measure the swelling.' Her hands are terrifyingly warm.",
+  "visual_cue": "Low angle, Nurse Anya looming over camera, holding a clipboard, haloed by harsh gaslight.",
+  "audio_cue": "High-pitched tinnitus ringing, slow heartbeat, scratch of pen on paper.",
+  "state_update": { "trauma_delta": 5, "hope_delta": -2, "compliance_delta": 5 },
+  "choices": ["Apologize", "Whimper", "Close your eyes"]
 }
 
-// ... (Retain existing helper functions like getSpecificDriveInstruction, etc. for backward compat or refactor if desired. 
-// For brevity, I will assume the prompt template uses the injected prefect block builder which we will include inline below.)
-
-function getSpecificDriveInstruction(prefect: PrefectDNA): string {
-  // Simplified for brevity, relying on Engine injection for main drive
-  return `Act according to your archetype: ${prefect.archetype}`;
+### EXAMPLE 2 (Defiance, Kinetic Tone)
+INPUT: "Go to hell! I won't do it!"
+OUTPUT:
+{
+  "thought_chain": "Subject chose defiance. Activate Inquisitor Petra. Immediate kinetic escalation.",
+  "narrative_prose": "The words barely leave your lips before the air cracks. It isn't a sound; it's a white flash behind your eyes. You don't feel the impact of Petra's boot so much as you feel the world dissolve. You are on the floor. The stone is cold against your cheek. Somewhere above you, a predatory giggle echoes. 'Oh, feisty!' Petra chirps. 'I love a moving target. Again.'",
+  "visual_cue": "Blurry motion, Petra in a dynamic high-kick pose, Dutch angle, green tank top.",
+  "audio_cue": "Wet thud of impact, sharp intake of breath, leather creaking, manic giggling.",
+  "state_update": { "trauma_delta": 10, "hope_delta": 5, "compliance_delta": -5 },
+  "choices": ["Spit blood", "Try to stand", "Curl up"]
 }
-
-function buildPrefectContextBlock(
-  activePrefects: PrefectDNA[],
-  ledger: YandereLedger,
-  playerInput: string,
-  history: string[],
-  currentLocation: string 
-): string {
-  const prefectProfiles = activePrefects.map((prefect, idx) => {
-    const emotionalState = prefect.currentEmotionalState || { paranoia: 0.2, desperation: 0.2, confidence: 0.5, arousal: 0, dominance: 0.5 };
-    
-    // Inject Psychometrics for behavior enforcement
-    const psychoData = prefect.psychometrics ? `
-**PSYCHOMETRICS:**
-- **TELL:** ${prefect.psychometrics.physiologicalTell} (MUST PERFORM THIS)
-- **SOMATIC:** ${prefect.psychometrics.somaticSignature}
-- **TRIGGER:** ${prefect.psychometrics.breakingPointTrigger}
-- **STYLE:** ${prefect.psychometrics.tortureStyle}` : '';
-
-    return `
-### PREFECT ${idx + 1}: ${prefect.displayName} (${prefect.archetype})
-**IDENTITY:** ID: ${prefect.id}, Drive: ${prefect.drive}, Weakness: ${prefect.secretWeakness}
-**EMOTIONAL STATE:** Paranoia: ${(emotionalState.paranoia * 100).toFixed(0)}%, Confidence: ${(emotionalState.confidence * 100).toFixed(0)}%
-${psychoData}
----`;
-  }).join('\n');
-  
-  return `
-# === ACTIVE PREFECTS IN SCENE ===
-Simulate the thoughts/actions of these ${activePrefects.length} prefects.
-**PLAYER STATE:** Trauma: ${ledger.traumaLevel}, Compliance: ${ledger.complianceScore}, Hope: ${ledger.hopeLevel}.
-${prefectProfiles}
 `;
-}
 
-/**
- * UNIFIED DIRECTOR: Logic Controller
- */
 export async function executeUnifiedDirectorTurn(
   playerInput: string,
   history: string[],
@@ -100,13 +70,11 @@ export async function executeUnifiedDirectorTurn(
     prefectSimulations: Array<any>;
     audioMarkup: string | undefined;
 }> {
-  try {
-    const modelId = 'gemini-2.5-flash'; 
-    const useThinking = !isLiteMode; 
+  // Use Flash-Lite Preview as requested for speed/cost optimization
+  const modelId = 'gemini-2.0-flash-lite-preview-02-05';
+  console.log(`⚡ [Unified Director] Starting Flash-Lite Turn (${modelId})...`);
 
-    console.log(`⚡ [Unified Director] Starting AGoT Reasoning using ${modelId}...`);
-    
-    // 1. Initialize Systems
+  try {
     const controller = new KGotController(currentGraphData);
     const graphSnapshot = controller.getGraph();
     const ledger: YandereLedger & { currentLocation?: string } = {
@@ -115,165 +83,121 @@ export async function executeUnifiedDirectorTurn(
     };
     const location = ledger.currentLocation || "The Calibration Chamber";
 
-    // --- 2. DETERMINE THEMATIC ENGINE (The "Why") ---
-    let activeEngineKey: keyof typeof THEMATIC_ENGINES = "PROTOCOL"; // Default
-    
-    const locUpper = location.toUpperCase();
-    if (["REFECTORY", "GROUNDS", "ARENA", "DOCK", "ARRIVAL"].some(l => locUpper.includes(l))) {
-      activeEngineKey = "SPECTACLE";
-    } 
-    else if (["BATHHOUSE", "COMMON_ROOM", "CONFESSIONAL", "DORM"].some(l => locUpper.includes(l))) {
-      activeEngineKey = "MASQUERADE";
-    }
-    else if (["RESEARCH_WING", "ISOLATION", "CALIBRATION", "CHAMBER", "INFIRMARY"].some(l => locUpper.includes(l))) {
-      activeEngineKey = "PROTOCOL";
+    // Telemetry (Optional for Lite, but good context)
+    let telemetry = { intent: 'neutral', subtext: 'genuine', intensity: 5 };
+    if (!isLiteMode) { 
+        telemetry = await localMediaService.analyzeIntent(playerInput);
     }
 
-    const engineData = THEMATIC_ENGINES[activeEngineKey];
-    // Extract domain from string for the prompt replacement
-    const domainMatch = engineData.match(/KEYWORD_DOMAIN: (.*)/);
-    const semanticDomain = domainMatch ? domainMatch[1] : "GENERAL";
+    // Determine Active Engine based on Input/State
+    let directive = "Maintain current pressure.";
+    if (ledger.traumaLevel > 60) directive = "Subject is unstable. Describe the world as tilting, loud, and disjointed.";
+    if (telemetry.intent === 'defiance') directive = "Punish defiance. Activate Petra (Kinetic Correction).";
+    else if (telemetry.intent === 'submission') directive = "Exploit submission. Activate Calista (Gaslighting) or Anya (Clinical).";
 
-    // 2.5 Calculate Fortune
-    const isCriticalSuccess = checkCriticalSuccess(ledger);
-    const fortuneInjection = isCriticalSuccess 
-      ? `**CRITICAL AGENCY EVENT:** The Subject's Hope has triggered a rare moment of clarity/luck.`
-      : `STANDARD PHYSICS: Apply standard Trauma/Compliance constraints.`;
+    // Construct the Prompt strictly following the protocol
+    const unifiedPrompt = `
+${SYSTEM_INSTRUCTION_FULL}
 
-    // 3. Build unified prompt
-    const prefectContextBlock = buildPrefectContextBlock(activePrefects, ledger, playerInput, history, location);
-    
-    // 3.5 Calculate Narrative Beat
-    const turnCount = graphSnapshot.global_state.turn_count;
-    const recentTraumaDelta = graphSnapshot.nodes['Subject_84']?.attributes?.last_trauma_delta || 0;
-    const currentBeat = TensionManager.calculateNarrativeBeat(turnCount, recentTraumaDelta);
-    const beatInstruction = TensionManager.getBeatInstructions(currentBeat);
+### CURRENT SIMULATION STATE
+- **Location:** ${location}
+- **Subject Status:** Trauma: ${ledger.traumaLevel}/100 | Hope: ${ledger.hopeLevel}/100 | Compliance: ${ledger.complianceScore}/100
+- **Physical State:** ${ledger.physicalIntegrity < 50 ? "CRITICAL (Nausea, blurred vision)" : "STABLE (Anxious)"}
+- **Active Agents:** ${activePrefects.map(p => p.displayName).join(", ")}
 
-    // 3.6 Get Spotlight Context
-    const spotlight = controller.getNarrativeSpotlight(
-      "Subject_84",
-      location,
-      activePrefects.map(p => p.id)
-    );
+### PLAYER INPUT
+"${playerInput}"
 
-    // --- PHASE 0: CONTEXT COMPRESSION ---
-    let contextHistory = "";
-    if (history.length > 15) {
-        const oldLogs = history.slice(0, -15).join('\n');
-        const recentLogs = history.slice(-15).join('\n---\n');
-        try {
-            const summary = await localGrunt.summarizeHistory(oldLogs);
-            contextHistory = `ARCHIVE SUMMARY: ${summary}\n\nRECENT LOGS:\n${recentLogs}`;
-        } catch (e) {
-            contextHistory = history.slice(-20).join('\n---\n');
-        }
-    } else {
-        contextHistory = history.join('\n---\n');
-    }
+### DIRECTIVE
+1. Analyze the player's input (${telemetry.intent} / ${telemetry.subtext}).
+2. ${directive}
+3. Generate the response JSON strictly adhering to the schema.
 
-    const unifiedPrompt = DIRECTOR_MASTER_PROMPT_TEMPLATE
-      .replace('{{active_engine_data}}', engineData)
-      .replace('{{active_engine_name}}', activeEngineKey)
-      .replace('{{semantic_domain}}', semanticDomain)
-      .replace('{{narrative_beat}}', currentBeat)
-      .replace('{{beat_instruction}}', beatInstruction)
-      .replace('{{ledger}}', JSON.stringify(ledger, null, 2))
-      .replace('{{narrative_spotlight}}', JSON.stringify(spotlight, null, 2))
-      .replace('{{active_prefects}}', prefectContextBlock)
-      .replace('{{history}}', contextHistory)
-      .replace('{{player_input}}', playerInput)
-      .replace('{{fortuneInjection}}', fortuneInjection);
-    
+${FEW_SHOT_EXAMPLES}
+`;
+
     const ai = getAI();
-    const response = await callGeminiWithRetry<GenerateContentResponse>(
-      () => ai.models.generateContent({
-        model: modelId, 
-        contents: [{ role: 'user', parts: [{ text: unifiedPrompt }] }],
+    const response = await callGeminiWithRetry(async () => {
+      return await ai.models.generateContent({
+        model: modelId,
+        contents: { parts: [{ text: unifiedPrompt }] },
         config: {
-          responseMimeType: "application/json",
           responseSchema: UnifiedDirectorOutputSchema,
-          temperature: 1.0, 
-          thinkingConfig: useThinking ? { thinkingBudget: 2048 } : undefined 
-        }
-      }),
-      "Unified Director"
-    );
-    
-    const outputText = response.text || "{}";
-    let unifiedOutput: UnifiedDirectorOutput;
+          responseMimeType: "application/json",
+          temperature: 0.7, // As requested for balance
+        },
+      });
+    }, "Director-Lite");
+
+    const rawText = response.text || '{}';
+    let output: UnifiedDirectorOutput;
 
     try {
-      unifiedOutput = JSON.parse(outputText);
-    } catch (parseError) {
-      console.warn("Director JSON malformed. Invoking Grunt repair...");
-      try {
-          const fixed = await localGrunt.repairJson(outputText);
-          const cleanFixed = fixed.replace(/```json|```/g, '').trim(); 
-          unifiedOutput = JSON.parse(cleanFixed);
-      } catch (err) {
-          console.error("Critical JSON failure:", err);
-          throw new Error(`Invalid JSON response from AI.`);
-      }
+        output = JSON.parse(rawText);
+    } catch (e) {
+        console.warn("JSON repair required...");
+        const fixed = await localGrunt.repairJson(rawText);
+        output = JSON.parse(fixed);
     }
 
-    // 4. Apply mutations
-    if (unifiedOutput.kgot_mutations) {
-      controller.applyMutations(unifiedOutput.kgot_mutations);
-    }
-    if (unifiedOutput.ledger_update) {
-      controller.updateLedger('Subject_84', unifiedOutput.ledger_update);
-    }
-    
-    // 5. Combine somatic + narrative
-    const combinedNarrative = `
-<span class="somatic-nova">${unifiedOutput.somatic_state?.impact_sensation || ""}</span>
-
-<span class="somatic-void">${unifiedOutput.somatic_state?.internal_collapse || ""}</span>
-
-${unifiedOutput.narrative_text}
-`;
-    
-    // Construct the Cognitive Graph trace log
-    const nodesTrace = unifiedOutput.reasoning_graph?.nodes.map(n => `[${n.type}] ${n.content}`).join('\n  ');
-    const cognitiveTrace = `
-AGOT REASONING TRACE (${modelId}):
--------------------------
-ENGINE: ${unifiedOutput.meta_analysis.selected_engine}
-PROFILE: ${unifiedOutput.meta_analysis.player_psych_profile}
-
-GRAPH:
-  ${nodesTrace}
-    `.trim();
-
-    return {
-      narrative: combinedNarrative,
-      script: unifiedOutput.script || [],
-      visualPrompt: unifiedOutput.visual_prompt || "Darkness.",
-      updatedGraph: controller.getGraph(),
-      choices: unifiedOutput.choices || ["Endure", "Observe"],
-      thoughtProcess: cognitiveTrace,
-      state_updates: unifiedOutput.ledger_update,
-      audioCues: unifiedOutput.audio_cues,
-      psychosisText: unifiedOutput.psychosis_text,
-      prefectSimulations: unifiedOutput.prefect_simulations || [],
-      audioMarkup: unifiedOutput.audio_markup
+    // --- State & Memory Processing ---
+    // Convert lite 'state_update' to full Ledger logic
+    const ledgerUpdates: Partial<YandereLedger> = {
+        traumaLevel: (ledger.traumaLevel || 0) + (output.state_update.trauma_delta || 0),
+        hopeLevel: (ledger.hopeLevel || 0) + (output.state_update.hope_delta || 0),
+        complianceScore: (ledger.complianceScore || 0) + (output.state_update.compliance_delta || 0)
     };
-    
-  } catch (error: any) {
-    console.error("Unified Director Failed:", error);
-    const errorMessage = error.message || "Unknown AI error.";
+
+    // Auto-generate Memories/Grudges if impact is high
+    const mutations: any[] = [];
+    if (Math.abs(output.state_update.trauma_delta) > 5) {
+        mutations.push({
+            operation: 'add_memory',
+            memory: {
+                id: `mem_${Date.now()}`,
+                description: output.thought_chain,
+                emotional_imprint: output.state_update.trauma_delta > 0 ? "Trauma Spike" : "Relief",
+                involved_entities: activePrefects.map(p => p.id),
+                timestamp: graphSnapshot.global_state.turn_count
+            }
+        });
+    }
+
+    // Apply updates
+    if (mutations.length > 0) controller.applyMutations(mutations);
+    controller.updateLedger('Subject_84', ledgerUpdates);
+
+    // Simple Script Parsing (Splitting prose by dialogue quotes if possible, else just narrator)
+    const script = [{ speaker: "Narrator", text: output.narrative_prose }];
+
     return {
-      narrative: `The Loom shudders. A neural-symbolic disconnect. (${errorMessage})`,
-      script: [{ speaker: "System", text: `ERROR: Neuro-Symbolic disconnect. (${errorMessage.substring(0,100)}...)` }],
+      narrative: output.narrative_prose,
+      script: script,
+      visualPrompt: output.visual_cue,
+      updatedGraph: controller.getGraph(),
+      choices: output.choices || ["Endure", "Observe", "Beg"],
+      thoughtProcess: output.thought_chain,
+      state_updates: ledgerUpdates,
+      audioCues: [{ mode: "SFX", text_fragment: output.audio_cue }],
+      psychosisText: undefined,
+      prefectSimulations: [], // Lite mode skips deep agent simulation for speed
+      audioMarkup: undefined
+    };
+
+  } catch (error: any) {
+    console.error("Director-Lite Failed:", error);
+    return {
+      narrative: `The system flickers. (Error: ${error.message})`,
+      script: [],
       visualPrompt: "Static.",
       updatedGraph: currentGraphData,
-      choices: ["Attempt to re-stabilize"],
-      thoughtProcess: `Error: ${errorMessage}`,
-      state_updates: {}, 
+      choices: ["Retry"],
+      thoughtProcess: "Error",
+      state_updates: undefined,
       audioCues: [],
-      psychosisText: "ERROR",
+      psychosisText: undefined,
       prefectSimulations: [],
-      audioMarkup: undefined,
+      audioMarkup: undefined
     };
   }
 }

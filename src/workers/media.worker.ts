@@ -9,6 +9,7 @@ env.useBrowserCache = true;
 let ttsPipeline: any = null;       // Speech
 let aesthetePipeline: any = null;  // Qwen 0.5B (Tone/Vibe)
 let gruntPipeline: any = null;     // SmolLM2 135M (JSON/Summary)
+let empathPipeline: any = null;    // Llama 3.2 1B (Intent/Telemetry)
 
 // --- LAZY LOADERS ---
 
@@ -26,7 +27,6 @@ async function getTTS() {
 async function getAesthete() {
     if (!aesthetePipeline) {
         self.postMessage({ type: 'status', payload: 'Loading Aesthete (Qwen 0.5B)...' });
-        // Qwen 0.5B Chat - The smartest "small" model for nuanced tone
         aesthetePipeline = await pipeline('text-generation', 'Xenova/Qwen1.5-0.5B-Chat', {
             dtype: 'q8', 
             device: 'webgpu',
@@ -38,13 +38,24 @@ async function getAesthete() {
 async function getGrunt() {
     if (!gruntPipeline) {
         self.postMessage({ type: 'status', payload: 'Loading Grunt (SmolLM 135M)...' });
-        // SmolLM2 - The fastest instruction follower for mechanical tasks
         gruntPipeline = await pipeline('text-generation', 'HuggingFaceTB/SmolLM2-135M-Instruct', {
             dtype: 'q8',
             device: 'webgpu',
         } as any);
     }
     return gruntPipeline;
+}
+
+async function getEmpath() {
+    if (!empathPipeline) {
+        self.postMessage({ type: 'status', payload: 'Loading Empath (Llama 3.2 1B)...' });
+        // Using Llama 3.2 1B Instruct for advanced telemetry
+        empathPipeline = await pipeline('text-generation', 'Xenova/Llama-3.2-1B-Instruct', {
+            dtype: 'q4', // Aggressive quantization for browser
+            device: 'webgpu',
+        } as any);
+    }
+    return empathPipeline;
 }
 
 // --- MAIN EVENT LOOP ---
@@ -73,46 +84,54 @@ self.onmessage = async (e) => {
             // 2. TONE ANALYSIS (The Aesthete)
             case 'ANALYZE_TONE': {
                 const generator = await getAesthete();
-                
-                // Prompt Engineering for Qwen
-                // We force it to act as a literary critic
                 const messages = [
-                    { role: 'system', content: `Analyze the tone.
-Options:
-- DARK (Horror, cynicism, violence, clinical detachment, dark humor)
-- LIGHT (Hope, joy, melodrama, wholesomeness, safety)
-Answer with one word.` },
+                    { role: 'system', content: `Analyze tone. Options: DARK (Horror/Clinical), LIGHT (Hope/Safety). One word.` },
                     { role: 'user', content: `Text: "${payload.text.slice(0, 500)}"` }
                 ];
-
-                const output = await generator(messages, { 
-                    max_new_tokens: 5,
-                    temperature: 0.1, // Deterministic
-                    do_sample: false
-                });
-                
-                // Parse response (Qwen output format)
-                // Qwen output is usually in the last generated message content
-                let responseText = "";
-                if (output && output[0] && output[0].generated_text) {
-                    const gen = output[0].generated_text;
-                    if (Array.isArray(gen)) {
-                        responseText = gen[gen.length - 1]?.content || "";
-                    } else {
-                        // fallback if structure differs
-                        responseText = JSON.stringify(gen);
-                    }
-                }
-                
+                const output = await generator(messages, { max_new_tokens: 5, temperature: 0.1 });
+                const gen = output[0].generated_text;
+                const responseText = Array.isArray(gen) ? gen[gen.length - 1]?.content : JSON.stringify(gen);
                 const isDark = responseText.toUpperCase().includes("DARK");
-                
                 self.postMessage({ type: 'RESULT', id, payload: { isApproved: isDark, reason: responseText } });
                 break;
             }
 
-            // 3. JSON REPAIR (The Grunt)
+            // 3. INTENT TELEMETRY (The Empath - Llama 3.2)
+            case 'ANALYZE_INTENT': {
+                const generator = await getEmpath();
+                const input = payload.text.slice(0, 300);
+                const messages = [
+                    { role: 'system', content: `Analyze the user's input.
+Return JSON ONLY: { "intent": "submission" | "defiance" | "fear" | "neutral", "subtext": "sarcastic" | "genuine" | "desperate", "intensity": 1-10 }` },
+                    { role: 'user', content: `Input: "${input}"` }
+                ];
+                
+                const output = await generator(messages, { 
+                    max_new_tokens: 100, 
+                    temperature: 0.1,
+                    do_sample: false
+                });
+                
+                const gen = output[0].generated_text;
+                const responseText = Array.isArray(gen) ? gen[gen.length - 1]?.content : "";
+                
+                // Extract JSON from response
+                let result = { intent: 'neutral', subtext: 'genuine', intensity: 5 };
+                try {
+                    const match = responseText.match(/\{.*\}/s);
+                    if (match) {
+                        result = JSON.parse(match[0]);
+                    }
+                } catch (e) {
+                    console.warn("Llama JSON parse failed", e);
+                }
+                
+                self.postMessage({ type: 'RESULT', id, payload: result });
+                break;
+            }
+
+            // 4. JSON REPAIR (The Grunt)
             case 'REPAIR_JSON': {
-                // Heuristic First (Zero Cost)
                 try {
                     const clean = payload.jsonString.replace(/```json|```/g, '').trim();
                     JSON.parse(clean); 
@@ -120,11 +139,10 @@ Answer with one word.` },
                     return;
                 } catch(e) {}
 
-                // Neural Fallback
                 const generator = await getGrunt();
                 const messages = [
-                    { role: 'system', content: "You are a JSON repair tool. Output only the valid JSON string. No markdown." },
-                    { role: 'user', content: `Fix this broken JSON:\n${payload.jsonString}` }
+                    { role: 'system', content: "Fix this JSON string." },
+                    { role: 'user', content: payload.jsonString }
                 ];
                 const output = await generator(messages, { max_new_tokens: 1024, temperature: 0.1 });
                 const genText = output[0].generated_text;
@@ -133,11 +151,11 @@ Answer with one word.` },
                 break;
             }
 
-            // 4. SUMMARIZATION (The Grunt)
+            // 5. SUMMARIZATION (The Grunt)
             case 'SUMMARIZE': {
                 const generator = await getGrunt();
                 const messages = [
-                    { role: 'user', content: `Summarize this narrative log into one dense paragraph of lore:\n\n${payload.text}` }
+                    { role: 'user', content: `Summarize:\n\n${payload.text}` }
                 ];
                 const output = await generator(messages, { max_new_tokens: 200, temperature: 0.3 });
                 const genText = output[0].generated_text;

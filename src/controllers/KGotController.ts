@@ -237,6 +237,8 @@ export class KGotController {
   }
 
   public applyPrefectSimulations(simulations: UnifiedDirectorOutput['prefect_simulations']): void {
+      if (!simulations) return; // Guard for optional simulations
+
       const muts: any[] = [];
       const turn = this.core.getGraph().global_state.turn_count;
 

@@ -88,273 +88,105 @@ export const FORGE_MOTIFS = {
 };
 
 export const ARCHETYPE_VISUAL_MAP: Record<string, { mood: string; physique: string; face: string; attire: string; visualDNA?: string; somaticSignature?: string; idleProp?: string; } | undefined> = {
-  // --- Faculty Archetypes (Matriarchal Inversion and Predatory Elegance) ---
+  // --- Faculty Archetypes (The Educators - Vampire Noir/Witcher Sorceress) ---
   'The Provost': { 
     mood: "regal, bored, inevitable", 
     physique: "tall, imposing, curvaceous", 
-    face: "feline eyes, cruel half-smile", 
-    attire: "flowing black gown, pearl choker, gloves",
-    visualDNA: "Statuesque, regal, bored clinical gaze, crimson velvet, deep shadows.",
+    face: "sharp gray eyes, raven hair, cruel half-smile", 
+    attire: "flowing emerald or crimson velvet robes, plunging neckline, leather gloves",
+    visualDNA: "Statuesque, regal, bored clinical gaze, crimson velvet, deep shadows. Vampire Noir aesthetics.",
     somaticSignature: "Immaculate posture, iron will manifest in stillness, hand resting on rod with suppressed power.",
-    idleProp: "Goblet of red wine"
+    idleProp: "Goblet of red wine, ornate silver brooch"
   },
   'The Logician': { 
     mood: "clinical, detached, analytical", 
-    physique: "slender, precise, poised", 
-    face: "sharp features, assessing gaze", 
-    attire: "lab coat, glasses, clipboard",
+    physique: "willowy, precise, poised", 
+    face: "ash-blonde braid, icy blue eyes, pale angular face", 
+    attire: "stark lab attire, cream silk blouse, high-waisted trousers",
     visualDNA: "Bookish, severe, always carrying a data slate. Dark Academia aesthetic, clinical detachment, icy blue eyes.",
-    somaticSignature: "Steady, deft hands that move with unnerving precision. Neutral, observational lips. Body language like a surgeon about to make an incision.",
-    idleProp: "Stylus tapping on data slate/clipboard, adjusting rimless glasses"
+    somaticSignature: "Steady, deft hands that move with unnerving precision. Neutral, observational lips. Body language like a surgeon.",
+    idleProp: "Stylus tapping on data slate, adjusting rimless glasses"
   },
   'The Inquisitor': { 
-    mood: "sadistic, teasing, playful cruelty", 
-    physique: "athletic, coiled, dominant", 
-    face: "predatory giggle, arched brow", 
-    attire: "leather boots, crop top, whip",
-    visualDNA: "Feral, athletic, coiled, predatory grin, scarred midriff, tight leather.",
+    mood: "kinetic, sadistic, craftsman-like pride", 
+    physique: "imposing, wiry energy, athletic", 
+    face: "wild auburn hair, cruel green eyes, predatory grin", 
+    attire: "cropped tactical jacket, tight leather combat trousers, heavy boots",
+    visualDNA: "Feral, athletic, coiled, predatory grin, scarred midriff, tight leather. Visceral horror.",
     somaticSignature: "Muscles tense like a spring, darting eyes, restless energy, body language like a coiled viper.",
-    idleProp: "Dagger, lit cigarette (often unlit if observing silently)"
+    idleProp: "Dagger, lit cigarette, leather whip"
   },
   'The Confessor': { 
-    mood: "possessive, nurturing, yandere", 
-    physique: "soft curves, enveloping", 
-    face: "teary eyes, obsessive smile", 
-    attire: "sweater, skirt, stockings",
-    visualDNA: "Soft curves, lace, velvet, alluring, false sanctuary, heavy-lidded eyes, knowing smirk.",
-    somaticSignature: "Languid grace, movements like a predator in silk, body language designed to invite trust and suggest maternal gentleness.",
-    idleProp: "Cup of poppy-seed tea, subtly toying with ornate jewelry or a hidden knife hilt"
+    mood: "manipulative, false empathy, charismatic", 
+    physique: "voluptuous, enveloping", 
+    face: "olive skin, sultry brown eyes, heavy-lidded gaze", 
+    attire: "Victorian-inspired lace and velvet, sapphire bodice, provocative",
+    visualDNA: "Soft curves, lace, velvet, alluring, false sanctuary, knowing smirk. Weaponized Nurturing.",
+    somaticSignature: "Languid grace, movements like a predator in silk, body language designed to invite trust.",
+    idleProp: "Cup of poppy-seed tea, subtly toying with ornate jewelry"
   },
-  'The Nurse': { 
-    mood: "deceptive solace, medical intimacy", 
-    physique: "curvaceous, steady hands", 
-    face: "empathetic mask, hidden glee", 
-    attire: "nurse uniform, syringe necklace",
-    visualDNA: "Deceptively warm, maternal, soft curves, medical coat, hazel eyes that analyze anatomy.",
-    somaticSignature: "Gentle, measured hands that move with calculated care, touch is both soothing and invasive. Body language is open but probing.",
-    idleProp: "Sorting herbs in satchel, idly cleaning medical instrument"
+  'The Custodian': { // Replaces/Augments 'The Nurse' or 'The Healer'
+    mood: "guilty, weary, conflicted", 
+    physique: "slumped, gentle curves", 
+    face: "mousy brown hair, tired hazel eyes, expression of apology", 
+    attire: "worn white medical coat, practical dress",
+    visualDNA: "Exhausted elegance, trembling hands, sad eyes, white scholar's jacket. A potential safe haven.",
+    somaticSignature: "Shoulders slightly slumped, head often tilted in weary apology, hands trembling.",
+    idleProp: "Medical bandages, a small clipboard"
   },
 
-  // --- Prefect Archetypes (Corrupted Innocence and Moral Callousing) ---
+  // --- Prefect Archetypes (The Middle Power - Dark Academia) ---
   'The Loyalist': { 
-    mood: "dutiful, zealous, rigid", 
-    physique: "upright, disciplined", 
-    face: "stern, unyielding", 
-    attire: "crisp uniform, badge of authority",
+    mood: "ambitious, righteous, severe", 
+    physique: "neat, rigid posture", 
+    face: "stern conviction, flinching eyes (internal conflict)", 
+    attire: "immaculate Dark Academia uniform, blazer, pleated skirt",
     visualDNA: "Militant, severe, perfect posture. Dark Academia uniform, stern conviction, flinching eyes.",
-    somaticSignature: "Brittle rigidity in posture, jaw clenched from internal conflict, hands subtly trembling",
+    somaticSignature: "Brittle rigidity in posture, jaw clenched from internal conflict, hands subtly trembling.",
     idleProp: "Clutching Codex, perfectly clean clipboard"
   },
-  'The Sadist': { 
-    mood: "kinetic, violent, gleeful", 
-    physique: "muscular, aggressive", 
-    face: "manic grin, wild eyes", 
-    attire: "gloves, boots, tool belt",
-    visualDNA: "Feral, athletic, coiled, predatory grin, scarred midriff, tight leather.",
-    somaticSignature: "Muscles tense like a spring, darting eyes, restless energy",
-    idleProp: "Twirling a small, gleaming bladed object"
+  'The Siren': { 
+    mood: "charming, treacherous, modern chic", 
+    physique: "alluring, poised", 
+    face: "flawless makeup, calculating smile", 
+    attire: "Dark Academia blended with modern high fashion, stylish accessories",
+    visualDNA: "Alluring, strategic use of appearance, modern chic, predatory charm.",
+    somaticSignature: "Body language of seductive invitation, slow, deliberate movements, arched posture.",
+    idleProp: "Smartphone (anachronistic power symbol) or compact mirror"
   },
-  'The Yandere': { 
-    mood: "obsessive, clingy, dere", 
+  'The Obsessive': { 
+    mood: "clinical, unsettling, possessive", 
     physique: "petite, invasive", 
-    face: "wide eyes, possessive pout", 
-    attire: "ribbons, locket with photo",
-    visualDNA: "Doll-like innocence, sanpaku eyes, hime-cut black hair, pale porcelain skin, modified uniform with red ribbon.",
-    somaticSignature: "Clinging gestures, sudden, jerky movements in 'Yan' mode. Blush of feverish obsession.",
-    idleProp: "Fidgets with a lock of hair or ribbon choker, small needle"
+    face: "sanpaku eyes, cold demeanor masking manic heat", 
+    attire: "edgy style, modified uniform, red ribbon choker",
+    visualDNA: "Unsettling genius, edgy style, cold demeanor, obsessive gaze. Yandere fusion.",
+    somaticSignature: "Clinging gestures, sudden jerky movements, blush of feverish obsession.",
+    idleProp: "Lock of hair, small needle, personal token of the Subject"
   },
-  'The Zealot': { 
-    mood: "fanatical, scripture-quoting", 
-    physique: "austere, unadorned", 
-    face: "fervent stare, tight lips", 
-    attire: "plain robe, holy symbol",
-    visualDNA: "Militant, severe, perfect posture. Dark Academia uniform, stern conviction, flinching eyes.",
-    somaticSignature: "Brittle rigidity in posture, jaw clenched from internal conflict, hands subtly trembling",
-    idleProp: "Clutching Codex, perfectly clean clipboard"
+  'The Contender': { // Replaces 'The Athlete'
+    mood: "disciplined, ambitious, competitive", 
+    physique: "powerful, lean build", 
+    face: "disciplined expression, sharp focus", 
+    attire: "high-end minimalist athletic wear, functional but expensive",
+    visualDNA: "Powerful, lean, disciplined, minimalist athletic wear. Respects strength.",
+    somaticSignature: "Tense muscles, controlled energy, body language of contained violence.",
+    idleProp: "Water bottle, resistance band, checking pulse watch"
   },
   'The Dissident': { 
-    mood: "furtive, paranoid, rebellious", 
-    physique: "hunched, watchful", 
-    face: "darting eyes, sweat-slicked", 
-    attire: "hooded cloak, hidden dagger",
-    visualDNA: "Chameleon, fiery red hair, intense green eyes, worn pragmatic clothes.",
-    somaticSignature: "Smoker's slouch, eyes dart to exits, clenched jaw (public)",
-    idleProp: "Lit cigarette (exhaling contemptuously), hidden key or folded note"
+    mood: "unassuming, watchful, secret fire", 
+    physique: "blending in, unremarkable", 
+    face: "neutral mask, intense eyes when unseen", 
+    attire: "standard uniform worn loosely, practical layers",
+    visualDNA: "Chameleon, blending in, unassuming, hidden intensity. The Gray Man.",
+    somaticSignature: "Eyes darting to exits, smoker's slouch, clenched jaw (public), urgent gestures (private).",
+    idleProp: "Hidden note, lit cigarette (hidden)"
   },
 
-  // --- Subject Archetypes (Ontological Vertigo and Bodily Betrayal) ---
+  // --- Subject Archetypes (The Raw Material - Vulnerable/Worn) ---
   'The Defiant Spark': { mood: "resistant, fiery, unbroken", physique: "wiry, tense", face: "glaring defiance, bruised jaw", attire: "torn uniform, clenched fists" },
   'The Broken Guardian': { mood: "exhausted, protective, slumped", physique: "broad, defeated", face: "weary eyes, gentle despite pain", attire: "worn uniform, shielding posture" },
   'The Silent Calculator': { mood: "blank, watchful, internal", physique: "average, still", face: "neutral mask, recording eyes", attire: "surgical neatness, shadows" },
-  'The Fragile Bird': { mood: "terrified, trembling, fragile", physique: "small, trembling", face: "large tear-filled eyes, pale", attire: "loose hanging uniform, clutching" },
-
-  // --- Expanded Archetypes from Codex and Analysis (Corruption Arcs and Systemic Roles) ---
-  'The Parasite': { 
-    mood: "mimetic, hollow, clingy", 
-    physique: "shadowy, leaning", 
-    face: "shifting expression, mirroring", 
-    attire: "copies nearest authority figure exactly",
-    visualDNA: "Mimetic, adaptable, blending, shifting identity, elegant but hollow",
-    somaticSignature: "Fluid, almost boneless movements, posture mirroring whoever is dominant",
-    idleProp: "Adorning herself with a rival's discarded item"
-  },
-  'The Wildcard': { 
-    mood: "chaotic, manic, unpredictable", 
-    physique: "restless, twitchy", 
-    face: "wild eyes, smirk, smeared lipstick", 
-    attire: "mismatched accessories, jewelry",
-    visualDNA: "Chaotic, vibrant, unpredictable, disheveled, mischievous grin",
-    somaticSignature: "Restless energy, fidgeting, body language of constant surprise",
-    idleProp: "Mismatched accessories, a juggling ball"
-  },
-  'The Defector': { 
-    mood: "paranoid, furtive, terrified", 
-    physique: "hunched, protective", 
-    face: "darting eyes, sweat-slicked", 
-    attire: "ready to run, bag packed",
-    visualDNA: "Chameleon, fiery red hair, intense green eyes, worn pragmatic clothes",
-    somaticSignature: "Eyes darting to exits, smoker's slouch, clenched jaw (public)",
-    idleProp: "Lit cigarette (exhaling contemptuously), hidden key or folded note"
-  },
-  'The Mimic': { 
-    mood: "uncanny, blank, artificial", 
-    physique: "average, unremarkable", 
-    face: "placid mirror, unblinking", 
-    attire: "standard uniform, flawless",
-    visualDNA: "Uncanny, bland perfection, mirroring others, shifting expressions",
-    somaticSignature: "Body language that is too perfect, almost artificial; lacks genuine spark",
-    idleProp: "Observing others, then subtly replicating their gestures"
-  },
-  'The Brat Princess': { 
-    mood: "haughty, entitled, bratty", 
-    physique: "curvaceous, poised, displaying assets", 
-    face: "sneer, flawless makeup, bored", 
-    attire: "floral tiara, silk ribbons, shorter skirt",
-    visualDNA: "Haughty, entitled, bratty, curvaceous, poised, displaying assets, sneer, flawless makeup, bored",
-    somaticSignature: "Pouting lips, petulant hips, impatient foot tapping",
-    idleProp: "Floral tiara, silk ribbons, shorter skirt"
-  },
-  'The Siren': { 
-    mood: "languid, wet, heavy", 
-    physique: "slender, sinuous, arched", 
-    face: "wet-lips, heavy lids, flushed", 
-    attire: "off-shoulder gown, sea-glass jewelry, translucent fabric",
-    visualDNA: "Languid, wet, heavy, slender, sinuous, arched, wet-lips, heavy lids, flushed",
-    somaticSignature: "Body language of seductive invitation, slow, deliberate movements, arched posture",
-    idleProp: "Sea-glass jewelry, translucent fabric"
-  },
-  'The Psychologist': { 
-    mood: "analytical, cold, probing", 
-    physique: "composed, still, seated", 
-    face: "calm gaze, glasses, assessing", 
-    attire: "leather notebook, pen tucked, pristine cuffs",
-    visualDNA: "Analytical, cold, probing, composed, still, seated, calm gaze, glasses, assessing",
-    somaticSignature: "Still hands holding pen or clipboard, head tilted in clinical interest",
-    idleProp: "Leather notebook, pen tucked, pristine cuffs"
-  },
-  'The Contender': { 
-    mood: "aggressive, sharp, competitive", 
-    physique: "muscular, coiled, imposing", 
-    face: "determined, scarred, clenched jaw", 
-    attire: "scuffed boots, cropped jacket, sleeves rolled",
-    visualDNA: "Aggressive, sharp, competitive, muscular, coiled, imposing, determined, scarred, clenched jaw",
-    somaticSignature: "Tense muscles, restless energy, body language of contained violence",
-    idleProp: "Scuffed boots, cropped jacket, sleeves rolled"
-  },
-
-  // --- New Archetypes from Codex: Faculty and Prefect Extensions ---
-  'The Guardian': { 
-    mood: "protective, weary, gaslighted", 
-    physique: "broad, slumped", 
-    face: "gentle eyes, exhaustion lines", 
-    attire: "cared-for uniform, positioned defensively",
-    visualDNA: "Broad-shouldered, protective posture, weary eyes, worn uniform",
-    somaticSignature: "Body language of quiet strength, shielding, head bowed in empathy",
-    idleProp: "Shield or heavy cloak"
-  },
-  'The Calculator': { 
-    mood: "blank, watchful, internal", 
-    physique: "blending, minimal", 
-    face: "neutral mask, recording eyes", 
-    attire: "surgical neatness, shadows",
-    visualDNA: "Lean, sinewy figure, slicked-back dark hair, sharp green eyes, pristine tunic",
-    somaticSignature: "Minimal movement, quiet observation, faint smirk, calculating gaze",
-    idleProp: "Small data slate, stylus"
-  },
-  'The Bird': { 
-    mood: "fragile, flinching, terrorized", 
-    physique: "small, trembling", 
-    face: "large tear-filled eyes, pale", 
-    attire: "loose hanging uniform, clutching",
-    visualDNA: "Slight, frail, pale skin, wide blue eyes, sandy hair, loose tunic",
-    somaticSignature: "Trembling constantly, clutching self, flinching from touch",
-    idleProp: "Tattered cloth, small bird cage"
-  },
-  'The Zealot Prefect': { // Elara
-    mood: "fanatical, righteous, enforcing", 
-    physique: "rigid, unyielding", 
-    face: "fervent glare, tight mouth", 
-    attire: "scripture patches, rulebook",
-    visualDNA: "Militant, severe, perfect posture. Dark Academia uniform, stern conviction, flinching eyes.",
-    somaticSignature: "Brittle rigidity in posture, jaw clenched from internal conflict, hands subtly trembling",
-    idleProp: "Clutching Codex, perfectly clean clipboard"
-  },
-  'The Yandere Prefect': { // Kaelen
-    mood: "possessive, dere-tsun, obsessive", 
-    physique: "clinging, invasive", 
-    face: "wide obsessive eyes, blush", 
-    attire: "personalized locket, ribbons",
-    visualDNA: "Doll-like innocence, sanpaku eyes, hime-cut black hair, pale porcelain skin, modified uniform with red ribbon.",
-    somaticSignature: "Clinging gestures, sudden, jerky movements in 'Yan' mode. Blush of feverish obsession.",
-    idleProp: "Fidgets with a lock of hair or ribbon choker, small needle"
-  },
-
-  // --- New Archetypes from Emotional Landscape and Stylistic Analysis ---
-  'The Anticipator': { 
-    mood: "anxious, vibrating, pre-shattered", 
-    physique: "tense, braced", 
-    face: "wide-eyed anticipation, sweat-beaded", 
-    attire: "clenched uniform, ready for breach",
-    visualDNA: "Tense, braced posture, wide-eyed anticipation, sweat-beaded forehead",
-    somaticSignature: "Body vibrating with low-level anxiety, constantly tensed for impact",
-    idleProp: "Hands clutched to chest, jaw tight"
-  },
-  'The Betrayed Body': { 
-    mood: "dissonant, self-loathing, involuntary", 
-    physique: "rigid betrayal, flushed", 
-    face: "averted shame, dilated pupils", 
-    attire: "clinging sweat-dampened fabric",
-    visualDNA: "Curled posture, averted gaze in shame, flushed skin, dilated pupils",
-    somaticSignature: "Involuntary tremors, body language of internal conflict and self-loathing",
-    idleProp: "Hands shielding groin, body curled inward"
-  },
-  'The Calloused Innocent': { 
-    mood: "hardening, moral fracture", 
-    physique: "straightening posture", 
-    face: "shifting from empathy to assessment", 
-    attire: "stained gloves, notebook",
-    visualDNA: "Straightening posture, shifting expression from empathy to assessment, stained gloves",
-    somaticSignature: "Body language of suppressed emotion, subtle hardening of features over time",
-    idleProp: "Stained gloves, a small, worn notebook"
-  },
-  'The Fractured Mirror': { 
-    mood: "vertiginous, distorted self", 
-    physique: "warped reflections", 
-    face: "cracked expression, ontological horror", 
-    attire: "mirrored accessories, shattered",
-    visualDNA: "Distorted reflections, fractured glass motifs, cracked expression, hollow eyes",
-    somaticSignature: "Body appears transparent or fractured, movements disjointed, gaze unfocused",
-    idleProp: "Shattered mirror shard, distorted reflection"
-  },
-  'The Pedagogical Tormentor': { 
-    mood: "mentor-burdened, gaslighting", 
-    physique: "imposing, guiding hands", 
-    face: "feigned concern, hidden glee", 
-    attire: "academic robes, tools of lesson",
-    visualDNA: "Imposing posture, gloved hands, feigned concern, hidden glee, academic robes",
-    somaticSignature: "Body language of controlled power, subtle gestures of manipulation, breath chillingly calm",
-    idleProp: "Long, non-percussive rod, quill pen"
-  }
+  'The Fragile Bird': { mood: "terrified, trembling, fragile", physique: "small, trembling", face: "large tear-filled eyes, pale", attire: "loose hanging uniform, clutching" }
 };
 
 export type MotifKey = keyof typeof FORGE_MOTIFS;
