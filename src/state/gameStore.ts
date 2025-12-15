@@ -7,18 +7,20 @@ import { INITIAL_LEDGER } from '../constants';
 import { updateLedgerHelper } from './stateHelpers';
 import { createMultimodalSlice } from './multimodalSlice';
 import { createSubjectSlice } from './subjectSlice';
-import { LogEntry, CombinedGameStoreState, CharacterId, PrefectDNA, PrefectDecision, GameState, YandereLedger } from '../types';
+import { LogEntry, CombinedGameStoreState, CharacterId, PrefectDNA, GameState, YandereLedger } from '../types';
 import { KGotController } from '../controllers/KGotController';
 import { enqueueTurnForMedia } from './mediaController';
-import { createIndexedDBStorage, forgeStorage } from '../utils/indexedDBStorage'; // Import forgeStorage
+import { createIndexedDBStorage, forgeStorage } from '../utils/indexedDBStorage';
 
-// Initialize the Controller to get the canonical graph structure
-const controller = new KGotController({ 
-    nodes: {}, 
-    edges: [], 
-    global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' } 
-});
-const INITIAL_GRAPH: KnowledgeGraph = controller.getGraph();
+// Use a factory function for initial graph to avoid global state pollution
+const getInitialGraph = (): KnowledgeGraph => {
+    const controller = new KGotController({ 
+        nodes: {}, 
+        edges: [], 
+        global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' } 
+    });
+    return controller.getGraph();
+};
 
 const INITIAL_GAME_STATE: GameState = {
     ledger: INITIAL_LEDGER,
@@ -42,12 +44,11 @@ const INITIAL_LOGS: LogEntry[] = [
   }
 ];
 
-// Helper: Lightweight K-Means Clustering (replacing heavy ml5)
+// Helper: Lightweight K-Means Clustering
 function simpleKMeans(vectors: Record<string, number[]>, k: number = 3): Record<string, string[]> {
     const keys = Object.keys(vectors);
     if (keys.length < k) return { 'cluster_0': keys };
 
-    // 1. Initialize Centroids randomly
     const centroids: number[][] = [];
     for (let i = 0; i < k; i++) {
         centroids.push(vectors[keys[Math.floor(Math.random() * keys.length)]]);
@@ -56,9 +57,7 @@ function simpleKMeans(vectors: Record<string, number[]>, k: number = 3): Record<
     let assignments: Record<string, number> = {};
     let iterations = 0;
     
-    // 2. Iteration Loop
     while (iterations < 10) {
-        // Assign
         let changed = false;
         keys.forEach(key => {
             const vec = vectors[key];
@@ -77,7 +76,6 @@ function simpleKMeans(vectors: Record<string, number[]>, k: number = 3): Record<
 
         if (!changed) break;
 
-        // Update Centroids
         const newCentroids = Array(k).fill(0).map(() => Array(vectors[keys[0]].length).fill(0));
         const counts = Array(k).fill(0);
         
@@ -97,7 +95,6 @@ function simpleKMeans(vectors: Record<string, number[]>, k: number = 3): Record<
         iterations++;
     }
 
-    // 3. Group by Cluster
     const groups: Record<string, string[]> = {};
     Object.entries(assignments).forEach(([node, cluster]) => {
         const clusterName = `cluster_${cluster}`;
@@ -111,7 +108,7 @@ function simpleKMeans(vectors: Record<string, number[]>, k: number = 3): Record<
 // Helper to select active prefects for the scene
 function selectActivePrefects(
   prefects: PrefectDNA[], 
-  ledger: YandereLedger, // Use YandereLedger here
+  ledger: YandereLedger,
   count: number = 2
 ): PrefectDNA[] {
   const scores = new Map<string, number>();
@@ -119,7 +116,6 @@ function selectActivePrefects(
   prefects.forEach(p => {
     let score = 0.1;
     
-    // Ledger reactivity
     if (ledger.traumaLevel > 60) {
       if (p.archetype === 'The Nurse') score += 0.6;
       if (p.archetype === 'The Voyeur') score += 0.3;
@@ -130,7 +126,6 @@ function selectActivePrefects(
       if (p.archetype === 'The Sadist') score += 0.4;
     }
     
-    // Archetype-specific
     switch (p.archetype) {
       case 'The Yandere':
         score += 0.4;
@@ -139,7 +134,6 @@ function selectActivePrefects(
       case 'The Dissident':
         if (ledger.hopeLevel > 40) score += 0.4;
         break;
-      // ... other archetypes
     }
     
     if (p.favorScore > 70) score += 0.2;
@@ -160,26 +154,25 @@ function selectActivePrefects(
 export interface GameStoreWithPrefects extends CombinedGameStoreState {
     prefects: PrefectDNA[];
     updatePrefects: (prefects: PrefectDNA[]) => void;
-    narrativeClusters: Record<string, string[]>; // New: Stores Node2Vec Clusters
-    analyzeGraph: () => void; // New: Triggers analysis
+    narrativeClusters: Record<string, string[]>;
+    analyzeGraph: () => void;
     
-    // Lite Mode Support
     isLiteMode: boolean;
     setLiteMode: (isLite: boolean) => void;
     startSession: (isLiteMode?: boolean) => Promise<void>; 
-    saveSnapshot: () => Promise<void>; // Added missing method
-    loadSnapshot: () => Promise<void>; // Added missing method
+    saveSnapshot: () => Promise<void>;
+    loadSnapshot: () => Promise<void>;
 }
 
 export const useGameStore = create<GameStoreWithPrefects>()(
   persist(
     (set, get, api) => ({
       gameState: INITIAL_GAME_STATE,
-      kgot: INITIAL_GRAPH,
+      kgot: getInitialGraph(),
       logs: INITIAL_LOGS,
       choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
       prefects: [], 
-      sessionActive: false, // Default to false
+      sessionActive: false,
       narrativeClusters: {},
       isLiteMode: false,
       
@@ -196,14 +189,10 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       ...createSubjectSlice(set, get, api),
 
       addLog: (log) => set((state) => {
-          // MEMORY MANAGEMENT: Prune old logs if they exceed threshold
-          // This prevents the application state from bloating indefinitely
           const MAX_LOGS = 50;
           let updatedLogs = [...state.logs, log];
           
           if (updatedLogs.length > MAX_LOGS) {
-              // Keep initial system logs (0-1) and the last 40 logs
-              // This is a simple sliding window strategy
               const systemLogs = updatedLogs.filter(l => l.type === 'system' && l.id.includes('init'));
               const recentLogs = updatedLogs.slice(-(MAX_LOGS - systemLogs.length));
               updatedLogs = [...systemLogs, ...recentLogs];
@@ -228,33 +217,31 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       })),
 
       analyzeGraph: async () => {
-          // Triggered periodically or after turns to update embeddings and clusters
           const state = get();
           const currentController = new KGotController(state.kgot);
-          
-          // 1. Compute Node2Vec Embeddings
           const embeddings = currentController.getNode2VecEmbeddings();
-          
-          // 2. Perform Clustering (Narrative Subplots)
-          // K=3 for finding e.g., 'Trauma Group', 'Faculty Elite', 'Resistance'
           const clusters = simpleKMeans(embeddings, 3);
-          
-          // 3. Log results to system if changed
           console.log("[GraphAnalysis] Narrative Clusters updated (Node2Vec):", clusters);
-          
           set({ narrativeClusters: clusters });
       },
 
       applyServerState: (result: any) => {
-          // 1. Identify Primary Actor for Visualization
-          let primaryActor: PrefectDNA | CharacterId | string = CharacterId.PLAYER; // Default to player/POV
+          const state = get();
+          
+          // Initialize controller with current graph state to process updates
+          const controller = new KGotController(state.kgot);
+
+          // 1. Identify Primary Actor for Visualization using Fuzzy Resolution
+          let primaryActor: PrefectDNA | CharacterId | string = CharacterId.PLAYER; 
           
           if (result.prefectSimulations && result.prefectSimulations.length > 0) {
               const sortedSims = [...result.prefectSimulations].sort((a: any, b: any) => 
                   (b.public_action?.length || 0) - (a.public_action?.length || 0)
               );
               const activeId = sortedSims[0].prefect_id;
-              const prefect = get().prefects.find(p => p.id === activeId);
+              // Resolve ID using controller
+              const resolvedActiveId = controller.resolveEntityId(activeId) || activeId;
+              const prefect = get().prefects.find(p => p.id === resolvedActiveId);
               if (prefect) {
                   primaryActor = prefect;
               }
@@ -263,6 +250,9 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           // 2. Register Multimodal Turn
           let newTurnId: string | null = null;
           if (result.narrative) {
+              const subjectNode = controller.getGraph().nodes['Subject_84'];
+              const currentLocation = subjectNode?.attributes?.currentLocation || state.gameState.location;
+
               const newTurn = get().registerTurn(
                   result.narrative, 
                   result.visualPrompt, 
@@ -271,14 +261,12 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                     ledgerSnapshot: result.state_updates ? { ...get().gameState.ledger, ...result.state_updates } : get().gameState.ledger,
                     directorDebug: result.thoughtProcess,
                     activeCharacters: typeof primaryActor !== 'string' ? [primaryActor.id] : [primaryActor],
-                    // Fix: Access currentLocation from KGotController's subject node attributes
-                    location: result.updatedGraph?.nodes['Subject_84']?.attributes?.currentLocation || get().gameState.location,
+                    location: currentLocation,
                   },
-                  result.script // NEW: Pass the script to the turn registration
+                  result.script
               );
               newTurnId = newTurn.id;
               
-              // Trigger media generation pipeline
               enqueueTurnForMedia(
                 newTurn, 
                 primaryActor, 
@@ -286,23 +274,18 @@ export const useGameStore = create<GameStoreWithPrefects>()(
               );
           }
 
-          // State updates via setter to trigger pruning logic inside addLog
-          // We can't use simple spread here because addLog contains logic
-          
           if (result.thoughtProcess) {
               get().addLog({ id: `thought-${Date.now()}`, type: 'thought', content: result.thoughtProcess });
           }
-          
           if (result.narrative) {
               get().addLog({ 
                   id: newTurnId || `narrative-${Date.now()}`, 
                   type: 'narrative', 
                   content: result.narrative, 
                   visualContext: result.visualPrompt,
-                  script: result.script // Pass script for structured rendering in Log
+                  script: result.script
               });
           }
-
           if (result.psychosisText) {
               get().addLog({
                   id: `psychosis-${Date.now()}`,
@@ -312,21 +295,17 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           }
 
           // === HANDLING MUTATIONS AND SYNCING TO STORE ===
-          if (result.updatedGraph && result.kgot_mutations) {
+          if (result.kgot_mutations) {
+             // 1. Process Side Effects (Logs / Subject Updates)
              result.kgot_mutations.forEach((mut: any) => {
-                 // Handle 'add_injury' mutations
+                 // Handle 'add_injury' mutations using resolved IDs
                  if (mut.operation === 'add_injury' && mut.params) {
-                     const targetId = mut.params.target_id === 'Player' ? CharacterId.PLAYER : mut.params.target_id;
+                     const rawTargetId = mut.params.target_id || mut.params.subject_id;
+                     const finalTarget = controller.resolveEntityId(rawTargetId) || rawTargetId;
                      
-                     // Resolve standard IDs
-                     let finalTarget = targetId;
-                     if (targetId.includes("84")) finalTarget = CharacterId.PLAYER;
-                     
-                     // Get current subject
                      const subject = get().subjects[finalTarget];
                      if (subject) {
-                         const injuryName = mut.params.injury_name;
-                         // Add to injuries array if not already present
+                         const injuryName = mut.params.injury_name || mut.params.injury;
                          const updatedInjuries = [...new Set([...(subject.injuries || []), injuryName])];
                          get().updateSubject(finalTarget, { injuries: updatedInjuries });
                          
@@ -338,11 +317,11 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                      }
                  }
                  // Handle 'add_subject_secret' mutations
-                 if (mut.operation === 'add_subject_secret' && mut.params) {
-                     const subjectId = mut.params.subject_id === 'Player' ? CharacterId.PLAYER : mut.params.subject_id;
-                     const secretName = mut.params.secret_name;
-                     const secretDescription = mut.params.secret_description;
-                     const discoveredBy = mut.params.discovered_by;
+                 if ((mut.operation === 'add_subject_secret' || mut.operation === 'add_secret') && mut.params) {
+                     const rawSubjectId = mut.params.subject_id || CharacterId.PLAYER;
+                     const subjectId = controller.resolveEntityId(rawSubjectId) || rawSubjectId;
+                     const secretName = mut.params.secret_name || "Hidden Truth";
+                     const discoveredBy = mut.params.discovered_by || "Unknown";
 
                      const subject = get().subjects[subjectId];
                      if (subject) {
@@ -351,38 +330,40 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                              type: 'system',
                              content: `SECRET DISCOVERED: "${secretName}" about ${subject.name} by ${discoveredBy}.`
                          });
-                         // No direct update to subject.secrets here as it's managed by KGotController.
-                         // KGotController stores the secret in the subject's KGotNode attributes.
                      }
                  }
              });
+
+             // 2. Apply mutations to the Graph via Controller (which handles ID resolution internally now for mutations)
+             controller.applyMutations(result.kgot_mutations);
           }
 
-          set((state) => {
-              let nextKgot = state.kgot;
-              if (result.updatedGraph) {
-                  nextKgot = result.updatedGraph;
-              }
+          // 3. Handle Ledger Updates via Controller
+          if (result.state_updates) {
+              controller.updateLedger('Subject_84', result.state_updates);
+          }
 
+          // 4. Retrieve Updated Graph from Controller
+          const finalGraph = controller.getGraph();
+
+          set((state) => {
               let nextLedger = state.gameState.ledger;
               if (result.state_updates) {
                  nextLedger = updateLedgerHelper(state.gameState.ledger, result.state_updates);
               }
 
-              // Determine next turn count (Sync with KGoT or increment)
-              const nextTurn = nextKgot.global_state?.turn_count 
-                ? nextKgot.global_state.turn_count 
+              const nextTurn = finalGraph.global_state?.turn_count 
+                ? finalGraph.global_state.turn_count 
                 : (state.gameState.turn + 1);
 
               return {
-                  kgot: nextKgot,
+                  kgot: finalGraph,
                   choices: result.choices || [],
-                  // logs are updated via addLog above
                   isThinking: false,
                   gameState: {
                       ...state.gameState,
                       ledger: nextLedger,
-                      turn: nextTurn // Update local turn count
+                      turn: nextTurn 
                   }
               };
           });
@@ -420,7 +401,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             2 
           );
           
-          // Pass the isLiteMode flag from store to the Director
           const result = await executeUnifiedDirectorTurn(
             input,
             history,
@@ -432,8 +412,14 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           if (result.prefectSimulations && result.prefectSimulations.length > 0) {
             const updatedPrefects = [...state.prefects];
             
+            // Instantiate Controller for ID Resolution
+            const controller = new KGotController(state.kgot);
+
             result.prefectSimulations.forEach((sim: any) => {
-              const prefectIndex = updatedPrefects.findIndex(p => p.id === sim.prefect_id);
+              // Resolve Prefect ID
+              const resolvedId = controller.resolveEntityId(sim.prefect_id) || sim.prefect_id;
+              const prefectIndex = updatedPrefects.findIndex(p => p.id === resolvedId);
+              
               if (prefectIndex !== -1) {
                 const prefect = updatedPrefects[prefectIndex];
                 
@@ -454,20 +440,22 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                 }
                 
                 if (sim.sabotage_attempt) {
-                  const targetId = updatedPrefects.find(p => 
-                    p.displayName.includes(sim.sabotage_attempt.target)
-                  )?.id;
-                  if (targetId) {
+                  // Resolve Target ID for Sabotage
+                  const targetRaw = sim.sabotage_attempt.target;
+                  const targetId = controller.resolveEntityId(targetRaw);
+                  
+                  if (targetId && updatedPrefects.some(p => p.id === targetId)) {
                     prefect.relationships[targetId] = 
                       Math.max(-1, (prefect.relationships[targetId] || 0) - 0.3);
                   }
                 }
                 
                 if (sim.alliance_signal) {
-                  const targetId = updatedPrefects.find(p => 
-                    p.displayName.includes(sim.alliance_signal.target)
-                  )?.id;
-                  if (targetId) {
+                  // Resolve Target ID for Alliance
+                  const targetRaw = sim.alliance_signal.target;
+                  const targetId = controller.resolveEntityId(targetRaw);
+                  
+                  if (targetId && updatedPrefects.some(p => p.id === targetId)) {
                     prefect.relationships[targetId] = 
                       Math.min(1, (prefect.relationships[targetId] || 0) + 0.2);
                   }
@@ -494,7 +482,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           
         } catch (e: any) {
           console.error("Unified Director Error:", e);
-          set({ isThinking: false }); // Ensure UI is no longer stuck in thinking state
+          set({ isThinking: false }); 
           get().addLog({
             id: `error-${Date.now()}`,
             type: 'system',
@@ -505,6 +493,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
 
       resetGame: () => {
         get().resetMultimodalState();
+        // Use local controller to generate fresh state
         const freshController = new KGotController({ nodes: {}, edges: [], global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' } });
         const newSeed = Date.now();
         
@@ -514,18 +503,17 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           logs: INITIAL_LOGS,
           choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
           prefects: [],
-          sessionActive: false, // Reset active state
+          sessionActive: false, 
           narrativeClusters: {},
           isThinking: false,
           executedCode: undefined,
           lastSimulationLog: undefined,
           lastDirectorDebug: undefined,
-          // Preserve isLiteMode setting or reset? Assuming preserve.
         });
       },
 
       startSession: async (isLiteMode = false) => {
-        set({ sessionActive: true, isLiteMode }); // Activate session with mode preference
+        set({ sessionActive: true, isLiteMode }); 
         const state = get();
         
         if (state.prefects.length === 0) {
@@ -535,16 +523,9 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         }
       },
 
-      /**
-       * Optimized Save Snapshot:
-       * 1. Decouples heavy graph save (KGoT) from lightweight state save.
-       * 2. Compresses graph data by stripping transient visualization props (x, y, vx, vy) from nodes.
-       */
       saveSnapshot: async () => {
         const state = get();
         try {
-          // 1. Save Lightweight State (UI-blocking risk if large)
-          // We omit KGoT here to be saved separately.
           const { kgot, ...lightweightState } = state;
           
           await forgeStorage.saveGameState('forge-snapshot', {
@@ -556,10 +537,9 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             isLiteMode: lightweightState.isLiteMode
           });
 
-          // 2. Compress KGoT Graph (Strip Force-Layout Params)
           const compressedNodes: Record<string, any> = {};
           Object.values(state.kgot.nodes).forEach((node: any) => {
-              const { x, y, vx, vy, index, ...cleanNode } = node; // Destructure to remove D3 props
+              const { x, y, vx, vy, index, ...cleanNode } = node; 
               compressedNodes[node.id] = cleanNode;
           });
           
@@ -569,7 +549,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
               global_state: state.kgot.global_state
           };
 
-          // 3. Save Heavy Graph State (Async IndexedDB)
           await forgeStorage.saveGraphState('forge-snapshot-graph', compressedGraph);
 
           console.log("Game state archived (Split-Storage Optimization).");
@@ -582,7 +561,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
 
       loadSnapshot: async () => {
         try {
-          // 1. Parallel Load
           const [baseState, graphData] = await Promise.all([
               forgeStorage.loadGameState('forge-snapshot'),
               forgeStorage.loadGraphState('forge-snapshot-graph')
@@ -591,8 +569,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           if (baseState && graphData) {
             set((state) => ({
               ...state,
-              ...baseState, // Restore lightweight state
-              kgot: graphData, // Restore active graph
+              ...baseState,
+              kgot: graphData, 
               sessionActive: true, 
               isThinking: false,
               currentTurnId: baseState.multimodalTimeline?.[baseState.multimodalTimeline.length - 1]?.id || null,
@@ -617,8 +595,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       storage: createJSONStorage(() => createIndexedDBStorage()), 
       partialize: (state) => ({
         gameState: state.gameState,
-        // We do NOT persist kgot here anymore, it is handled manually in saveSnapshot via forgeStorage.saveGraphState
-        // to prevent duplicate storage or blocking the main thread with massive stringify ops.
         logs: state.logs,
         prefects: state.prefects,
         multimodalTimeline: state.multimodalTimeline,

@@ -4,7 +4,7 @@ import { UnifiedDirectorOutput } from '../lib/schemas/unifiedDirectorSchema';
 import { YandereLedger } from '../types';
 import { KGotCore } from '../lib/kgot/core';
 import { applyMutations } from '../lib/kgot/mutations';
-import { fuzzyResolve, ENTITY_MAP } from '../lib/kgot/search';
+import { fuzzyResolve } from '../lib/kgot/search';
 import { runLayoutAsync } from '../lib/kgot/layout';
 import { updateCentrality, detectCommunities, calculateDominancePath, pruneGraph } from '../lib/kgot/metrics';
 import { INITIAL_LEDGER } from '../constants';
@@ -117,14 +117,13 @@ export class KGotController {
     const currentTurn = this.core.getGraph().global_state.turn_count || 0;
 
     // Pre-process params to resolve fuzzy IDs before passing to strict mutation handler
-    // We iterate the raw JSON from Gemini and fix IDs if they are just names
     const resolvedMutations = mutations.map(m => {
         const resolved = { ...m };
         
         // Helper to resolve specific fields if they exist
         const resolveField = (obj: any, field: string) => {
             if (obj && obj[field]) {
-                const id = this.resolveTargetId(obj[field]);
+                const id = this.resolveEntityId(obj[field]);
                 if (id) obj[field] = id;
             }
         };
@@ -147,10 +146,10 @@ export class KGotController {
 
         // Array resolution for alliances/witnesses
         if (resolved.members && Array.isArray(resolved.members)) {
-            resolved.members = resolved.members.map((id: string) => this.resolveTargetId(id) || id);
+            resolved.members = resolved.members.map((id: string) => this.resolveEntityId(id) || id);
         }
         if (resolved.witness_ids && Array.isArray(resolved.witness_ids)) {
-            resolved.witness_ids = resolved.witness_ids.map((id: string) => this.resolveTargetId(id) || id);
+            resolved.witness_ids = resolved.witness_ids.map((id: string) => this.resolveEntityId(id) || id);
         }
 
         return resolved;
@@ -160,32 +159,43 @@ export class KGotController {
     
     // Auto-prune and Layout periodically
     if (Math.random() < 0.1) {
-        pruneGraph(this.core);
-        runLayoutAsync(this.core);
+        this.pruneGraph();
+        this.runLayout();
     }
   }
 
   public updateLedger(subjectId: string, deltas: Partial<YandereLedger>): void {
       const turn = this.core.getGraph().global_state.turn_count;
-      // We manually construct a set of atomic ledger updates
-      const mutations = Object.keys(deltas).map(key => ({
-          operation: 'update_ledger_stat',
-          id: subjectId,
-          stat: key,
-          delta: (deltas as any)[key] - ((this.core.internalGraph.getNodeAttributes(subjectId)?.attributes?.ledger?.[key]) || 0), // Not ideal, but fits atomic model if delta is needed
-          clamp: true
-      }));
-      
-      // OR better, just use a dedicated bulk update in core if needed, 
-      // but for now let's just trigger direct attribute merge which applyMutations supports via update_node
       const updateMut = {
           operation: 'update_node',
           id: subjectId,
           updates: {
-              attributes: { ledger: { ...deltas } } // This will merge
+              attributes: { ledger: { ...deltas } } 
           }
       };
       applyMutations(this.core, [updateMut], turn);
+  }
+
+  // --- Metrics & Analysis (Core Methods) ---
+
+  public updateMetrics(): void {
+      updateCentrality(this.core);
+  }
+
+  public detectCommunities(): Record<string, number> {
+      return detectCommunities(this.core);
+  }
+
+  public getDominancePath(source: string, target: string): string[] | null {
+      return calculateDominancePath(this.core, source, target);
+  }
+
+  public pruneGraph(threshold: number = 0.1): void {
+      pruneGraph(this.core, threshold);
+  }
+
+  public async runLayout(iterations: number = 50): Promise<void> {
+      await runLayoutAsync(this.core, iterations);
   }
 
   // --- Analysis & AI ---
@@ -204,7 +214,7 @@ export class KGotController {
       const turn = this.core.getGraph().global_state.turn_count;
 
       simulations.forEach(sim => {
-          const pid = this.resolveTargetId(sim.prefect_id) || sim.prefect_id;
+          const pid = this.resolveEntityId(sim.prefect_id) || sim.prefect_id;
           
           // Update State
           muts.push({
@@ -236,7 +246,7 @@ export class KGotController {
               muts.push({
                   operation: 'update_grudge',
                   source: pid,
-                  target: this.resolveTargetId(sim.sabotage_attempt.target) || sim.sabotage_attempt.target,
+                  target: this.resolveEntityId(sim.sabotage_attempt.target) || sim.sabotage_attempt.target,
                   delta: 25 
               });
           }
@@ -246,7 +256,10 @@ export class KGotController {
 
   // --- Search & Utils ---
 
-  private resolveTargetId(nameOrId: string | undefined): string | null {
+  /**
+   * Public wrapper for fuzzy ID resolution to be used by store side-effects.
+   */
+  public resolveEntityId(nameOrId: string | undefined): string | null {
       return fuzzyResolve(this.core, nameOrId || '');
   }
 }

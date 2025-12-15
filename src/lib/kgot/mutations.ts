@@ -157,12 +157,44 @@ const AddPsychosisNode = z.object({
   intensity: z.number().min(0).max(100),
 });
 
+// --- NEW LORE MUTATIONS ---
+
+const UpdateRelationship = z.object({
+  operation: z.literal('update_relationship'),
+  source: z.string(),
+  target: z.string(),
+  category: z.enum(['HATE', 'SYMPATHY', 'LOVE', 'OBSESSION', 'RIVALRY', 'TRUST']),
+  delta: z.number().min(-1).max(1),
+});
+
+const UpdateAgentEmotion = z.object({
+  operation: z.literal('update_agent_emotion'),
+  agent_id: z.string(),
+  emotion: z.enum(['paranoia', 'desperation', 'confidence', 'arousal', 'dominance']),
+  delta: z.number(),
+});
+
+const InflictSomaticTrauma = z.object({
+  operation: z.literal('inflict_somatic_trauma'),
+  target_id: z.string(),
+  location: z.enum(['groin', 'testis', 'face', 'torso', 'limbs', 'mind']),
+  description: z.string(),
+  severity: z.number().min(0).max(100),
+});
+
+const RevealSecret = z.object({
+  operation: z.literal('reveal_secret'),
+  secret_id: z.string(),
+  revealed_to: z.array(z.string()),
+});
+
 // Union of all mutation types
 const Mutation = z.discriminatedUnion('operation', [
   AddNode, UpdateNode, RemoveNode, AddEdge, UpdateEdge, RemoveEdge,
   AddMemory, UpdateGrudge, AddInjury,
   AddTraumaBond, UpdateLedgerStat, AddSecret, UpdatePhase,
-  AddSecretAlliance, AddTraumaMemory, UpdateDominance, AddPsychosisNode
+  AddSecretAlliance, AddTraumaMemory, UpdateDominance, AddPsychosisNode,
+  UpdateRelationship, UpdateAgentEmotion, InflictSomaticTrauma, RevealSecret
 ]);
 
 export type Mutation = z.infer<typeof Mutation>;
@@ -441,6 +473,108 @@ function applySingleMutation(graph: any, mut: Mutation, currentTurn: number) {
                     type: 'HALLUCINATES',
                     label: 'perceives',
                     weight: mut.intensity / 100
+                });
+            }
+            break;
+        }
+        case 'update_relationship': {
+            const { source, target, category, delta } = mut;
+            if (graph.hasNode(source) && graph.hasNode(target)) {
+                const key = `${source}->${target}_${category}`;
+                if (!graph.hasEdge(key)) {
+                     graph.addDirectedEdgeWithKey(key, source, target, {
+                         type: category,
+                         label: category,
+                         weight: Math.max(0, delta) // Initial weight
+                     });
+                } else {
+                     const w = graph.getEdgeAttribute(key, 'weight');
+                     graph.setEdgeAttribute(key, 'weight', Math.max(0, Math.min(1, w + delta)));
+                }
+            }
+            break;
+        }
+        case 'update_agent_emotion': {
+            const { agent_id, emotion, delta } = mut;
+            if (graph.hasNode(agent_id)) {
+                const attrs = graph.getNodeAttributes(agent_id);
+                const agentState = attrs.attributes?.agent_state || {};
+                // Ensure initialized
+                if (typeof agentState[emotion] !== 'number') agentState[emotion] = 0.5;
+                
+                agentState[emotion] = Math.max(0, Math.min(1, agentState[emotion] + delta));
+                
+                graph.mergeNodeAttributes(agent_id, {
+                    attributes: { ...attrs.attributes, agent_state: agentState }
+                });
+            }
+            break;
+        }
+        case 'inflict_somatic_trauma': {
+            const { target_id, location, description, severity } = mut;
+            if (graph.hasNode(target_id)) {
+                const attrs = graph.getNodeAttributes(target_id);
+                const ledger = attrs.attributes?.ledger || { ...INITIAL_LEDGER };
+                const injuries = attrs.attributes?.injuries || [];
+                
+                // 1. Add Injury Description
+                const injuryEntry = `${location.toUpperCase()}: ${description}`;
+                const updatedInjuries = [...new Set([...injuries, injuryEntry])];
+                
+                // 2. Ledger Impact (Lore Specific)
+                if (location !== 'mind') {
+                    ledger.physicalIntegrity = Math.max(0, ledger.physicalIntegrity - (severity * 0.5));
+                }
+                
+                ledger.traumaLevel = Math.min(100, ledger.traumaLevel + (severity * 0.3));
+                
+                if (location === 'groin' || location === 'testis') {
+                    ledger.shamePainAbyssLevel = Math.min(100, ledger.shamePainAbyssLevel + (severity * 0.4));
+                    ledger.castrationAnxiety = Math.min(100, (ledger.castrationAnxiety || 0) + (severity * 0.5));
+                    ledger.complianceScore = Math.min(100, ledger.complianceScore + (severity * 0.2)); 
+                } else if (location === 'mind') {
+                    ledger.hopeLevel = Math.max(0, ledger.hopeLevel - (severity * 0.4));
+                    ledger.fearOfAuthority = Math.min(100, ledger.fearOfAuthority + (severity * 0.3));
+                    ledger.shamePainAbyssLevel = Math.min(100, ledger.shamePainAbyssLevel + (severity * 0.2));
+                }
+                
+                graph.mergeNodeAttributes(target_id, {
+                    attributes: {
+                        ...attrs.attributes,
+                        ledger,
+                        injuries: updatedInjuries,
+                        last_injury_severity: severity,
+                        last_injury_turn: currentTurn,
+                        last_trauma_delta: severity // For visual coherence
+                    }
+                });
+            }
+            break;
+        }
+        case 'reveal_secret': {
+            const { secret_id, revealed_to } = mut;
+            if (graph.hasNode(secret_id)) {
+                // Update Secret Attributes
+                const attrs = graph.getNodeAttributes(secret_id);
+                const currentRevealed = attrs.attributes?.revealed_to || [];
+                const newRevealed = [...new Set([...currentRevealed, ...revealed_to])];
+                
+                graph.mergeNodeAttributes(secret_id, {
+                    attributes: { ...attrs.attributes, revealed_to: newRevealed }
+                });
+                
+                // Add Knowledge Edges
+                revealed_to.forEach(entityId => {
+                    if (graph.hasNode(entityId)) {
+                        const key = `${entityId}->${secret_id}_KNOWS`;
+                        if (!graph.hasEdge(key)) {
+                            graph.addDirectedEdgeWithKey(key, entityId, secret_id, {
+                                type: 'KNOWLEDGE',
+                                label: 'knows',
+                                weight: 1.0
+                            });
+                        }
+                    }
                 });
             }
             break;
