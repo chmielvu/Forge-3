@@ -137,7 +137,7 @@ export class AudioService {
       this.droneNodes.lfo.frequency.linearRampToValueAtTime(targetLfo, ctx.currentTime + 2);
       
       // Slight volume boost with tension
-      const targetGain = 0.1 + (t * 0.1);
+      const targetGain = 0.15 + (t * 0.1);
       this.droneNodes.masterGain?.gain.linearRampToValueAtTime(targetGain, ctx.currentTime + 2);
   }
 
@@ -149,12 +149,73 @@ export class AudioService {
       this.droneNodes.masterGain?.gain.linearRampToValueAtTime(0, ctx.currentTime + 2);
       
       setTimeout(() => {
-          this.droneNodes.source?.stop();
-          this.droneNodes.lfo?.stop();
-          this.droneNodes.source?.disconnect();
-          this.droneNodes.masterGain?.disconnect();
+          try {
+             this.droneNodes.source?.stop();
+             this.droneNodes.lfo?.stop();
+             this.droneNodes.source?.disconnect();
+             this.droneNodes.masterGain?.disconnect();
+          } catch(e) { }
           this.isDronePlaying = false;
       }, 2000);
+  }
+
+  // --- UI SFX ENGINE ---
+  public playSfx(type: 'type' | 'hover' | 'click' | 'glitch' | 'boot') {
+      const ctx = this.getContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const now = ctx.currentTime;
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      switch (type) {
+          case 'type': // Subtle high-pitch click
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(800 + Math.random() * 200, now);
+              gain.gain.setValueAtTime(0.02, now);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+              osc.start(now);
+              osc.stop(now + 0.05);
+              break;
+          case 'hover': // Low tech thrum
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(50, now);
+              gain.gain.setValueAtTime(0.0, now);
+              gain.gain.linearRampToValueAtTime(0.05, now + 0.05);
+              gain.gain.linearRampToValueAtTime(0.0, now + 0.2);
+              osc.start(now);
+              osc.stop(now + 0.2);
+              break;
+          case 'click': // Sharp mechanical confirm
+              osc.type = 'square';
+              osc.frequency.setValueAtTime(200, now);
+              osc.frequency.exponentialRampToValueAtTime(50, now + 0.1);
+              gain.gain.setValueAtTime(0.05, now);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+              osc.start(now);
+              osc.stop(now + 0.1);
+              break;
+          case 'glitch': // Harsh noise burst
+              osc.type = 'sawtooth';
+              osc.frequency.setValueAtTime(100, now);
+              osc.frequency.linearRampToValueAtTime(1000, now + 0.1);
+              gain.gain.setValueAtTime(0.05, now);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+              osc.start(now);
+              osc.stop(now + 0.15);
+              break;
+          case 'boot': // Power up swell
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(50, now);
+              osc.frequency.exponentialRampToValueAtTime(400, now + 1.0);
+              gain.gain.setValueAtTime(0, now);
+              gain.gain.linearRampToValueAtTime(0.1, now + 0.5);
+              gain.gain.linearRampToValueAtTime(0, now + 1.5);
+              osc.start(now);
+              osc.stop(now + 1.5);
+              break;
+      }
   }
 
   /**
@@ -232,6 +293,12 @@ export class AudioService {
   public getCurrentTime(): number {
     if (!this.context || !this.source) return this.pausedAt;
     return this.context.currentTime - this.startTime;
+  }
+
+  public setVolume(volume: number) {
+      if (this.gainNode && this.context) {
+          this.gainNode.gain.linearRampToValueAtTime(volume, this.context.currentTime + 0.1);
+      }
   }
 }
 

@@ -1,4 +1,6 @@
+
 import React from 'react';
+import { audioService } from '../services/AudioService';
 
 interface Props {
   onAction: (input: string) => void;
@@ -33,12 +35,18 @@ export default function ActionWheel({ onAction, disabled }: Props) {
     }
   ];
   
+  const handleAction = (intent: string) => {
+      audioService.playSfx('click');
+      onAction(intent);
+  };
+
   return (
     <div className="grid grid-cols-2 gap-3">
       {actions.map((act) => (
         <button
           key={act.label}
-          onClick={() => onAction(act.intent)}
+          onClick={() => handleAction(act.intent)}
+          onMouseEnter={() => audioService.playSfx('hover')}
           disabled={disabled}
           className={`
             group relative p-4 rounded-sm border transition-all duration-300 text-left

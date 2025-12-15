@@ -26,6 +26,7 @@ import DistortionLayer from './components/DistortionLayer';
 import LedgerDisplay from './components/LedgerDisplay';
 import PrefectLeaderboard from './components/PrefectLeaderboard';
 import SubjectPanel from './components/SubjectPanel';
+import { audioService } from './services/AudioService';
 
 // --- GLOBAL STYLES & FONTS ---
 const GlobalStyles = () => (
@@ -108,7 +109,13 @@ const AnalyticalPanel = ({ title, children, side }: { title: string, children?: 
 
 // --- START SCREEN ---
 
-const StartScreen = ({ onStart }: { onStart: (liteMode: boolean) => void }) => (
+const StartScreen = ({ onStart }: { onStart: (liteMode: boolean) => void }) => {
+    const handleStart = (lite: boolean) => {
+        audioService.playSfx('boot');
+        onStart(lite);
+    };
+
+    return (
     <div className={`absolute inset-0 z-50 flex flex-col items-center justify-center ${THEME.colors.bg} ${THEME.colors.textMain} animate-fade-in font-serif overflow-hidden`}>
       
       {/* Background Layers */}
@@ -147,7 +154,8 @@ const StartScreen = ({ onStart }: { onStart: (liteMode: boolean) => void }) => (
   
         <div className="flex flex-col md:flex-row gap-4 md:gap-6 justify-center items-center">
           <button 
-            onClick={() => onStart(false)}
+            onClick={() => handleStart(false)}
+            onMouseEnter={() => audioService.playSfx('hover')}
             className="group relative px-8 py-3 md:px-10 md:py-4 bg-[#292524]/80 border border-[#78350f]/40 hover:border-[#991b1b] hover:bg-[#451a03]/40 transition-all duration-500 ease-out shadow-lg hover:shadow-[#991b1b]/20 rounded-sm"
           >
             <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#78350f] opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -160,7 +168,8 @@ const StartScreen = ({ onStart }: { onStart: (liteMode: boolean) => void }) => (
           </button>
 
           <button 
-            onClick={() => onStart(true)}
+            onClick={() => handleStart(true)}
+            onMouseEnter={() => audioService.playSfx('hover')}
             className="group relative px-6 py-3 md:px-8 md:py-4 bg-transparent border border-emerald-900/30 hover:border-emerald-600/50 hover:bg-emerald-950/20 transition-all duration-500 ease-out rounded-sm"
           >
             <div className="flex items-center gap-3 relative z-10">
@@ -177,7 +186,8 @@ const StartScreen = ({ onStart }: { onStart: (liteMode: boolean) => void }) => (
         </div>
       </div>
     </div>
-);
+    );
+};
 
 // --- MAIN APPLICATION COMPONENT ---
 
@@ -203,6 +213,7 @@ export default function App() {
 
   const handleCustomSubmit = () => {
     if (!customInput.trim()) return;
+    audioService.playSfx('click');
     processPlayerTurn(customInput);
     setCustomInput('');
   };
@@ -293,7 +304,7 @@ export default function App() {
              {/* Window Controls */}
              <div className="flex gap-2">
                  <button 
-                    onClick={() => setViewMode(viewMode === 'CINEMATIC' ? 'ANALYTICAL' : 'CINEMATIC')}
+                    onClick={() => { audioService.playSfx('hover'); setViewMode(viewMode === 'CINEMATIC' ? 'ANALYTICAL' : 'CINEMATIC'); }}
                     className={THEME.classes.iconBtn + " bg-[#0c0a09]/80 backdrop-blur-sm"}
                     title="Toggle View Mode"
                  >
@@ -301,7 +312,7 @@ export default function App() {
                  </button>
                  <button 
                     className={`${THEME.classes.iconBtn} bg-[#0c0a09]/80 backdrop-blur-sm ${isDevOverlayOpen ? 'text-[#991b1b] border-[#991b1b]/30' : ''}`}
-                    onClick={() => setDevOverlayOpen(!isDevOverlayOpen)}
+                    onClick={() => { audioService.playSfx('hover'); setDevOverlayOpen(!isDevOverlayOpen); }}
                     title="Toggle Developer Overlay"
                  >
                    <Terminal size={16} />
@@ -409,7 +420,8 @@ export default function App() {
                                 {choices.map((choice, idx) => (
                                     <button
                                         key={idx}
-                                        onClick={() => processPlayerTurn(choice)}
+                                        onClick={() => { audioService.playSfx('click'); processPlayerTurn(choice); }}
+                                        onMouseEnter={() => audioService.playSfx('hover')}
                                         className="group relative text-left px-4 py-3 bg-[#292524]/40 hover:bg-[#451a03]/20 border border-transparent hover:border-[#78350f]/40 rounded-sm transition-all duration-300"
                                     >
                                         <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#78350f] opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -432,6 +444,7 @@ export default function App() {
                             <button
                                 onClick={handleCustomSubmit}
                                 disabled={!customInput.trim()}
+                                onMouseEnter={() => audioService.playSfx('hover')}
                                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-[#78716c] hover:text-[#e7e5e4] disabled:opacity-30 transition-colors"
                             >
                                 <Send size={16} />
@@ -444,8 +457,8 @@ export default function App() {
              {/* Footer Metadata */}
              <div className="flex justify-between items-center mt-4 px-2 opacity-40">
                 <div className="flex gap-4">
-                     <button className="hover:text-[#e7e5e4] transition-colors" title="Archives"><Database size={12} /></button>
-                     <button className="hover:text-[#e7e5e4] transition-colors" title="Codex"><BookOpen size={12} /></button>
+                     <button className="hover:text-[#e7e5e4] transition-colors" title="Archives" onMouseEnter={() => audioService.playSfx('hover')}><Database size={12} /></button>
+                     <button className="hover:text-[#e7e5e4] transition-colors" title="Codex" onMouseEnter={() => audioService.playSfx('hover')}><BookOpen size={12} /></button>
                 </div>
                 <span className="font-mono text-[8px] tracking-[0.4em] uppercase text-[#57534e]">
                     Forge OS v.3.7 <span className="mx-2 text-[#78350f]">::</span> {isLiteMode ? 'LOCAL' : 'CLOUD'}

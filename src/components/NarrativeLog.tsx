@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Activity, Brain, Zap, Image as ImageIcon, MessageCircle, Terminal } from 'lucide-react';
 import { LogEntry, YandereLedger, MediaStatus, MultimodalTurn, ScriptItem } from '../types';
 import { useGameStore } from '../state/gameStore';
@@ -51,17 +51,42 @@ const getStyleForSpeaker = (speaker: string) => {
     return SPEAKER_STYLES['Narrator'];
 };
 
+// --- DIEGETIC LOADER ---
+const LOADING_MESSAGES = [
+    "CALIBRATING NEURAL PATHWAYS...",
+    "ACCESSING ARCHIVE [REDACTED]...",
+    "SYNCHRONIZING PAIN RECEPTORS...",
+    "COMPILING SOMATIC DATA...",
+    "OBSERVING SUBJECT RESPONSE...",
+    "THE LOOM IS WEAVING..."
+];
+
+const DiegeticLoader = () => {
+    const [msgIndex, setMsgIndex] = useState(0);
+    
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setMsgIndex(prev => (prev + 1) % LOADING_MESSAGES.length);
+        }, 1200);
+        return () => clearInterval(interval);
+    }, []);
+
+    return (
+        <div className="flex items-center gap-3 text-[#facc15] animate-pulse py-2 pl-2">
+            <Activity size={14} className="animate-spin" />
+            <span className="font-mono text-[10px] tracking-[0.3em] uppercase opacity-80">
+                {LOADING_MESSAGES[msgIndex]}
+            </span>
+        </div>
+    );
+};
+
 // --- TYPEWRITER COMPONENT ---
 const TypewriterText: React.FC<{ content: string; onComplete?: () => void; speed?: number }> = ({ content, onComplete, speed = 20 }) => {
     const [displayed, setDisplayed] = useState('');
     const indexRef = useRef(0);
     const timeoutRef = useRef<number | null>(null);
 
-    // Pre-parse the content to handle custom tags [[COLOR|TEXT]]
-    // We will render chunks. If it's a tag, we render it fully instantly (or type it if ambitious, but instant is safer for styles)
-    // For simplicity in this version: We strip tags for typing logic or handle them as atomic blocks.
-    // Simpler approach: Regular typing, but use a parser for final display.
-    
     useEffect(() => {
         setDisplayed('');
         indexRef.current = 0;
@@ -71,6 +96,11 @@ const TypewriterText: React.FC<{ content: string; onComplete?: () => void; speed
                 const nextChar = content.charAt(indexRef.current);
                 setDisplayed(prev => prev + nextChar);
                 indexRef.current++;
+                
+                // Play subtle typewriter sound every few chars
+                if (indexRef.current % 3 === 0) {
+                    audioService.playSfx('type');
+                }
                 
                 // Speed variation for realism
                 let nextDelay = speed;
@@ -192,14 +222,6 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
   
   const multimodalTimeline = useGameStore(s => s.multimodalTimeline);
   
-  // Ambient Sound Trigger based on Ledger
-  useEffect(() => {
-      if (ledger.traumaLevel > 0) {
-          audioService.startDrone();
-          audioService.updateDrone(ledger.traumaLevel);
-      }
-  }, [ledger.traumaLevel]);
-
   // Robust scrolling logic
   const scrollToBottom = () => {
     if (containerRef.current) {
@@ -334,12 +356,7 @@ const NarrativeLog: React.FC<Props> = ({ logs, thinking, choices, onChoice, ledg
             );
           })}
 
-          {thinking && (
-            <div className="flex items-center gap-3 text-[#facc15] animate-pulse py-2 pl-2">
-              <Activity size={14} className="animate-spin" />
-              <span className="font-mono text-[10px] tracking-[0.3em] uppercase opacity-80">The Director is Weaving...</span>
-            </div>
-          )}
+          {thinking && <DiegeticLoader />}
           
           <div ref={bottomRef} className="h-2" />
         </div>

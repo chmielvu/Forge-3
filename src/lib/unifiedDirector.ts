@@ -2,13 +2,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { KGotController } from "../controllers/KGotController";
 import { DIRECTOR_SYSTEM_INSTRUCTIONS } from "../config/directorCore";
-import { THEMATIC_ENGINES, BLUEPRINT_VARIANTS, MOTIF_LIBRARY } from "../config/directorEngines";
+import { LORE_APPENDIX, LORE_CONSTITUTION } from "../config/loreInjection"; // Import Lore
+import { THEMATIC_ENGINES, MOTIF_LIBRARY } from "../config/directorEngines";
 import { UnifiedDirectorOutputSchema } from "./schemas/unifiedDirectorSchema";
 import { PrefectDNA, YandereLedger } from "../types";
 import { INITIAL_LEDGER } from "../constants";
 import { callGeminiWithRetry } from "../utils/apiRetry";
 import { TensionManager } from "../services/TensionManager";
-import { localMediaService } from "../services/localMediaService";
+import { localMediaService, localGrunt } from "../services/localMediaService";
 
 const getApiKey = (): string => {
   if (typeof process !== 'undefined' && process.env?.API_KEY) return process.env.API_KEY;
@@ -80,6 +81,10 @@ export async function executeUnifiedDirectorTurn(
   const finalPrompt = `
 ${DIRECTOR_SYSTEM_INSTRUCTIONS}
 
+=== LORE MANDATES (IMMUTABLE) ===
+${LORE_APPENDIX.VERNACULAR_OF_DIMINUTION}
+${LORE_CONSTITUTION.VOICE_MANDATES}
+
 === PSYCHOMETRIC TELEMETRY (Llama-1B) ===
 INPUT: "${playerInput}"
 INTENT: ${telemetry.intent.toUpperCase()}
@@ -111,7 +116,7 @@ ${history.slice(-5).join('\n')}
 === TASK ===
 Generate the JSON response.
 1. **THINK**: Plan the scene using the "Rhythm of Escalation".
-2. **NARRATE**: Focus on *Anticipation* and *Textures*. Use the Engine Vocabulary.
+2. **NARRATE**: Focus on *Anticipation* and *Textures*. Use the Engine Vocabulary and the Vernacular of Diminution.
 3. **UPDATE**: Modify the YandereLedger.
 `;
 
@@ -133,12 +138,30 @@ Generate the JSON response.
       });
     });
 
-    // Extract JSON (Lite models sometimes wrap in markdown)
-    const rawText = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    const cleanFixed = rawText.replace(/```json|```/g, '').trim();
-    const unifiedOutput = JSON.parse(cleanFixed);
+    let rawText = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    let cleanFixed = rawText.replace(/```json|```/g, '').trim();
+    let unifiedOutput;
 
-    // Apply State Updates
+    // First attempt to parse
+    try {
+        unifiedOutput = JSON.parse(cleanFixed);
+    } catch (e) {
+        console.warn("Initial JSON parse failed. Attempting Llama worker repair...");
+        
+        // --- CRITICAL REPAIR STEP ---
+        try {
+            // Use the local worker (Llama) to repair the string
+            const repairedJsonString = await localGrunt.repairJson(cleanFixed);
+            unifiedOutput = JSON.parse(repairedJsonString);
+            console.log("JSON successfully repaired by Llama worker.");
+        } catch (repairError) {
+             console.error("Llama repair failed. Throwing original error.", repairError);
+             throw new Error(`Critical JSON failure after repair attempt: ${(repairError as Error).message}`);
+        }
+    }
+    // End CRITICAL REPAIR STEP
+
+    // Apply State Updates (Assuming successful parse/repair)
     if (unifiedOutput.kgot_mutations) controller.applyMutations(unifiedOutput.kgot_mutations);
     if (unifiedOutput.ledger_update) controller.updateLedger('Subject_84', unifiedOutput.ledger_update);
 
@@ -150,9 +173,9 @@ Generate the JSON response.
     return {
         meta_analysis: { selected_engine: 'PROTOCOL', player_psych_profile: 'Error' },
         reasoning_graph: { nodes: [], selected_path: [] },
-        narrative_text: `The Loom shudders. System disconnect. (${error.message})`,
-        visual_prompt: "Static.",
-        choices: ["Retry"],
+        narrative_text: `The Loom shudders. System disconnect. The Architect is offline. (${error.message || 'Unknown LLM error'})`,
+        visual_prompt: "Static. Chromatic Aberration.",
+        choices: ["Observe the damage", "Try to reset the panel"],
         prefect_simulations: [],
         script: [],
         kgot_mutations: [],
