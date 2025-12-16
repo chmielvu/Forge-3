@@ -1,20 +1,19 @@
-import React from 'react';
+
+import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './src/App';
 import './src/index.css';
-import { Buffer as BufferPolyfill } from 'buffer'; // Changed to named import
+import { ErrorBoundary } from './src/components/ErrorBoundary'; // Import ErrorBoundary
 
-// Polyfill Buffer globally for dependencies like protobufjs/@google/genai
-if (typeof window !== 'undefined') {
-  (window as any).Buffer = (window as any).Buffer || BufferPolyfill; // Use named import
-}
 
 const container = document.getElementById('root');
 if (container) {
   const root = createRoot(container);
   root.render(
     <React.StrictMode>
-      <App />
+      <ErrorBoundary> {/* Wrap App with ErrorBoundary */}
+        <App />
+      </ErrorBoundary>
     </React.StrictMode>
   );
 } else {
@@ -25,7 +24,9 @@ if (container) {
   const root = createRoot(rootElement);
   root.render(
     <React.StrictMode>
-      <App />
+      <ErrorBoundary> {/* Wrap App with ErrorBoundary */}
+        <App />
+      </ErrorBoundary>
     </React.StrictMode>
   );
 }

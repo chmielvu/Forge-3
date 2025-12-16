@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { VISUAL_MANDATE, VIDEO_MANDATE } from '../config/visualMandate';
 import { useGameStore } from '../state/gameStore'; 
@@ -302,7 +303,6 @@ export async function distortImageAction(imageB64: string, instruction: string):
           ],
         },
         config: {
-          responseModalities: [Modality.IMAGE],
           safetySettings: [
             { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
           ],

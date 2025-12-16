@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
-import { VISUAL_MANDATE } from "../config/visualMandate";
+import { VISUAL_MANDATE } from "@/config/visualMandate";
 
 // Robust API Key Retrieval
 const getApiKey = (): string => {
@@ -74,7 +74,7 @@ export async function generateSceneVisual(promptJSON: string): Promise<{ success
     const ai = getAI();
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: [{ text: `GENERATE IMAGE FROM JSON ACP: ${JSON.stringify(parsedPrompt)}` }] }
+        contents: { parts: [{ text: `GENERATE IMAGE STRICTLY ADHERING TO THIS JSON STRUCTURE: ${JSON.stringify(parsedPrompt)}` }] }
     });
     
     // Correctly find the image part by iterating, as per guidelines

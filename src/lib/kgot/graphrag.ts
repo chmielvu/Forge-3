@@ -7,7 +7,7 @@ import * as tf from '@tensorflow/tfjs';
 import { localGrunt } from '../../services/localMediaService'; // For summaries
 import { openDB } from 'idb'; // Lightweight IDB wrapper (from 'idb' dep)
 import { applyDecayMutation, triggerPeriodicDecay } from './decay-mut'; // Modular decay import
-import { KGOT_CONFIG } from '../../config/behaviorTuning';
+import { KGOT_CONFIG } from '@/config/behaviorTuning';
 
 interface GraphRAGIndex {
   entities: Record<string, { label: string; features: number[] }>;
@@ -258,10 +258,14 @@ export class GraphRAGIndexer {
       const frontier = [...expanded].slice(-10); // Cap frontier
       const nextLayer = new Set<string>();
       frontier.forEach(n => {
-        internalGraph.forEachNeighbor(n, (neighbor) => {
-          const edge = internalGraph.edge(n, neighbor);
-          const edgeWeight = (internalGraph.getEdgeAttribute(edge, 'weight') as number) || 0;
-          if (edgeWeight >= 0.1) nextLayer.add(neighbor); // Decay filter
+        // FIXED: Use internalGraph.edges(n, neighbor) for multigraphs
+        internalGraph.edges(n).forEach(edgeId => { // Iterate all edges connected to 'n'
+            const source = internalGraph.source(edgeId);
+            const target = internalGraph.target(edgeId);
+            const neighbor = (source === n) ? target : source; // Determine actual neighbor
+
+            const edgeWeight = (internalGraph.getEdgeAttribute(edgeId, 'weight') as number) || 0;
+            if (edgeWeight >= 0.1) nextLayer.add(neighbor); // Decay filter
         });
       });
       [...nextLayer].forEach(n => expanded.add(n));
@@ -273,12 +277,15 @@ export class GraphRAGIndexer {
     const evidenceEdges: any[] = [];
     relevantNodes.forEach(source => {
         relevantNodes.forEach(target => {
-            if (source !== target && internalGraph.hasEdge(source, target)) {
-                const edge = internalGraph.edge(source, target);
-                const attrs = internalGraph.getEdgeAttributes(edge);
-                if ((attrs.weight as number) > 0.3) {
-                    evidenceEdges.push({ source, target, ...attrs });
-                }
+            if (source !== target) {
+                // FIXED: Use internalGraph.edges() for multigraphs
+                internalGraph.edges(source, target).forEach(edgeId => {
+                    // FIX: Cast attrs to any
+                    const attrs: any = internalGraph.getEdgeAttributes(edgeId);
+                    if ((attrs.weight as number) > 0.3) {
+                        evidenceEdges.push({ source, target, ...attrs });
+                    }
+                });
             }
         });
     });

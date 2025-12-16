@@ -1,5 +1,4 @@
 
-
 import { KnowledgeGraph } from './lib/types/kgot';
 
 export enum CharacterId {
@@ -59,8 +58,8 @@ export interface ScriptItem {
 export type LogEntry = 
   | { id: string; type: 'system'; content: string }
   | { id: string; type: 'thought'; content: string }
-  | { id: string; type: 'narrative'; content: string; visualContext?: string; script?: ScriptItem[] }
-  | { id: string; type: 'psychosis'; content: string };
+  | { id: string; type: 'narrative'; content: string; visualContext?: string; script?: ScriptItem[]; speaker?: string } // Added speaker property
+  | { id: string; type: 'psychosis'; content: string; speaker?: string }; // Added speaker property
 
 export enum MediaStatus {
   idle = 'idle',

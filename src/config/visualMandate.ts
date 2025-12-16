@@ -1,4 +1,3 @@
-
 /**
  * @file src/config/visualMandate.ts
  * @description The immutable aesthetic constitution for The Forge's Loom.
@@ -34,10 +33,10 @@ export const VIDEO_MANDATE = {
 
 export const LIGHTING_PRESETS = {
   'Harsh': "Lighting: Single dominant harsh source (top-down clinical surgical lamp) with strong cool rim-light. Shadows emphasize bruises. Sweat glistens on tense skin.",
-  'Intimate': "Lighting: Warm gaslamp amber glow battling cool blue moonlight. Deep chiaroscuro. Light catches the edges of lace and restrained limbs. Shadows pool in hollows.",
-  'Moody': "Lighting: Cinematic rim lighting only. Silhouette emphasis against volumetric fog. Eyes reflecting the single light source with unwilling desire.",
-  'WarmCandle': "Lighting: Flickering candle flame from side, casting warm oranges with deep black shadows. Inspired by tavern intimacy, but with restrained tension.",
-  'Clinical': "Lighting: Harsh fluorescent overhead, cold sterile white, sharp clinical shadows, antiseptic atmosphere."
+  'Intimate': "Lighting: Warm gaslamp amber glow battling cool blue moonlight. Deep chiaroscuro. Light catches the edges of lace and restrained limbs. Shadows pool in hollows. Dominant colors: #991b1b, #1e1b2d, #a8a29e.", // Burgundy, navy, muted gold
+  'Moody': "Lighting: Cinematic rim lighting only. Silhouette emphasis against volumetric fog. Eyes reflecting the single light source with unwilling desire. Dominant colors: #064e3b, #7f1d1d, #0c0a09.", // Emerald, burgundy, deepest black
+  'WarmCandle': "Lighting: Flickering candle flame from side, casting warm oranges with deep black shadows. Inspired by tavern intimacy, but with restrained tension. Dominant colors: #7f1d1d, #1c1917, #a8a29e.", // Burgundy, dark charcoal, muted gold
+  'Clinical': "Lighting: Harsh fluorescent overhead, cold sterile white, sharp clinical shadows, antiseptic atmosphere. Dominant colors: #1e1b2d, #065f46, #e7e5e4." // Navy, emerald, muted white
 } as const;
 
 export type LightingKey = keyof typeof LIGHTING_PRESETS;

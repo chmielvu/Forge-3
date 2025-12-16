@@ -18,21 +18,24 @@ export class AudioService {
   private isDronePlaying: boolean = false;
 
   constructor() {
-    // Lazy initialization in getContext()
+    // AudioContext will now be lazily initialized in getContext()
+    // No-op here
   }
 
   /**
    * Returns the shared Singleton AudioContext.
-   * Re-initializes if the context is null or closed.
+   * Initializes or resumes the context only after a user gesture.
    */
   public getContext(): AudioContext {
-    // Check if context is missing or closed (garbage collected or released)
+    // Check if context is missing, closed, or needs a new instance
     if (!this.context || this.context.state === 'closed') {
       const AudioCtor = (window.AudioContext || (window as any).webkitAudioContext);
       if (!AudioCtor) {
           throw new Error("Web Audio API is not supported in this browser.");
       }
       this.context = new AudioCtor({ sampleRate: 24000 });
+      
+      // Initialize gainNode here as well, since it depends on a valid context
       this.gainNode = this.context.createGain();
       this.gainNode.connect(this.context.destination);
     }
@@ -67,7 +70,7 @@ export class AudioService {
    */
   public startDrone() {
     if (this.isDronePlaying) return;
-    const ctx = this.getContext();
+    const ctx = this.getContext(); // Ensure context is initialized/resumed
 
     // 1. Noise Source
     const noiseBuffer = this.createBrownNoise(ctx);
@@ -123,7 +126,7 @@ export class AudioService {
   public updateDrone(tension: number) {
       if (!this.isDronePlaying || !this.droneNodes.filter || !this.droneNodes.lfo) return;
       
-      const ctx = this.getContext();
+      const ctx = this.getContext(); // Ensure context is initialized/resumed
       const t = Math.max(0, Math.min(100, tension)) / 100;
 
       // Tension increases filter cutoff (brightness/harshness)
@@ -147,7 +150,7 @@ export class AudioService {
    */
   public triggerSomaticPulse(intensity: number = 0.5) {
       if (!this.isDronePlaying || !this.droneNodes.filter) return;
-      const ctx = this.getContext();
+      const ctx = this.getContext(); // Ensure context is initialized/resumed
       const now = ctx.currentTime;
 
       // Momentary low-pass drop (The "Void" sensation)
@@ -173,7 +176,7 @@ export class AudioService {
 
   public stopDrone() {
       if (!this.isDronePlaying) return;
-      const ctx = this.getContext();
+      const ctx = this.getContext(); // Ensure context is initialized/resumed
       
       // Fade out
       this.droneNodes.masterGain?.gain.linearRampToValueAtTime(0, ctx.currentTime + 2);
@@ -191,7 +194,7 @@ export class AudioService {
 
   // --- UI SFX ENGINE ---
   public playSfx(type: 'type' | 'hover' | 'click' | 'glitch' | 'boot') {
-      const ctx = this.getContext();
+      const ctx = this.getContext(); // Ensure context is initialized/resumed
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       const now = ctx.currentTime;
@@ -252,7 +255,7 @@ export class AudioService {
    * Decodes raw PCM data (Gemini format) into an AudioBuffer.
    */
   public decodePCM(base64: string): AudioBuffer {
-    const ctx = this.getContext();
+    const ctx = this.getContext(); // Ensure context is initialized/resumed
     const binaryString = atob(base64);
     const len = binaryString.length;
     const bytes = new Uint8Array(len);
@@ -269,7 +272,7 @@ export class AudioService {
 
   public async play(base64Data: string, volume: number, playbackRate: number, onEnded: () => void) {
     this.stop(); // Ensure clean slate
-    const ctx = this.getContext();
+    const ctx = this.getContext(); // Ensure context is initialized/resumed
     
     try {
         const buffer = this.decodePCM(base64Data);
@@ -278,8 +281,10 @@ export class AudioService {
         this.source.buffer = buffer;
         this.source.playbackRate.value = playbackRate;
         
-        if (!this.gainNode) {
-            this.gainNode = ctx.createGain();
+        // gainNode is now guaranteed to be set by getContext()
+        if (!this.gainNode) { 
+            // This case should ideally not be hit if getContext() is always called first
+            this.gainNode = ctx.createGain(); 
             this.gainNode.connect(ctx.destination);
         }
         this.source.connect(this.gainNode);

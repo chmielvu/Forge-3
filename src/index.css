@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles for dark academia theme */
+body {
+  @apply bg-[#0c0a09] text-[#e7e5e4] font-serif; /* Deepest black background, muted white text */
+}
+
+/* Custom Scrollbar for "Dark Academia" feel */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #0c0a09; /* Deepest black background */
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #44403c; /* Charcoal gray */
+  border-radius: 2px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a8a29e; /* Muted gold on hover */
+}
+
+.text-shadow-glow {
+  text-shadow: 0 0 20px rgba(231,229,228,0.1), 0 0 10px rgba(231,229,228,0.05); /* Muted white glow */
+}
+
+.mask-linear-fade {
+  mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+}

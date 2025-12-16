@@ -1,4 +1,5 @@
 
+
 import { Type } from "@google/genai";
 
 export interface UnifiedDirectorOutput {
@@ -94,7 +95,79 @@ export const UnifiedDirectorOutputSchema = {
     // Optional Advanced Fields
     kgot_mutations: { 
         type: Type.ARRAY,
-        items: { type: Type.OBJECT },
+        items: { 
+            type: Type.OBJECT,
+            properties: {
+                operation: { type: Type.STRING },
+                id: { type: Type.STRING },
+                params: { 
+                    type: Type.OBJECT, 
+                    properties: {
+                        target_id: { type: Type.STRING, description: "The ID of the target entity for the operation." },
+                        injury_name: { type: Type.STRING, description: "The name of the injury." },
+                        injury: { type: Type.STRING, description: "Alias for injury_name." },
+                        subject_id: { type: Type.STRING, description: "The ID of the subject." },
+                        secret_name: { type: Type.STRING, description: "The name of the secret." },
+                        description: { type: Type.STRING, description: "A general description." },
+                        severity: { type: Type.NUMBER, description: "The severity of the effect." },
+                    },
+                    additionalProperties: true 
+                },
+                edge: { 
+                    type: Type.OBJECT, 
+                    properties: {
+                        source: { type: Type.STRING },
+                        target: { type: Type.STRING },
+                        type: { type: Type.STRING },
+                        label: { type: Type.STRING },
+                        weight: { type: Type.NUMBER },
+                        key: { type: Type.STRING },
+                    },
+                    additionalProperties: true
+                },
+                node: { 
+                    type: Type.OBJECT, 
+                    properties: {
+                        id: { type: Type.STRING },
+                        type: { type: Type.STRING },
+                        label: { type: Type.STRING },
+                        attributes: { type: Type.OBJECT, properties: { _placeholder: { type: Type.STRING, description: "Placeholder for dynamic attributes."} }, additionalProperties: true }
+                    },
+                    additionalProperties: true
+                },
+                updates: { 
+                    type: Type.OBJECT, 
+                    properties: {
+                        attributes: { type: Type.OBJECT, properties: { _placeholder: { type: Type.STRING, description: "Placeholder for dynamic attributes."} }, additionalProperties: true }
+                    },
+                    additionalProperties: true
+                },
+                memory: { 
+                    type: Type.OBJECT, 
+                    properties: {
+                        id: { type: Type.STRING },
+                        description: { type: Type.STRING },
+                        emotional_imprint: { type: Type.STRING },
+                        involved_entities: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        timestamp: { type: Type.NUMBER }
+                    },
+                    additionalProperties: true
+                },
+                secret_id: { type: Type.STRING },
+                description: { type: Type.STRING },
+                discovered_by: { type: Type.STRING },
+                turn_discovered: { type: Type.NUMBER },
+                target_id: { type: Type.STRING },
+                subject_id: { type: Type.STRING },
+                injury: { type: Type.STRING },
+                severity: { type: Type.NUMBER },
+                source: { type: Type.STRING },
+                target: { type: Type.STRING },
+                delta: { type: Type.NUMBER },
+                category: { type: Type.STRING },
+            },
+            additionalProperties: true // Allow for properties not explicitly defined
+        },
         description: "List of graph mutations to apply."
     },
     prefect_simulations: {

@@ -1,4 +1,3 @@
-
 /**
  * @file src/data/motifs.ts
  * @description Extendable library of visual motifs (Manara-esque and Narrative-specific).
@@ -108,7 +107,7 @@ export const ARCHETYPE_VISUAL_MAP: Record<string, { mood: string; physique: stri
     mood: "clinical, detached, analytical", 
     physique: "willowy, precise, poised", 
     face: "ash-blonde braid, icy blue eyes, pale angular face", 
-    attire: "stark lab attire, cream silk blouse, high-waisted trousers",
+    attire: "stark lab attire, cream silk blouse, high-waisted woolen trousers",
     visualDNA: "Bookish, severe, always carrying a data slate. Dark Academia aesthetic, clinical detachment, icy blue eyes.",
     somaticSignature: "Steady, deft hands that move with unnerving precision. Neutral, observational lips. Body language like a surgeon about to make an incision.",
     idleProp: "Stylus tapping on data slate, adjusting rimless glasses"
@@ -126,7 +125,7 @@ export const ARCHETYPE_VISUAL_MAP: Record<string, { mood: string; physique: stri
   'The Confessor': { 
     mood: "manipulative, false empathy, charismatic", 
     physique: "voluptuous, enveloping", 
-    face: "olive skin, sultry brown eyes, heavy-lidded gaze", 
+    face: "olive skin, long chestnut waves, sultry brown eyes, heavy-lidded gaze", 
     attire: "Victorian-inspired lace and velvet, sapphire bodice, provocative",
     visualDNA: "Soft curves, lace, velvet, alluring, false sanctuary, heavy-lidded eyes, knowing smirk. Weaponized Nurturing.",
     somaticSignature: "Languid grace, movements like a predator in silk, body language designed to invite trust and suggest maternal gentleness.",

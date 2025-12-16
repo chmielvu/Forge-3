@@ -9,7 +9,7 @@ import {
   ScriptItem
 } from '../types';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
-import { INITIAL_LEDGER } from '../constants';
+import { INITIAL_LEDGER } from '@/constants';
 import { audioService } from '../services/AudioService';
 
 // Helper to generate a unique ID
@@ -41,8 +41,8 @@ export const createMultimodalSlice: StateCreator<
     // Access root state and safely drill down to gameState
     const state = get(); 
     // Fallback to INITIAL_LEDGER if ledger is not yet ready to prevent undefined access
-    const currentLedger = state.gameState.ledger || INITIAL_LEDGER; 
-    const currentLocation = state.gameState.location || "Unknown";
+    const currentLedger = state.gameState?.ledger || INITIAL_LEDGER; 
+    const currentLocation = state.gameState?.location || "Unknown";
 
     const newTurnIndex = state.multimodalTimeline.length;
     const newTurn: MultimodalTurn = {
@@ -321,8 +321,7 @@ export const createMultimodalSlice: StateCreator<
   },
 
   setVolume: (volume) => {
-    // Cast to any to bypass the misleading TypeScript error
-    (audioService as any).setVolume(volume);
+    audioService.setVolume(volume);
     set((state) => ({
       audioPlayback: { ...state.audioPlayback, volume },
     }));

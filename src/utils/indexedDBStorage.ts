@@ -24,9 +24,12 @@ interface ForgeDB extends DBSchema {
 
 class ForgeStorageManager {
   private db: IDBPDatabase<ForgeDB> | null = null;
-  
+  private dbPromise: Promise<IDBPDatabase<ForgeDB>> | null = null;
+
   async init() {
-    this.db = await openDB<ForgeDB>('forge-loom-db', 1, {
+    if (this.dbPromise) return this.dbPromise; // Return existing promise if already initializing
+    
+    this.dbPromise = openDB<ForgeDB>('forge-loom-db', 1, {
       upgrade(db: IDBPDatabase<ForgeDB>) {
         if (!db.objectStoreNames.contains('game-state')) {
           db.createObjectStore('game-state');
@@ -41,83 +44,157 @@ class ForgeStorageManager {
         }
       }
     });
+
+    try {
+      this.db = await this.dbPromise;
+      return this.db;
+    } catch (error) {
+      console.error("[ForgeStorageManager] Failed to open IndexedDB:", error);
+      this.db = null; // Ensure db is null on failure
+      this.dbPromise = null; // Reset promise to allow re-init on next call
+      throw error; // Re-throw to propagate the error
+    }
   }
   
+  // Helper to ensure DB is initialized before operations
+  private async getDb(): Promise<IDBPDatabase<ForgeDB> | null> {
+    if (!this.db) {
+      try {
+        await this.init(); // Attempt to initialize if not already
+      } catch (e) {
+        return null; // Initialization failed
+      }
+    }
+    return this.db;
+  }
+
   async saveGameState(key: string, data: any) {
-    if (!this.db) await this.init();
-    await this.db!.put('game-state', data, key);
+    const db = await this.getDb();
+    if (!db) return;
+    try {
+      await db.put('game-state', data, key);
+    } catch (error) {
+      console.error(`[ForgeStorageManager] Failed to save game state ${key}:`, error);
+    }
   }
   
   async loadGameState(key: string) {
-    if (!this.db) await this.init();
-    return await this.db!.get('game-state', key);
+    const db = await this.getDb();
+    if (!db) return null;
+    try {
+      return await db.get('game-state', key);
+    } catch (error) {
+      console.error(`[ForgeStorageManager] Failed to load game state ${key}:`, error);
+      return null;
+    }
   }
   
   async saveGraphState(key: string, graphData: any) {
-    if (!this.db) await this.init();
-    await this.db!.put('graph-state', graphData, key);
+    const db = await this.getDb();
+    if (!db) return;
+    try {
+      await db.put('graph-state', graphData, key);
+    } catch (error) {
+      console.error(`[ForgeStorageManager] Failed to save graph state ${key}:`, error);
+    }
   }
   
   async loadGraphState(key: string) {
-    if (!this.db) await this.init();
-    return await this.db!.get('graph-state', key);
+    const db = await this.getDb();
+    if (!db) return null;
+    try {
+      return await db.get('graph-state', key);
+    } catch (error) {
+      console.error(`[ForgeStorageManager] Failed to load graph state ${key}:`, error);
+      return null;
+    }
   }
   
   async cacheMedia(id: string, type: 'image' | 'audio', data: string) {
-    if (!this.db) await this.init();
-    await this.db!.put('media-cache', {
-      id,
-      type,
-      data,
-      timestamp: Date.now()
-    });
+    const db = await this.getDb();
+    if (!db) return;
+    try {
+      await db.put('media-cache', {
+        id,
+        type,
+        data,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      console.error(`[ForgeStorageManager] Failed to cache media ${id}:`, error);
+    }
   }
   
   async getMediaCache(id: string) {
-    if (!this.db) await this.init();
-    return await this.db!.get('media-cache', id);
+    const db = await this.getDb();
+    if (!db) return null;
+    try {
+      return await db.get('media-cache', id);
+    } catch (error) {
+      console.error(`[ForgeStorageManager] Failed to get media cache ${id}:`, error);
+      return null;
+    }
   }
   
   async clearOldMedia(maxAge: number = 7 * 24 * 60 * 60 * 1000) {
-    if (!this.db) await this.init();
-    const threshold = Date.now() - maxAge;
-    const tx = this.db!.transaction('media-cache', 'readwrite');
-    const index = tx.store.index('by-timestamp');
-    
-    for await (const cursor of index.iterate()) {
-      if (cursor.value.timestamp < threshold) {
-        await cursor.delete();
+    const db = await this.getDb();
+    if (!db) return;
+    try {
+      const threshold = Date.now() - maxAge;
+      const tx = db.transaction('media-cache', 'readwrite');
+      const index = tx.store.index('by-timestamp');
+      
+      for await (const cursor of index.iterate()) {
+        if (cursor.value.timestamp < threshold) {
+          await cursor.delete();
+        }
       }
+      await tx.done;
+    } catch (error) {
+      console.error("[ForgeStorageManager] Failed to clear old media:", error);
     }
   }
   
   async exportFullState() {
-    if (!this.db) await this.init();
-    
-    const gameState = await this.db!.getAll('game-state');
-    const graphState = await this.db!.getAll('graph-state');
-    
-    return {
-      gameState,
-      graphState,
-      exportedAt: new Date().toISOString()
-    };
+    const db = await this.getDb();
+    if (!db) return null;
+    try {
+      const gameState = await db.getAll('game-state');
+      const graphState = await db.getAll('graph-state');
+      
+      return {
+        gameState,
+        graphState,
+        exportedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error("[ForgeStorageManager] Failed to export full state:", error);
+      return null;
+    }
   }
   
   async importFullState(data: any) {
-    if (!this.db) await this.init();
-    
-    const tx = this.db!.transaction(['game-state', 'graph-state'], 'readwrite');
-    
-    for (const [key, value] of Object.entries(data.gameState || {})) {
-      await tx.objectStore('game-state').put(value, key);
+    const db = await this.getDb();
+    if (!db) return;
+    try {
+      const tx = db.transaction(['game-state', 'graph-state'], 'readwrite');
+      
+      if (data.gameState) {
+        for (const [key, value] of Object.entries(data.gameState)) {
+          await tx.objectStore('game-state').put(value, key);
+        }
+      }
+      
+      if (data.graphState) {
+        for (const [key, value] of Object.entries(data.graphState)) {
+          await tx.objectStore('graph-state').put(value, key);
+        }
+      }
+      
+      await tx.done;
+    } catch (error) {
+      console.error("[ForgeStorageManager] Failed to import full state:", error);
     }
-    
-    for (const [key, value] of Object.entries(data.graphState || {})) {
-      await tx.objectStore('graph-state').put(value, key);
-    }
-    
-    await tx.done;
   }
 }
 
@@ -126,12 +203,22 @@ export const forgeStorage = new ForgeStorageManager();
 // Zustand middleware adapter
 export const createIndexedDBStorage = () => ({
   getItem: async (name: string): Promise<string | null> => {
-    const data = await forgeStorage.loadGameState(name);
-    return data ? JSON.stringify(data) : null;
+    try {
+      const data = await forgeStorage.loadGameState(name);
+      return data ? JSON.stringify(data) : null;
+    } catch (error) {
+      console.error(`[createIndexedDBStorage] getItem failed for ${name}:`, error);
+      return null; // Return null to prevent app crash
+    }
   },
   setItem: async (name: string, value: string): Promise<void> => {
-    const data = JSON.parse(value);
-    await forgeStorage.saveGameState(name, data);
+    try {
+      const data = JSON.parse(value); // Ensure value is parseable
+      await forgeStorage.saveGameState(name, data);
+    } catch (error) {
+      console.error(`[createIndexedDBStorage] setItem failed for ${name}:`, error);
+      // Do not re-throw, fail gracefully
+    }
   },
   removeItem: async (name: string): Promise<void> => {
     // Implement if needed

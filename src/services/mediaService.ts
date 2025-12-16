@@ -109,17 +109,22 @@ export const generateDramaticAudio = async (
     // Construct multi-speaker prompt by joining script items
     const multiSpeakerText = script.map(item => `${item.speaker}: ${item.text}`).join('\n');
 
-    // Attempt to use the multi-speaker API first
-    const result = await generateMultiSpeakerSpeechAction(multiSpeakerText, speakerVoiceConfigs);
+    let multiSpeakerResult: { audioData: string; duration: number } | undefined;
+    try {
+        multiSpeakerResult = await generateMultiSpeakerSpeechAction(multiSpeakerText, speakerVoiceConfigs);
+    } catch (e) {
+        console.warn("[mediaService] Multi-speaker generation API call failed, falling back to sequential generation.", e);
+        multiSpeakerResult = undefined; // Ensure it's undefined on error
+    }
 
-    if (result && typeof result !== 'string') {
+    if (multiSpeakerResult && typeof multiSpeakerResult.audioData === 'string' && multiSpeakerResult.audioData.length > 0) {
         return {
-            audioData: result.audioData,
-            duration: result.duration,
+            audioData: multiSpeakerResult.audioData,
+            duration: multiSpeakerResult.duration,
             alignment: script.map((item, index) => ({
                 index,
-                start: (index / script.length) * result.duration, // Approximate alignment
-                end: ((index + 1) / script.length) * result.duration,
+                start: (index / script.length) * multiSpeakerResult!.duration, // Approximate alignment
+                end: ((index + 1) / script.length) * multiSpeakerResult!.duration,
                 speaker: item.speaker
             }))
         };
@@ -127,7 +132,7 @@ export const generateDramaticAudio = async (
     
     // Fallback: Generate individual lines and stitch them (if multi-speaker fails or returns nothing)
     // This provides better alignment data but is slower/more expensive
-    console.log("[mediaService] Multi-speaker generation returned empty, falling back to sequential generation.");
+    console.log("[mediaService] Multi-speaker generation returned empty or failed, falling back to sequential generation.");
     
     const clipsPromise = script.map(async (line) => {
         const voice = resolveVoiceForSpeaker(line.speaker);

@@ -1,5 +1,5 @@
-
 import { YandereLedger } from '../types';
+import { THEME } from '@/theme';
 
 export type NarratorMode = 
   | 'MOCKING_JESTER' 
@@ -26,8 +26,8 @@ export const NARRATOR_VOICES: Record<NarratorMode, NarratorVoice> = {
     choiceBias: 'subtle_mockery',
     cssClass: 'narrator-jester',
     voiceId: 'Puck', // High pitch, bright timbre
-    borderColor: '#eab308', // yellow-500
-    textColor: '#fde047', // yellow-300
+    borderColor: THEME.colors.accentGold, // Muted gold/gray border
+    textColor: THEME.colors.textMain, // Muted white text
     triggerKeywords: ['scream', 'beg', 'broken', 'weakness', 'drama', 'pathetic', 'fail', 'try harder', 'useless', 'pain', 'defy'],
     responses: [
       "Oh, look at you trying. It's adorable.",
@@ -44,8 +44,8 @@ export const NARRATOR_VOICES: Record<NarratorMode, NarratorVoice> = {
     choiceBias: 'encourages_submission',
     cssClass: 'narrator-seductress',
     voiceId: 'Kore', // Low pitch, slow pace, breathy purr
-    borderColor: '#f43f5e', // rose-500
-    textColor: '#fda4af', // rose-300
+    borderColor: THEME.colors.accentBurgundy, // Burgundy accent border
+    textColor: '#fecaca', // Light red text
     triggerKeywords: ['touch', 'gaze', 'submit', 'tremble', 'pleasure', 'good boy', 'sweet', 'pet', 'belong', 'warmth', 'throb', 'kneel'],
     responses: [
       "Mmm... you look so much prettier when you're on your knees.",
@@ -62,8 +62,8 @@ export const NARRATOR_VOICES: Record<NarratorMode, NarratorVoice> = {
     choiceBias: 'validates_pattern_recognition',
     cssClass: 'narrator-analyst',
     voiceId: 'Charon', // Flat mid-range, metronomic
-    borderColor: '#3b82f6', // blue-500
-    textColor: '#93c5fd', // blue-300
+    borderColor: THEME.colors.accent, // Emerald green accent border
+    textColor: '#86efac', // Light green text
     triggerKeywords: ['protocol', 'calibrate', 'logic', 'data', 'somatic', 'threshold', 'variable', 'observe', 'result', 'specimen', 'analyze'],
     responses: [
       "Note: Cortisol levels spiking. Neural pathways re-mapping to associate pain with intimacy.",
@@ -80,8 +80,8 @@ export const NARRATOR_VOICES: Record<NarratorMode, NarratorVoice> = {
     choiceBias: 'empathetic_fatalism',
     cssClass: 'narrator-confidante',
     voiceId: 'Zephyr', // Soft/low pitch, hesitant
-    borderColor: '#a855f7', // purple-500
-    textColor: '#d8b4fe', // purple-300
+    borderColor: THEME.colors.panel, // Navy background border
+    textColor: THEME.colors.textMuted, // Muted gold/gray text
     triggerKeywords: ['aftermath', 'quiet', 'scar', 'alone', 'sorry', 'grieve', 'broken', 'shatter', 'endure', 'please', 'help'],
     responses: [
       "I know. It's unfair. But fairness died here a long time ago.",

@@ -1,12 +1,50 @@
+
+import { pipeline, env } from '@xenova/transformers';
+import { BEHAVIOR_CONFIG } from '../config/behaviorTuning'; // Import config
+
 // Worker Instance Singleton
 let mediaWorker: Worker | null = null;
-const pendingRequests = new Map<string, { resolve: Function, reject: Function }>();
+// Track worker availability status: null (unknown), true (available), false (unavailable/disabled)
+let workerAvailable: boolean | null = null; 
 
-function getWorker() {
+// Stores pending worker requests, keyed by a unique ID
+const pendingRequests = new Map<string, { resolve: (value: any) => void; reject: (reason: any) => void }>();
+
+// Helper for chatty models (copied from worker for main thread fallback)
+function extractJSON(text: string) {
+    try {
+        const firstBracket = text.indexOf('{');
+        const lastBracket = text.lastIndexOf('}');
+        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+            const jsonString = text.substring(firstBracket, lastBracket + 1);
+            return JSON.parse(jsonString);
+        }
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+function getWorker(): Worker | null {
+    // If TEST_MODE is active, explicitly disable workers.
+    // This check must happen first.
+    if (BEHAVIOR_CONFIG.TEST_MODE) {
+        if (workerAvailable !== false) { // Only log once if it's not already marked false
+            console.warn("[LocalMediaService] TEST_MODE active: Disabling Web Worker for local LLMs.");
+        }
+        workerAvailable = false;
+        return null;
+    }
+
+    // If workers were previously determined unavailable, respect that.
+    if (workerAvailable === false) return null;
+
     if (!mediaWorker) {
         try {
-            // Initialize worker using Vite's explicit worker import with URL constructor
-            mediaWorker = new Worker(new URL('../workers/media.worker.ts', import.meta.url));
+            // Attempt to create worker
+            mediaWorker = new Worker(new URL('../workers/media.worker.ts', import.meta.url).href, {
+                type: 'module'
+            });
             
             mediaWorker.onmessage = (e) => {
                 const { type, id, payload, error } = e.data;
@@ -26,13 +64,18 @@ function getWorker() {
             
             mediaWorker.onerror = (e) => {
                 console.error("[LocalMediaService] Worker Error:", e);
-                // Clean up worker on critical error
-                mediaWorker = null;
+                workerAvailable = false; // Mark as unavailable on error
+                mediaWorker = null; // Clean up worker instance
+                // Reject all pending requests immediately if the worker crashes
+                pendingRequests.forEach(req => req.reject(new Error("Worker crashed unexpectedly.")));
+                pendingRequests.clear();
             };
-
+            workerAvailable = true; // Mark as successfully created
         } catch (e) {
-            console.error("[LocalMediaService] Failed to construct worker:", e);
-            mediaWorker = null;
+            console.error("[LocalMediaService] Failed to construct worker (falling back to main thread):", e);
+            workerAvailable = false; // Mark as unavailable
+            mediaWorker = null; // Ensure worker is null
+            return null;
         }
     }
     return mediaWorker;
@@ -41,7 +84,10 @@ function getWorker() {
 // Generic Dispatcher
 async function dispatchToWorker(type: string, payload: any, timeoutMs = 45000): Promise<any> {
     const worker = getWorker();
-    if (!worker) throw new Error("Worker unavailable");
+    if (!worker) {
+        // Fallback to main thread execution if worker not available
+        return executeOnMainThread(type, payload);
+    }
 
     const id = crypto.randomUUID();
     return new Promise((resolve, reject) => {
@@ -59,6 +105,58 @@ async function dispatchToWorker(type: string, payload: any, timeoutMs = 45000): 
 
         worker.postMessage({ type, id, payload });
     });
+}
+
+// --- MAIN THREAD FALLBACK IMPLEMENTATIONS (Simplified / Mock) ---
+async function executeOnMainThread(type: string, payload: any): Promise<any> {
+    switch (type) {
+        case 'ANALYZE_TONE': {
+            const lowerText = payload.text.toLowerCase();
+            const isApproved = !lowerText.includes('wholesome') && !lowerText.includes('melodramatic');
+            return { isApproved, reason: "Main thread mock tone analysis." };
+        }
+        case 'SUMMARIZE': {
+            const words = payload.text.split(' ').slice(0, 20).join(' '); // Simple truncation
+            return `Summary: ${words}...`;
+        }
+        case 'REPAIR_JSON': {
+            try {
+                const parsed = extractJSON(payload.jsonString);
+                if (parsed) return JSON.stringify(parsed);
+            } catch (e) {
+                // Attempt a very basic repair, e.g., wrapping in {}
+                console.warn("[LocalMediaService:MainThread] Basic JSON repair attempt failed. Returning empty object.", e);
+            }
+            return JSON.stringify({}); // Fallback to empty JSON
+        }
+        case 'ANALYZE_INTENT': {
+            const lowerText = payload.text.toLowerCase();
+            if (lowerText.includes('defy') || lowerText.includes('resist')) {
+                return { intent: 'defiance', subtext: 'genuine', intensity: 8 };
+            } else if (lowerText.includes('submit') || lowerText.includes('comply')) {
+                return { intent: 'submission', subtext: 'genuine', intensity: 7 };
+            } else if (lowerText.includes('fear') || lowerText.includes('scared')) {
+                return { intent: 'fear', subtext: 'genuine', intensity: 6 };
+            }
+            return { intent: 'neutral', subtext: 'ambiguous', intensity: 5 };
+        }
+        case 'GENERATE_SPEECH': {
+            // Simplified speech generation on main thread (mock AudioBuffer)
+            const text = payload.text;
+            const sampleRate = 24000;
+            const durationPerChar = 0.08;
+            const duration = Math.max(0.5, text.length * durationPerChar);
+            const frameCount = sampleRate * duration;
+            const audioBuffer = new Float32Array(frameCount);
+
+            for (let i = 0; i < frameCount; i++) {
+                audioBuffer[i] = (Math.random() * 0.1 - 0.05); // Just random noise
+            }
+            return { audio: audioBuffer, sampling_rate: sampleRate };
+        }
+        default:
+            throw new Error(`Unknown main thread execution type: ${type}`);
+    }
 }
 
 // --- LOCAL GRUNT API ---
@@ -179,12 +277,7 @@ export async function generateLocalImage(prompt: string): Promise<string> {
 }
 
 export async function generateLocalSpeech(text: string): Promise<{ audioData: string; duration: number }> {
-    const worker = getWorker();
-    if (!worker) {
-        console.warn("[LocalMediaService] Worker unavailable for speech generation. Returning empty audio data.");
-        return { audioData: "", duration: 0 };
-    }
-
+    // Direct call to dispatchToWorker, which will handle worker vs main thread
     try {
         const data = await dispatchToWorker('GENERATE_SPEECH', { text });
         const wavBuffer = encodeWAV(data.audio, data.sampling_rate);

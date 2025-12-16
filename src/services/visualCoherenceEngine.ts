@@ -5,6 +5,7 @@ import { LIGHTING_PRESETS } from '../config/visualMandate';
 import { CHARACTER_VOICE_MAP } from '../config/voices';
 import { FORGE_MOTIFS, ARCHETYPE_VISUAL_MAP } from '../data/motifs'; 
 import { NarrativeBeat } from '../services/TensionManager';
+import { THEME } from '@/theme';
 
 /**
  * AudioCoherenceEngine v2
@@ -85,7 +86,7 @@ class VisualCoherenceEngine {
         location: 'The Arrival Dock',
         lightingScheme: 'stormy natural light, deep shadows',
         atmosphericEffects: ['volcanic ash', 'sea spray', 'heavy humidity'],
-        dominantColors: ['#050505', '#881337', '#facc15', '#1c1917'],
+        dominantColors: [THEME.colors.bg, THEME.colors.accentBurgundy, THEME.colors.accentGold, THEME.colors.panel], // Use theme colors
         keyProps: [], 
         surfaceMaterials: [], 
         architecturalStyle: "Roman Imperial decay, Gothic Bedlam" 

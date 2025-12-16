@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { KnowledgeGraph } from '../lib/types/kgot';
 import { executeUnifiedDirectorTurn } from '../lib/unifiedDirector';
-import { INITIAL_LEDGER } from '../constants';
+import { INITIAL_LEDGER, INITIAL_NODES, INITIAL_LINKS } from '@/constants';
 import { updateLedgerHelper } from './stateHelpers';
 import { createMultimodalSlice } from './multimodalSlice';
 import { createSubjectSlice } from './subjectSlice';
@@ -16,11 +16,15 @@ import { audioService } from '../services/AudioService';
 
 // Use a factory function for initial graph to avoid global state pollution
 const getInitialGraph = (): KnowledgeGraph => {
-    const controller = new KGotController({ 
+    // Create an empty graph first
+    const emptyGraph: KnowledgeGraph = { 
         nodes: {}, 
         edges: [], 
         global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' } 
-    });
+    };
+    // Initialize a controller with the empty graph.
+    // The KGotController constructor will automatically call initializeCanonicalNodes if the graph is empty.
+    const controller = new KGotController(emptyGraph);
     return controller.getGraph();
 };
 
@@ -254,7 +258,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           const controller = new KGotController(state.kgot);
 
           // Handle property name mismatch from different sources (legacy vs unified)
-          const simulations = result.prefectSimulations || result.prefect_simulations;
+          const simulations = result.prefect_simulations;
 
           // 1. Identify Primary Actor for Visualization using Fuzzy Resolution
           let primaryActor: PrefectDNA | CharacterId | string = CharacterId.PLAYER; 
@@ -504,7 +508,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           get().addLog({
             id: `error-${Date.now()}`,
             type: 'system',
-            content: `ERROR: Neuro-Symbolic disconnect. (${e.message || 'Unknown error'})`
+            content: `ERROR: Neuro-Symbolic disconnect. (${e.message || 'Unknown LLM error'})`
           });
         }
       },
@@ -527,8 +531,10 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           executedCode: undefined,
           lastSimulationLog: undefined,
           lastDirectorDebug: undefined,
+          isLiteMode: BEHAVIOR_CONFIG.TEST_MODE, // Ensure lite mode is reset correctly
         });
         audioService.stopDrone(); // Stop drone on reset
+        get().initializeSubjects(); // Initialize subjects on reset
       },
 
       startSession: async (isLiteMode = false) => {
@@ -540,6 +546,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             const newPrefects = initializePrefects(state.gameState.seed);
             set({ prefects: newPrefects });
         }
+        
+        get().initializeSubjects(); // Initialize subjects when starting a session
         
         // Sync initial prefects to KGoT
         const controller = new KGotController(get().kgot);
@@ -560,7 +568,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             prefects: lightweightState.prefects,
             multimodalTimeline: lightweightState.multimodalTimeline,
             audioPlayback: lightweightState.audioPlayback,
-            isLiteMode: lightweightState.isLiteMode
+            isLiteMode: lightweightState.isLiteMode,
+            subjects: lightweightState.subjects, // Ensure subjects are saved
           });
 
           const compressedNodes: Record<string, any> = {};
@@ -627,9 +636,11 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         multimodalTimeline: state.multimodalTimeline,
         audioPlayback: state.audioPlayback,
         isLiteMode: state.isLiteMode,
+        subjects: state.subjects, // Ensure subjects are persisted
       }),
       merge: (persistedState, currentState) => {
-        const state = persistedState as Partial<CombinedGameStoreState>;
+        // Defensively handle persistedState possibly being null or undefined
+        const state = persistedState ? (persistedState as Partial<CombinedGameStoreState>) : {};
         return { ...currentState, ...state, sessionActive: false, isThinking: false }; 
       },
     }

@@ -1,5 +1,4 @@
 
-
 import { GraphNode, CharacterId, YandereLedger } from './types';
 
 export const INITIAL_LEDGER: YandereLedger = {
@@ -31,6 +30,7 @@ export const INITIAL_NODES: (GraphNode & { ocean?: { O: number, C: number, E: nu
   { id: CharacterId.INQUISITOR, label: 'Petra', group: 'faculty', val: 22, ocean: { O: 0.6, C: 0.3, E: 0.9, A: 0.1, N: 0.8 } },
   { id: CharacterId.CONFESSOR, label: 'Calista', group: 'faculty', val: 20, ocean: { O: 0.7, C: 0.6, E: 0.5, A: 0.8, N: 0.4 } },
   { id: 'DR_ASTRA', label: 'Dr. Astra', group: 'faculty', val: 18, ocean: { O: 0.5, C: 0.7, E: 0.3, A: 0.6, N: 0.7 } },
+  { id: CharacterId.PHYSICUS, label: 'Physicus Mara', group: 'faculty', val: 17, ocean: { O: 0.6, C: 0.6, E: 0.5, A: 0.5, N: 0.6 } }, // Dummy for now
   { id: CharacterId.OBSESSIVE, label: 'Kaelen', group: 'prefect', val: 15, ocean: { O: 0.4, C: 0.8, E: 0.4, A: 0.9, N: 0.9 } },
   { id: CharacterId.NURSE, label: 'Anya', group: 'prefect', val: 14, ocean: { O: 0.6, C: 0.8, E: 0.6, A: 0.7, N: 0.2 } },
   { id: CharacterId.LOYALIST, label: 'Elara', group: 'prefect', val: 12, ocean: { O: 0.2, C: 0.9, E: 0.4, A: 0.3, N: 0.8 } },

@@ -18,7 +18,7 @@ export const BEHAVIOR_CONFIG = {
     TRIGGER_KEY: '`', // Tilde key
     LOG_ACTIONS: true,
     skipMediaGeneration: false,  // NEW: Skip all media for fast iteration
-    verboseLogging: true,        // NEW: Verbose console logging for media controller
+    verboseLogging: false,        // NEW: Verbose console logging for media controller
   },
   GAMEPLAY: {
     TURN_DELAY_MS: 1500, // Artificial delay for "thinking" feel
@@ -43,7 +43,8 @@ export const BEHAVIOR_CONFIG = {
     
     // Whether to include full prefect DNA in prompt (verbose but accurate)
     INCLUDE_FULL_CONTEXT: true
-  }
+  },
+  TEST_MODE: false, // NEW: Flag to globally disable Web Workers for testing/restricted environments
 };
 
 export const KGOT_CONFIG = {

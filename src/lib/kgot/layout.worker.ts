@@ -33,3 +33,5 @@ self.onmessage = (e) => {
     positions: positions
   });
 };
+
+export {};

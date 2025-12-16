@@ -1,9 +1,11 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { useGameStore } from '../state/gameStore';
-import { Play, Pause, FastForward, Rewind, Volume2, VolumeX, Loader2, RefreshCw, Speaker, Power, ImageOff, MicOff } from 'lucide-react';
+
+import * as React from 'react';
+import { Play, Pause, FastForward, Rewind, Volume2, VolumeX, Loader2, RefreshCw, Speaker, ImageOff, MicOff } from 'lucide-react';
 import { regenerateMediaForTurn } from '../state/mediaController';
 import { MediaStatus } from '../types';
 import { audioService } from '../services/AudioService';
+import { useGameStore } from '../state/gameStore';
+import { DEFAULT_MEDIA_BACKGROUND_URL, THEME } from '@/theme';
 
 // Placeholder for formatTime
 const formatTime = (seconds: number) => {
@@ -15,7 +17,7 @@ const formatTime = (seconds: number) => {
 interface MediaPanelProps {
   variant?: 'full' | 'background';
   className?: string;
-  backgroundImageUrl?: string; // NEW PROP
+  backgroundImageUrl?: string;
 }
 
 const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '', backgroundImageUrl }) => {
@@ -30,22 +32,21 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
     pauseAudio,
     setVolume,
     setHasUserInteraction,
-    startSession 
   } = useGameStore();
 
   const currentTurn = currentTurnId ? getTurnById(currentTurnId) : undefined;
 
-  const [localVolume, setLocalVolume] = useState(audioPlayback.volume);
-  const [isMuted, setIsMuted] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const rafRef = useRef<number>(0);
+  const [localVolume, setLocalVolume] = React.useState(audioPlayback.volume);
+  const [isMuted, setIsMuted] = React.useState(false);
+  const [imageLoaded, setImageLoaded] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
+  const rafRef = React.useRef<number>(0);
 
-  useEffect(() => {
+  React.useEffect(() => {
     setLocalVolume(audioPlayback.volume);
   }, [audioPlayback.volume]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     const loop = () => {
       if (audioPlayback.isPlaying && currentTurn?.audioDuration) {
         const time = audioService.getCurrentTime();
@@ -54,27 +55,27 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
         rafRef.current = requestAnimationFrame(loop);
       }
     };
-    if (audioPlayback.isPlaying) loop();
-    else cancelAnimationFrame(rafRef.current);
+    if (audioPlayback.isPlaying) {
+      rafRef.current = requestAnimationFrame(loop);
+    } else {
+      cancelAnimationFrame(rafRef.current);
+    }
     return () => cancelAnimationFrame(rafRef.current);
   }, [audioPlayback.isPlaying, currentTurn?.audioDuration, currentTurn?.id]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     setProgress(0);
   }, [currentTurnId]);
 
-  useEffect(() => {
-    // Removed redundant auto-advance logic. Rely on multimodalSlice.ts logic inside playTurn's onEnded callback.
-  }, []);
 
-  const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVolumeChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const vol = parseFloat(e.target.value);
     setLocalVolume(vol);
     setVolume(vol);
     if (vol > 0 && isMuted) setIsMuted(false);
   }, [setVolume, isMuted]);
 
-  const toggleMute = useCallback(() => {
+  const toggleMute = React.useCallback(() => {
     const newMutedState = !isMuted;
     setIsMuted(newMutedState);
     if (newMutedState) {
@@ -87,7 +88,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
     }
   }, [isMuted, audioPlayback.volume, setVolume]);
 
-  const handlePlayPause = useCallback(() => {
+  const handlePlayPause = React.useCallback(() => {
     setHasUserInteraction();
     if (!currentTurnId) return;
     if (audioPlayback.isPlaying && audioPlayback.currentPlayingTurnId === currentTurnId) {
@@ -97,7 +98,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
     }
   }, [audioPlayback.isPlaying, audioPlayback.currentPlayingTurnId, currentTurnId, currentTurn, playTurn, pauseAudio, setHasUserInteraction]);
 
-  const handleRegenerateMedia = useCallback(async (type?: 'image' | 'audio' | 'video') => {
+  const handleRegenerateMedia = React.useCallback(async (type?: 'image' | 'audio' | 'video') => {
     if (currentTurn?.id) {
         await regenerateMediaForTurn(currentTurn.id, type);
     }
@@ -105,39 +106,26 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
 
   // Initial State: Waiting for Narrative
   if (!currentTurn) {
-    if (variant === 'background') {
-        const backgroundStyle = backgroundImageUrl 
-            ? { backgroundImage: `url(${backgroundImageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-            : {};
-
-        return (
-            <div className={`relative w-full h-full bg-[#0c0a09] overflow-hidden ${className}`} style={backgroundStyle}>
-                {!backgroundImageUrl && (
-                    <>
-                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#292524_0%,#0c0a09_100%)] opacity-60" />
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] rounded-full border border-[#78350f]/10 animate-[spin_60s_linear_infinite]" />
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60%] h-[60%] rounded-full border border-[#991b1b]/10 animate-[spin_45s_linear_infinite_reverse]" />
-                        <div className="absolute inset-0 bg-[linear-gradient(rgba(120,53,15,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(120,53,15,0.03)_1px,transparent_1px)] bg-[size:40px_40px] opacity-30"></div>
-                    </>
-                )}
-            </div>
-        );
-    }
-    
+    const effectiveBackgroundImage = backgroundImageUrl || DEFAULT_MEDIA_BACKGROUND_URL;
+      
     return (
-      <div className="w-full h-full flex flex-col gap-4 items-center justify-center bg-stone-950 text-stone-500 font-mono text-xs uppercase p-8 text-center border-b border-stone-800">
-        <span className="animate-pulse tracking-widest">AWAITING_INPUT_SIGNAL</span>
-        <button 
-            onClick={() => startSession()}
-            className="flex items-center gap-2 px-6 py-3 bg-red-900/30 border border-red-900/50 text-red-400 hover:bg-red-900/50 hover:text-red-200 transition-all rounded-sm tracking-widest"
-        >
-            <Power size={14} /> INITIALIZE SYSTEM
-        </button>
+      <div 
+        className={`relative w-full h-full bg-[#0c0a09] overflow-hidden ${className}`} 
+        style={{ backgroundImage: `url(${effectiveBackgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+      >
+        <div className="absolute inset-0 bg-black/20 z-10" aria-hidden="true" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(12,10,9,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(12,10,9,0.03)_1px,transparent_1px)] bg-[size:40px_40px] opacity-10 z-0" aria-hidden="true"></div>
+        
+        {variant === 'full' && (
+          <div className="absolute inset-0 flex flex-col gap-4 items-center justify-center text-[#a8a29e] font-mono text-xs uppercase p-8 text-center" role="status" aria-live="polite">
+            <span className="animate-pulse tracking-widest">AWAITING_NARRATIVE_FEED</span>
+          </div>
+        )}
       </div>
     );
   }
 
-  const { imageData, imageStatus, imageError, audioDuration, audioStatus, audioError, videoUrl, videoStatus } = currentTurn;
+  const { imageData, imageStatus, audioDuration, audioStatus, videoUrl, videoStatus } = currentTurn;
 
   return (
     <div className={`relative flex flex-col items-center justify-center bg-black font-serif overflow-hidden ${className}`}>
@@ -145,10 +133,10 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
         
         {/* Loading Overlay */}
         {(videoStatus === MediaStatus.pending || imageStatus === MediaStatus.pending) && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40 text-stone-300 animate-pulse backdrop-blur-[1px]">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40 text-[#e7e5e4] animate-pulse backdrop-blur-[1px]" role="status" aria-live="polite">
             {variant === 'full' && (
               <>
-                <Loader2 size={32} className="animate-spin mb-4 opacity-80" />
+                <Loader2 size={32} className={`animate-spin mb-4 opacity-80 ${THEME.colors.accent}`} aria-hidden="true" /> {/* Emerald green loader */}
                 <span className="font-mono text-xs uppercase tracking-widest opacity-80">GENERATING_VISUALS...</span>
               </>
             )}
@@ -157,17 +145,18 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
 
         {/* Content Render Logic */}
         {imageStatus === MediaStatus.error ? (
-           <div className="w-full h-full bg-stone-950 flex flex-col items-center justify-center gap-4 relative overflow-hidden">
-              <div className="absolute inset-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
+           <div className="w-full h-full bg-[#1c1917] flex flex-col items-center justify-center gap-4 relative overflow-hidden" role="alert">
+              <div className="absolute inset-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" aria-hidden="true"></div>
               {variant === 'full' && (
                 <>
-                  <ImageOff size={48} className="text-red-900/50 mb-2" />
-                  <span className="font-mono text-xs text-red-500 tracking-widest uppercase">Visual Feed Interrupted</span>
+                  <ImageOff size={48} className="text-[#7f1d1d]/50 mb-2" aria-hidden="true" /> {/* Burgundy */}
+                  <span className="font-mono text-xs text-[#991b1b] tracking-widest uppercase">Visual Feed Interrupted</span> {/* Burgundy */}
                   <button 
                     onClick={() => handleRegenerateMedia('image')}
-                    className="flex items-center gap-2 px-4 py-2 mt-4 bg-red-950/50 border border-red-900/50 text-red-400 hover:bg-red-900 hover:text-white transition-all rounded-sm text-xs font-mono uppercase tracking-wide z-10"
+                    className="flex items-center gap-2 px-4 py-2 mt-4 bg-[#7f1d1d]/50 border border-[#7f1d1d]/50 text-[#fca5a5] hover:bg-[#7f1d1d] hover:text-white transition-all rounded-sm text-xs font-mono uppercase tracking-wide z-10"
+                    aria-label="Re-establish visual link"
                   >
-                    <RefreshCw size={12} /> Re-establish Link
+                    <RefreshCw size={12} aria-hidden="true" /> Re-establish Link
                   </button>
                 </>
               )}
@@ -178,6 +167,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
             autoPlay loop muted playsInline
             className="w-full h-full object-cover"
             onLoadedData={() => setImageLoaded(true)}
+            aria-label={`Video scene for Turn ${currentTurn.turnIndex}`}
           />
         ) : imageData && imageStatus === MediaStatus.ready ? (
           <img
@@ -185,18 +175,19 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
             alt={`Scene for Turn ${currentTurn.turnIndex}`}
             className={`w-full h-full object-cover transition-opacity duration-1000 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
             onLoad={() => setImageLoaded(true)}
+            aria-live="polite"
           />
         ) : (
-          <div className="w-full h-full bg-stone-900" />
+          <div className="w-full h-full bg-[#1c1917]" aria-hidden="true" /> {/* Dark charcoal placeholder */}
         )}
 
         {/* Audio Error Overlay */}
         {audioStatus === MediaStatus.error && variant === 'full' && (
-            <div className="absolute top-4 right-4 z-30 flex flex-col gap-2 items-end pointer-events-auto">
-                <div className="flex items-center gap-2 bg-red-950/90 border border-red-800 p-2 rounded-sm shadow-xl">
-                     <MicOff size={14} className="text-red-400" />
-                     <button onClick={() => handleRegenerateMedia('audio')} className="text-red-400 hover:text-white" title="Retry Audio">
-                        <RefreshCw size={12}/>
+            <div className="absolute top-4 right-4 z-30 flex flex-col gap-2 items-end pointer-events-auto" role="alert">
+                <div className="flex items-center gap-2 bg-[#1e1b2d]/90 border border-[#7f1d1d] p-2 rounded-sm shadow-xl"> {/* Navy background, burgundy border */}
+                     <MicOff size={14} className="text-[#fca5a5]" aria-hidden="true" /> {/* Light red text */}
+                     <button onClick={() => handleRegenerateMedia('audio')} className="text-[#fca5a5] hover:text-white" title="Retry Audio" aria-label="Retry audio generation">
+                        <RefreshCw size={12} aria-hidden="true" />
                      </button>
                 </div>
             </div>
@@ -204,41 +195,50 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
       </div>
 
       {variant === 'full' && (
-        <div className="w-full bg-stone-950 p-4 border-t border-stone-800 flex flex-col gap-3 z-30">
+        <div className="w-full bg-[#1c1917] p-4 border-t border-[#292524] flex flex-col gap-3 z-30" role="group" aria-label="Audio controls"> {/* Charcoal background */}
           <div className="flex items-center justify-between">
-            <button onClick={goToPreviousTurn} className="p-2 text-stone-500 hover:text-amber-500 transition-colors"><Rewind size={20} /></button>
+            <button onClick={goToPreviousTurn} className="p-2 text-[#a8a29e] hover:text-[#991b1b] transition-colors" aria-label="Go to previous narrative turn"> {/* Muted gold/gray, burgundy hover */}
+              <Rewind size={20} />
+            </button>
             <button
               onClick={handlePlayPause}
               className={`flex items-center justify-center w-10 h-10 rounded-full shadow-lg transition-all duration-300
                   ${audioStatus === MediaStatus.ready 
-                      ? 'bg-amber-600 text-black hover:bg-amber-500 hover:scale-105' 
-                      : 'bg-stone-800 text-stone-600 cursor-not-allowed'}
+                      ? 'bg-[#991b1b] text-white hover:bg-[#7f1d1d] hover:scale-105'  /* Burgundy play button */
+                      : 'bg-[#44403c] text-[#a8a29e] cursor-not-allowed'} /* Charcoal, muted gold/gray */
               `}
               disabled={audioStatus !== MediaStatus.ready && !audioPlayback.isPlaying}
+              aria-label={audioPlayback.isPlaying && audioPlayback.currentPlayingTurnId === currentTurn.id ? "Pause audio" : "Play audio"}
             >
               {audioPlayback.isPlaying && audioPlayback.currentPlayingTurnId === currentTurn.id ? <Pause size={20} /> : <Play size={20} />}
             </button>
-            <button onClick={goToNextTurn} className="p-2 text-stone-500 hover:text-amber-500 transition-colors"><FastForward size={20} /></button>
+            <button onClick={goToNextTurn} className="p-2 text-[#a8a29e] hover:text-[#991b1b] transition-colors" aria-label="Go to next narrative turn"> {/* Muted gold/gray, burgundy hover */}
+              <FastForward size={20} />
+            </button>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-[10px] text-stone-500 w-8 text-right">{formatTime((progress / 100) * (audioDuration || 0))}</span>
-            <div className="flex-1 h-1 bg-stone-800 rounded-full relative overflow-hidden">
-              <div className="absolute inset-y-0 left-0 bg-amber-600 rounded-full transition-all duration-75 ease-linear" style={{ width: `${progress}%` }}></div>
+          <div className="flex items-center gap-3" aria-label="Audio playback progress">
+            <span className="font-mono text-[10px] text-[#a8a29e] w-8 text-right" aria-label="Current time">{formatTime((audioService.getCurrentTime() / (audioDuration || 1)) * (audioDuration || 0))}</span> {/* Muted gold/gray */}
+            <div className="flex-1 h-1 bg-[#44403c] rounded-full relative overflow-hidden" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}> {/* Charcoal background */}
+              <div className="absolute inset-y-0 left-0 bg-[#991b1b] rounded-full transition-all duration-75 ease-linear" style={{ width: `${progress}%` }} aria-hidden="true"></div> {/* Burgundy progress */}
             </div>
-            <span className="font-mono text-[10px] text-stone-500 w-8">{formatTime(audioDuration || 0)}</span>
+            <span className="font-mono text-[10px] text-[#a8a29e] w-8" aria-label="Total duration">{formatTime(audioDuration || 0)}</span> {/* Muted gold/gray */}
           </div>
 
-          <div className="flex items-center gap-4 text-stone-500">
-            <button onClick={toggleMute} className="hover:text-amber-500 transition-colors">
+          <div className="flex items-center gap-4 text-[#a8a29e]"> {/* Muted gold/gray */}
+            <button onClick={toggleMute} className="hover:text-[#991b1b] transition-colors" aria-label={isMuted || localVolume === 0 ? "Unmute audio" : "Mute audio"}> {/* Burgundy hover */}
               {isMuted || localVolume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
             </button>
             <input
               type="range" min="0" max="1" step="0.05"
               value={localVolume} onChange={handleVolumeChange}
-              className="w-24 h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-amber-600"
+              className="w-24 h-1 bg-[#44403c] rounded-lg appearance-none cursor-pointer accent-[#991b1b]" /* Charcoal track, burgundy accent */
+              aria-label="Audio volume slider"
+              aria-valuenow={localVolume}
+              aria-valuemin={0}
+              aria-valuemax={1}
             />
-            <span className="ml-auto font-mono text-[10px] uppercase flex items-center gap-1"><Speaker size={14} /> RATE: {audioPlayback.playbackRate.toFixed(1)}x</span>
+            <span className="ml-auto font-mono text-[10px] uppercase flex items-center gap-1" aria-label="Playback rate"><Speaker size={14} aria-hidden="true" /> RATE: {audioPlayback.playbackRate.toFixed(1)}x</span>
           </div>
         </div>
       )}
