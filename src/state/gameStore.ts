@@ -180,7 +180,8 @@ function selectActivePrefects(
 // FIX: Add a factory function for the initial base state
 const getInitialBaseState = () => ({
   gameState: INITIAL_GAME_STATE,
-  kgot: getInitialGraph(), // Ensure a fresh graph is always generated
+  // Fix: Ensure narrative_phase is strictly typed as 'ACT_1' here.
+  kgot: { nodes: {}, edges: [], global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' as KnowledgeGraph['global_state']['narrative_phase'] } },
   logs: INITIAL_LOGS,
   choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
   prefects: [], // Prefects are re-initialized on session start
@@ -530,13 +531,19 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       resetGame: () => {
         get().resetMultimodalState(); // Reset multimodal slice
         get().initializeSubjects();   // Re-initialize subjects slice
+        // Fix: Reset main store state but ensure kgot.global_state.narrative_phase is of correct type.
+        // The getInitialBaseState already provides the correct type.
         set({ ...getInitialBaseState(), hasHydrated: true }); // Reset main store state but keep hydrated
         audioService.stopDrone(); // Stop drone on reset
       },
 
       startSession: async (isLiteMode = false) => {
+        // Set state first so all downstream selectors update
         set({ sessionActive: true, isLiteMode }); 
+
         const state = get();
+        // Update global config only once as a fallback for non-reactive services
+        BEHAVIOR_CONFIG.TEST_MODE = isLiteMode; 
         
         if (state.prefects.length === 0) {
             const newPrefects = initializePrefects(state.gameState.seed);
@@ -550,7 +557,13 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         get().prefects.forEach(p => controller.updateAgentAttributes(p));
         set({ kgot: controller.getGraph() });
         
-        audioService.startDrone(); // Start drone on session start
+        // Guard audio start with a check for the AudioContext state
+        try {
+          await audioService.getContext().resume();
+          audioService.startDrone();
+        } catch (e) {
+          console.warn("Audio failed to auto-start - waiting for interaction", e);
+        }
       },
 
       saveSnapshot: async () => {
@@ -601,7 +614,17 @@ export const useGameStore = create<GameStoreWithPrefects>()(
             set((state) => ({
               ...state,
               ...baseState,
-              kgot: graphData, 
+              // Fix: Ensure that graphData.global_state.narrative_phase is a valid type.
+              kgot: {
+                  ...graphData,
+                  global_state: {
+                      ...graphData.global_state,
+                      // Ensure narrative_phase is explicitly cast to the correct union type.
+                      narrative_phase: (['ACT_1', 'ACT_2', 'ACT_3'].includes(graphData.global_state.narrative_phase as string))
+                          ? graphData.global_state.narrative_phase as KnowledgeGraph['global_state']['narrative_phase']
+                          : 'ACT_1' as KnowledgeGraph['global_state']['narrative_phase'] // Default to 'ACT_1' if invalid
+                  }
+              }, 
               sessionActive: true, 
               isThinking: false,
               currentTurnId: baseState.multimodalTimeline?.[baseState.multimodalTimeline.length - 1]?.id || null,
@@ -635,10 +658,36 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         subjects: state.subjects,
         kgot: state.kgot, // Persist Knowledge Graph
       }),
+      // Fix: Explicitly merge kgot and ensure narrative_phase type safety.
       merge: (persistedState, currentState) => {
-        const state = persistedState ? (persistedState as Partial<CombinedGameStoreState>) : {};
-        // Ensure sessionActive is false on reload so we don't auto-start audio contexts without interaction
-        return { ...currentState, ...state, sessionActive: false, isThinking: false }; 
+        const pState = (persistedState as any) || {}; // Cast to any for flexible merging
+        const currentKgot = currentState.kgot;
+        const persistedKgot = pState.kgot as Partial<KnowledgeGraph> | undefined; // Treat persisted as partial
+
+        // Manually construct global_state to ensure type safety for narrative_phase
+        const mergedGlobalState: KnowledgeGraph['global_state'] = {
+            turn_count: persistedKgot?.global_state?.turn_count ?? currentKgot.global_state.turn_count,
+            tension_level: persistedKgot?.global_state?.tension_level ?? currentKgot.global_state.tension_level,
+            // Explicitly validate and cast narrative_phase
+            narrative_phase: (['ACT_1', 'ACT_2', 'ACT_3'].includes(persistedKgot?.global_state?.narrative_phase as string))
+                ? persistedKgot?.global_state?.narrative_phase as KnowledgeGraph['global_state']['narrative_phase']
+                : currentKgot.global_state.narrative_phase, // Default to current state's phase if persisted is invalid
+            narrative_summary: persistedKgot?.global_state?.narrative_summary ?? currentKgot.global_state.narrative_summary,
+        };
+
+        const mergedKgot: KnowledgeGraph = {
+            nodes: { ...currentKgot.nodes, ...(persistedKgot?.nodes || {}) },
+            edges: [...currentKgot.edges, ...(persistedKgot?.edges || [])], // Simple merge, KGotController will handle canonicalization
+            global_state: mergedGlobalState,
+        };
+
+        return { 
+          ...currentState, 
+          ...pState, // Spread other top-level persisted properties
+          kgot: mergedKgot, // Use the merged and type-safe kgot
+          // Only reset flags that should NEVER be persisted across reloads
+          isThinking: false 
+        }; 
       },
       onRehydrateStorage: () => (state) => {
         // Hydration callback: Mark state as hydrated to allow UI to render

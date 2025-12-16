@@ -1,8 +1,6 @@
-
-
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
-import { VISUAL_MANDATE, VIDEO_MANDATE } from '../config/visualMandate';
-import { useGameStore } from '../state/gameStore'; 
+import { VISUAL_MANDATE } from '../config/visualMandate';
+import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
 import { generateLocalImage, generateLocalSpeech, distortLocalImage } from './localMediaService';
 
 // Robust API Key Retrieval
@@ -25,12 +23,9 @@ const getApiKey = (): string => {
 const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
 // --- HELPER: CHECK MODE ---
+// Directly use config to avoid circular dependency with store
 function isLiteMode(): boolean {
-  try {
-    return useGameStore.getState().isLiteMode;
-  } catch(e) {
-    return false;
-  }
+  return BEHAVIOR_CONFIG.TEST_MODE;
 }
 
 // --- RATE LIMITING QUEUE WITH CIRCUIT BREAKER ---
@@ -226,19 +221,13 @@ export async function generateSpeechAction(text: string, voiceName: string): Pro
   });
 }
 
-/**
- * Generates multi-speaker speech for dramatic audio.
- */
 export async function generateMultiSpeakerSpeechAction(
   prompt: string, 
   speakerVoiceConfigs: Array<{ speaker: string, voiceConfig: { prebuiltVoiceConfig: { voiceName: string } } }>
 ): Promise<{ audioData: string; duration: number } | undefined> {
-  // Local multi-speaker not supported yet, fallback to local single speaker if lite mode is on.
-  // Or, if local multi-speaker logic is added, call it here.
   if (isLiteMode()) {
     console.warn("[GeminiMediaService] Multi-speaker audio not supported in Lite Mode. Falling back to single speaker for: ", prompt);
-    // Fallback to single speaker local if needed, for now just empty data
-    return generateLocalSpeech(prompt); // Fallback to local single speaker
+    return generateLocalSpeech(prompt); 
   }
 
   const apiKey = getApiKey();
@@ -247,7 +236,7 @@ export async function generateMultiSpeakerSpeechAction(
   return withRetry(async () => {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-preview-tts', // Assuming this model supports multi-speaker via config
+        model: 'gemini-2.5-flash-preview-tts', 
         contents: { parts: [{ text: prompt }] },
         config: {
           responseModalities: [Modality.AUDIO],
@@ -262,7 +251,6 @@ export async function generateMultiSpeakerSpeechAction(
       const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (!audioData) throw new Error("No multi-speaker audio data returned from Gemini.");
 
-      // Calculate approximate duration for UI sync
       const base64Length = audioData.length;
       const byteLength = (base64Length * 3) / 4; 
       const sampleCount = byteLength / 2; 
@@ -272,8 +260,6 @@ export async function generateMultiSpeakerSpeechAction(
   });
 }
 
-
-// ... rest of the file (generateVideoAction, distortImageAction) unchanged ...
 export async function generateVideoAction(
   imageB64: string, 
   visualPrompt: string, 
@@ -282,8 +268,7 @@ export async function generateVideoAction(
    if (isLiteMode()) return undefined; 
    const apiKey = getApiKey();
    if (!apiKey) throw new MediaGenerationError('AUTH', "API key is missing.");
-   // ... implementation retained from original file ...
-   // Returning undefined for now to keep diff clean as video is not primary target of this fix
+   // Returning undefined for now
    return undefined; 
 }
 

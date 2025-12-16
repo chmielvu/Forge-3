@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { motion, AnimatePresence } from "framer-motion";
@@ -23,12 +22,10 @@ const speakerStyles: Record<string, string> = {
 };
 
 export default function NarrativeLog() {
-  // FIX: Make multimodalTimeline reactive by including it in the selector
-  const { logs, isThinking, multimodalTimeline } = useGameStore(s => ({
-    logs: s.logs,
-    isThinking: s.isThinking,
-    multimodalTimeline: s.multimodalTimeline,
-  }));
+  const logs = useGameStore(s => s.logs);
+  const isThinking = useGameStore(s => s.isThinking);
+  const multimodalTimeline = useGameStore(s => s.multimodalTimeline);
+
   const viewportRef = useRef<HTMLDivElement>(null);
   const prefersReduced = useReducedMotion();
 
@@ -41,7 +38,10 @@ export default function NarrativeLog() {
 
   // Render the full log content, as the TypewriterText and ScriptRenderer logic were internal
   const renderLogContent = (log: LogEntry) => {
-    const isPsychosis = log.type === 'psychosis' || (log.type === 'narrative' && useGameStore.getState().gameState.ledger.traumaLevel > 80);
+    const state = useGameStore.getState();
+    // FIX: Safely access traumaLevel using optional chaining and default value
+    const traumaLevel = state.gameState?.ledger?.traumaLevel ?? 0; 
+    const isPsychosis = log.type === 'psychosis' || (log.type === 'narrative' && traumaLevel > 80);
     const logId = log.id; // Access log ID for multimodal timeline check
     // FIX: Use the reactive multimodalTimeline from component scope
     const multimodalTurn = multimodalTimeline.find(t => t.id === logId);
@@ -60,7 +60,7 @@ export default function NarrativeLog() {
                     // Apply bolding and other styling based on desired dark academia feel
                     return (
                         <p key={idx} className={`text-lg leading-relaxed ${style} ${item.speaker === 'Narrator' ? 'italic' : 'font-semibold'}`}>
-                            {item.speaker}: ${item.text}
+                            {item.speaker}: {item.text}
                         </p>
                     );
                 })}

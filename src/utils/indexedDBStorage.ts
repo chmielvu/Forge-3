@@ -208,7 +208,8 @@ export const createIndexedDBStorage = () => ({
       return data ? JSON.stringify(data) : null;
     } catch (error) {
       console.error(`[createIndexedDBStorage] getItem failed for ${name}:`, error);
-      return null; // Return null to prevent app crash
+      // FIX: Return a valid empty JSON string on error to prevent Zustand from breaking.
+      return JSON.stringify({}); 
     }
   },
   setItem: async (name: string, value: string): Promise<void> => {
@@ -224,3 +225,4 @@ export const createIndexedDBStorage = () => ({
     // Implement if needed
   }
 });
+    

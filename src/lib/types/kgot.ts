@@ -1,11 +1,9 @@
-
-
 import { YandereLedger, PrefectPsychometrics } from '../../types';
 
 // Knowledge Graph of Thoughts (KGoT) Schema
 // Version: SOTA 3.8 - Graphology Integration with Manara-Noir
 
-export type NodeType = 'ENTITY' | 'LOCATION' | 'EVENT' | 'CONCEPT' | 'FACULTY' | 'PREFECT' | 'SUBJECT' | 'INJURY' | 'SECRET';
+export type NodeType = 'ENTITY' | 'LOCATION' | 'EVENT' | 'CONCEPT' | 'FACULTY' | 'PREFECT' | 'SUBJECT' | 'INJURY' | 'SECRET' | 'MEMORY';
 
 export interface Memory {
   id: string;
@@ -98,7 +96,30 @@ export interface KGotNode {
   };
 }
 
-export type EdgeType = 'RELATIONSHIP' | 'SPATIAL' | 'TEMPORAL' | 'KNOWLEDGE' | 'TRAUMA_BOND' | 'SECRET_ALLIANCE' | 'GRUDGE' | 'OBSESSION' | 'AFFLICTS' | 'CAUSED_BY' | 'DISCOVERED';
+export type EdgeType = 
+  | 'RELATIONSHIP' 
+  | 'SPATIAL' 
+  | 'TEMPORAL' 
+  | 'KNOWLEDGE' 
+  | 'TRAUMA_BOND' 
+  | 'SECRET_ALLIANCE' 
+  | 'GRUDGE' 
+  | 'OBSESSION' 
+  | 'AFFLICTS' 
+  | 'CAUSED_BY' 
+  | 'DISCOVERED'
+  | 'INJURY_LINK';
+
+export interface KGotEdgeMeta {
+  tension?: number;
+  trope?: string;
+  is_secret?: boolean;
+  bond_type?: string;
+  intensity?: number;
+  timestamp?: number | string; // Allow number for turn count or string for ISO dates
+  fadedAt?: number; // Turn number when decay last applied
+  provenance?: string; // Creator/Reason for edge
+}
 
 export interface KGotEdge {
   key?: string; // Support for MultiGraph keys
@@ -107,14 +128,7 @@ export interface KGotEdge {
   type: EdgeType | string;
   label: string;
   weight: number; // 0.0 to 1.0
-  meta?: {
-    tension?: number;
-    trope?: string;
-    is_secret?: boolean;
-    bond_type?: string;
-    intensity?: number;
-    timestamp?: string;
-  };
+  meta?: KGotEdgeMeta;
 }
 
 export interface KnowledgeGraph {

@@ -1,6 +1,6 @@
 
 import { pipeline, env } from '@xenova/transformers';
-import { BEHAVIOR_CONFIG } from '../config/behaviorTuning'; // Import config
+import { BEHAVIOR_CONFIG } from '../config/behaviorTuning'; 
 
 // Worker Instance Singleton
 let mediaWorker: Worker | null = null;
@@ -29,7 +29,7 @@ function getWorker(): Worker | null {
     // If TEST_MODE is active, explicitly disable workers.
     // This check must happen first.
     if (BEHAVIOR_CONFIG.TEST_MODE) {
-        if (workerAvailable !== false) { // Only log once if it's not already marked false
+        if (workerAvailable !== false) { 
             console.warn("[LocalMediaService] TEST_MODE active: Disabling Web Worker for local LLMs.");
         }
         workerAvailable = false;
@@ -244,35 +244,43 @@ function analyzePrompt(prompt: string): VisualParams {
     params.texture = 'scanline';
   }
 
-  // ... (simplified for brevity, main logic retained) ...
-
   return params;
 }
 
 export async function generateLocalImage(prompt: string): Promise<string> {
   return new Promise((resolve) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) { resolve(''); return; }
+    const performGeneration = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(''); return; }
 
-    const params = analyzePrompt(prompt);
-    
-    // Simple abstract render
-    ctx.fillStyle = `hsl(${params.baseHue}, ${params.saturation}%, 10%)`;
-    ctx.fillRect(0, 0, 512, 512);
-    
-    // Add noise
-    for(let k=0; k<200; k++) {
-        const x = Math.random() * 512;
-        const y = Math.random() * 512;
-        ctx.fillStyle = `hsla(${params.secondaryHue}, 50%, 50%, 0.1)`;
-        ctx.fillRect(x, y, 50, 50);
+        const params = analyzePrompt(prompt);
+        
+        // Simple abstract render
+        ctx.fillStyle = `hsl(${params.baseHue}, ${params.saturation}%, 10%)`;
+        ctx.fillRect(0, 0, 512, 512);
+        
+        // Add noise
+        for(let k=0; k<200; k++) {
+            const x = Math.random() * 512;
+            const y = Math.random() * 512;
+            ctx.fillStyle = `hsla(${params.secondaryHue}, 50%, 50%, 0.1)`;
+            ctx.fillRect(x, y, 50, 50);
+        }
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        resolve(dataUrl.split(',')[1]);
+    };
+
+    // Use requestIdleCallback if available to avoid blocking the main thread during UI updates
+    // Fallback to setTimeout(0) for environments without requestIdleCallback
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(performGeneration);
+    } else {
+        setTimeout(performGeneration, 0);
     }
-
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    resolve(dataUrl.split(',')[1]);
   });
 }
 
@@ -308,7 +316,6 @@ function encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
   writeString(view, 0, 'RIFF');
   view.setUint32(4, 36 + samples.length * 2, true);
   writeString(view, 8, 'WAVE');
-  // Fix: Use writeString to write the 'fmt ' chunk ID
   writeString(view, 12, 'fmt ');
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
@@ -330,3 +337,4 @@ function encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
 function writeString(view: DataView, offset: number, string: string) {
   for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
 }
+    

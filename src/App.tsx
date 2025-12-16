@@ -1,5 +1,4 @@
 
-
 import * as React from 'react';
 import {
   BookOpen,
@@ -19,7 +18,7 @@ import {
 import { useGameStore } from './state/gameStore';
 import { audioService } from './services/AudioService';
 import { BEHAVIOR_CONFIG } from './config/behaviorTuning'; 
-import { THEME, DEFAULT_MEDIA_BACKGROUND_URL, DARK_ACADEMIA_GRID_TEXTURE_URL } from './theme'; // Updated to use relative path
+import { THEME, DEFAULT_MEDIA_BACKGROUND_URL, DARK_ACADEMIA_GRID_TEXTURE_URL } from './theme'; 
 
 // New UI Components
 import StartScreen from './components/StartScreen'; 
@@ -45,6 +44,10 @@ const GlobalStyles = () => (
       80% { text-shadow: 3px 0 0 #7f1d1d, -3px 0 0 #1e1b2d; transform: translateX(-3px); }
       100% { text-shadow: 0 0 0 #7f1d1d, 0 0 0 #1e1b2d; transform: translateX(0); }
     }
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
     .animate-fade-in {
       animation: fadeIn 1.5s ease-out forwards;
     }
@@ -66,7 +69,7 @@ const GlobalStyles = () => (
         background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
     }
     .bg-radial-gradient-crimson {
-      background: radial-gradient(circle at center, transparent 10%, rgba(127, 29, 29, 0.2) 60%, rgba(127, 29, 29, 0.4) 100%); /* Adjusted to burgundy */
+      background: radial-gradient(circle at center, transparent 10%, rgba(127, 29, 29, 0.2) 60%, rgba(127, 29, 29, 0.4) 100%); 
     }
     /* Custom Scrollbar for "Dark Academia" feel */
     .custom-scrollbar::-webkit-scrollbar {
@@ -101,24 +104,57 @@ const Vignette = () => (
   <div className="absolute inset-0 pointer-events-none z-[6] bg-[radial-gradient(circle_at_center,transparent_8%,rgba(12,10,9,0.85)_80%,#0c0a09_100%)]" />
 );
 
-// New Boot Loader Component
-const BootLoader = () => (
-  <div className="flex flex-col items-center justify-center h-screen bg-[#0c0a09] text-[#065f46] font-mono z-50">
-    <div className="flex flex-col gap-4 items-center">
-      <Loader2 size={48} className="animate-spin text-[#065f46] opacity-80" />
-      <div className="flex flex-col items-center gap-1">
-        <span className="text-sm tracking-[0.3em] uppercase animate-pulse">Initializing Neuro-Symbolic Engine</span>
-        <span className="text-xs text-[#065f46]/50">Restoring System State...</span>
+// New Cinematic Boot Loader
+const BootLoader = () => {
+  const [lines, setLines] = React.useState<string[]>([]);
+  const bootSequence = [
+    "> INITIALIZING CORE KERNEL...",
+    "> MOUNTING KNOWLEDGE GRAPH EXTENSIONS...",
+    "> SYNCHRONIZING PSYCHOMETRIC LEDGER...",
+    "> CONNECTING TO NEURO-SYMBOLIC ENGINE...",
+    "> VERIFYING INTEGRITY..."
+  ];
+
+  React.useEffect(() => {
+    let delay = 0;
+    bootSequence.forEach((line, index) => {
+      setTimeout(() => {
+        setLines(prev => [...prev, line]);
+      }, delay);
+      delay += 400 + Math.random() * 400; // Random jitter
+    });
+  }, []);
+
+  return (
+    <div className="flex flex-col items-center justify-center h-screen bg-[#0c0a09] text-[#065f46] font-mono z-50 overflow-hidden relative">
+      <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.5)_50%)] bg-[size:100%_4px] opacity-20"></div>
+      
+      <div className="flex flex-col gap-6 items-center max-w-md w-full px-8">
+        <div className="relative">
+           <Loader2 size={48} className="animate-spin text-[#065f46]" />
+           <div className="absolute inset-0 blur-md bg-[#065f46] opacity-20 animate-pulse"></div>
+        </div>
+        
+        <div className="w-full bg-[#0c0a09] border border-[#065f46]/30 p-4 rounded-sm min-h-[150px] shadow-[0_0_20px_rgba(6,95,70,0.1)]">
+          {lines.map((line, i) => (
+            <div key={i} className="text-xs tracking-wider opacity-80 animate-fade-in mb-1">
+              {line}
+            </div>
+          ))}
+          <div className="text-xs animate-pulse mt-2">_</div>
+        </div>
+        
+        <span className="text-[10px] text-[#065f46]/50 tracking-[0.5em] uppercase">System Restoration In Progress</span>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 
 // --- APP ENTRY POINT ---
 
 export default function App() {
-  const { sessionActive, startSession, resetGame, hasHydrated } = useGameStore();
+  const { sessionActive, startSession, resetGame, hasHydrated, gameState } = useGameStore();
 
   const handleStartSession = React.useCallback((isLite: boolean) => {
     // Crucial: Update BEHAVIOR_CONFIG.TEST_MODE before `startSession` might trigger worker-dependent logic
@@ -133,9 +169,15 @@ export default function App() {
     startSession(isLite);
   }, [startSession, resetGame]);
 
+  // Ensure hydration check triggers
+  React.useEffect(() => {
+     useGameStore.persist.rehydrate();
+  }, []);
+
   // Gate rendering: Do not show ANY UI until the store has rehydrated from IndexedDB.
   // This prevents race conditions where default state overwrites persisted state.
-  if (!hasHydrated) {
+  // Also check for essential game state data (like ledger.subjectId) for a more robust hydration check.
+  if (!hasHydrated || !gameState?.ledger?.subjectId) {
     return (
       <div className={`relative w-full h-screen flex flex-col ${THEME.colors.bg} ${THEME.colors.textMain} overflow-hidden font-serif`}>
         <GlobalStyles />
@@ -162,3 +204,4 @@ export default function App() {
     </div>
   );
 }
+    

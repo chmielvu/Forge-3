@@ -1,9 +1,8 @@
-
-
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { VISUAL_MANDATE } from "../config/visualMandate";
-import { useGameStore } from '../state/gameStore'; 
+// FIX: Removed unused gameStore import to prevent cycle
+// import { useGameStore } from '../state/gameStore'; 
 
 // Robust API Key Retrieval
 const getApiKey = (): string => {
@@ -25,8 +24,6 @@ const getApiKey = (): string => {
 const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
 // --- NANO BANANA ACP SCHEMA (STRICT) ---
-// Matches Section 4.1 of Master Doc exactly
-
 const NanoBananaACPSchema = z.object({
   scene_id: z.string(),
   style_lock: z.object({
@@ -61,12 +58,10 @@ export async function generateSceneVisual(promptJSON: string): Promise<{ success
 
   try {
     // 1. Validate the Director's JSON against the ACP Schema
-    // If the director output a string, try to parse it first
     let parsedPrompt;
     try {
         parsedPrompt = JSON.parse(promptJSON);
     } catch (e) {
-        // If not JSON, wrap it in a fallback structure to attempt generation anyway
         parsedPrompt = {
             scene_id: "fallback",
             style_lock: { base: VISUAL_MANDATE.ZERO_DRIFT_HEADER },
@@ -84,7 +79,6 @@ export async function generateSceneVisual(promptJSON: string): Promise<{ success
         contents: { parts: [{ text: `GENERATE IMAGE STRICTLY ADHERING TO THIS JSON STRUCTURE: ${JSON.stringify(parsedPrompt)}` }] }
     });
     
-    // Correctly find the image part by iterating, as per guidelines
     const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
     if (imagePart?.inlineData?.data) {
         return { success: true, image_url: imagePart.inlineData.data };
