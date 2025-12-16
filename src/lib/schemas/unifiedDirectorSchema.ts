@@ -1,6 +1,6 @@
 
-
 import { Type } from "@google/genai";
+import { z } from "zod";
 
 export interface UnifiedDirectorOutput {
   meta_analysis: {
@@ -45,6 +45,75 @@ export interface UnifiedDirectorOutput {
   script?: Array<{ speaker: string; text: string; emotion?: string; }>;
 }
 
+// --- RUNTIME VALIDATION SCHEMA (ZOD) ---
+export const UnifiedDirectorZodSchema = z.object({
+  meta_analysis: z.object({
+    selected_engine: z.string().default("DEFAULT"),
+    player_psych_profile: z.string().default("Unknown")
+  }).optional().default({ selected_engine: "DEFAULT", player_psych_profile: "Unknown" }),
+  
+  reasoning_graph: z.object({
+    nodes: z.array(z.object({
+      id: z.string().default("unknown"),
+      type: z.string().default("NOTE"),
+      content: z.string().default("")
+    })).default([]),
+    selected_path: z.array(z.string()).default([])
+  }).optional().default({ nodes: [], selected_path: [] }),
+  
+  narrative_text: z.string().default("The system recalibrates... (Narrative Signal Weak)"),
+  
+  visual_prompt: z.string().optional().default("Static. Dark void."),
+  
+  choices: z.array(z.string()).default(["Observe", "Wait"]),
+  
+  ledger_update: z.object({
+    trauma_delta: z.number().optional(),
+    shame_delta: z.number().optional(),
+    compliance_delta: z.number().optional(),
+    hope_delta: z.number().optional()
+  }).optional().default({}),
+
+  kgot_mutations: z.array(z.any()).optional().default([]),
+
+  prefect_simulations: z.array(z.object({
+    prefect_id: z.string(),
+    prefect_name: z.string().optional().default("Unknown Agent"),
+    emotional_state: z.object({
+        paranoia: z.number().default(0),
+        desperation: z.number().default(0),
+        confidence: z.number().default(0.5),
+        arousal: z.number().optional(),
+        dominance: z.number().optional()
+    }).optional().default({ paranoia: 0, desperation: 0, confidence: 0.5 }),
+    public_action: z.string().default("Observes."),
+    public_actionSummary: z.string().optional(),
+    hidden_motivation: z.string().default("Unknown"),
+    sabotage_attempt: z.object({
+        target: z.string(),
+        method: z.string(),
+        deniability: z.number()
+    }).optional(),
+    alliance_signal: z.object({
+        target: z.string(),
+        message: z.string()
+    }).optional(),
+    secrets_uncovered: z.array(z.string()).optional()
+  })).optional().default([]),
+
+  somatic_state: z.object({
+    impact_sensation: z.string().optional(),
+    internal_collapse: z.string().optional()
+  }).optional(),
+
+  script: z.array(z.object({
+    speaker: z.string(),
+    text: z.string(),
+    emotion: z.string().optional()
+  })).optional().default([])
+});
+
+// --- LLM GENERATION SCHEMA (GOOGLE SDK) ---
 export const UnifiedDirectorOutputSchema = {
   type: Type.OBJECT,
   properties: {
@@ -193,7 +262,7 @@ export const UnifiedDirectorOutputSchema = {
                 hidden_motivation: { type: Type.STRING },
                 sabotage_attempt: { 
                     type: Type.OBJECT,
-                    properties: { target: { type: Type.STRING }, method: { type: Type.STRING } }
+                    properties: { target: { type: Type.STRING }, method: { type: Type.STRING }, deniability: { type: Type.NUMBER } }
                 },
                 alliance_signal: {
                      type: Type.OBJECT,

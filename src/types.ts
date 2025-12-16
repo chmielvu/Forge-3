@@ -1,3 +1,4 @@
+
 import { KnowledgeGraph } from './lib/types/kgot';
 
 export enum CharacterId {
@@ -17,6 +18,12 @@ export enum CharacterId {
   DISSIDENT = 'PREFECT_DISSIDENT',
   NURSE = 'PREFECT_NURSE'
 }
+
+export type NarratorMode = 
+  | 'MOCKING_JESTER' 
+  | 'SEDUCTIVE_DOMINATRIX' 
+  | 'CLINICAL_ANALYST' 
+  | 'SYMPATHETIC_CONFIDANTE';
 
 export interface YandereLedger {
   subjectId: string;
@@ -197,53 +204,10 @@ export interface MultimodalSliceExports {
 }
 
 export interface SubjectSliceExports {
-  subjects: Record<string, SubjectState>;
   initializeSubjects: () => void;
   updateSubject: (id: string, updates: Partial<SubjectState>) => void;
   getSubject: (id: string) => SubjectState | undefined;
   triggerSubjectReaction: (playerActionType: 'COMPLY' | 'DEFY' | 'OBSERVE' | 'SPEAK', context: string) => void;
-}
-
-export interface GameState {
-  ledger: YandereLedger;
-  location: string;
-  turn: number;
-  nodes: GraphNode[]; 
-  links: any[]; // Consider defining a more specific type for links if they are not KGotEdge
-  seed: number;
-}
-
-export interface CombinedGameStoreState extends MultimodalSliceExports, SubjectSliceExports {
-  gameState: GameState;
-  kgot: KnowledgeGraph;
-  logs: LogEntry[];
-  choices: string[];
-  prefects: PrefectDNA[];
-  sessionActive: boolean; 
-  isThinking: boolean;
-  isMenuOpen: boolean;
-  isGrimoireOpen: boolean;
-  isDevOverlayOpen: boolean;
-  executedCode?: string;
-  lastSimulationLog?: string;
-  lastDirectorDebug?: string;
-  addLog: (log: LogEntry) => void;
-  setLogs: (logs: LogEntry[]) => void;
-  setChoices: (choices: string[]) => void;
-  setThinking: (isThinking: boolean) => void;
-  setMenuOpen: (isOpen: boolean) => void;
-  setGrimoireOpen: (isOpen: boolean) => void;
-  setDevOverlayOpen: (isOpen: boolean) => void;
-  updatePrefects: (prefects: PrefectDNA[]) => void;
-  updateGameState: (updates: Partial<GameState>) => void;
-  updateLogMedia: (logId: string, media: Partial<LogEntry>) => void;
-  applyServerState: (result: any) => void;
-  applyDirectorUpdates: (response: any) => void;
-  processPlayerTurn: (input: string) => void;
-  resetGame: () => void;
-  startSession: (isLiteMode?: boolean) => Promise<void>;
-  saveSnapshot: () => Promise<void>;
-  loadSnapshot: () => Promise<void>;
 }
 
 export type PrefectArchetype = 
@@ -272,21 +236,16 @@ export interface TraitVector {
   ambition: number;
 }
 
-/**
- * @interface PrefectPsychometrics
- * @description Defines specific psychological "tells" and somatic signatures for Prefects,
- * derived from the lore documents to ensure deeper characterization.
- */
 export interface PrefectPsychometrics {
   tortureStyle: 'KINETIC' | 'CLINICAL' | 'EMOTIONAL' | 'RITUALISTIC' | 'INTIMATE' | 'PUBLIC'; 
-  physiologicalTell: string; // e.g., "The Mid-Sentence Snap", "The Predatory Giggle"
-  breakingPointTrigger: string; // What makes them break their mask
-  idleProp: string; // The visual prop they fidget with (e.g., "Spinning dagger", "Adjusting glasses")
-  vocalQuirk?: string; // e.g., "Whispers dangerous secrets", "Manic giggles"
-  visualDNA?: string; // Short descriptor for their unique visual style/appearance
-  somaticSignature?: string; // How their body expresses their internal state (e.g., "Sweat-beaded forehead", "Clenched Jaw")
-  arousal?: number; // Added arousal for emotional state tracking
-  dominance?: number; // Added dominance for emotional state tracking
+  physiologicalTell: string; 
+  breakingPointTrigger: string; 
+  idleProp: string; 
+  vocalQuirk?: string; 
+  visualDNA?: string; 
+  somaticSignature?: string; 
+  arousal?: number; 
+  dominance?: number; 
 }
 
 export interface PrefectDNA {
@@ -308,12 +267,57 @@ export interface PrefectDNA {
   };
   lastPublicAction?: string;
   knowledge?: string[];
-  psychometrics?: PrefectPsychometrics; // NEW: Deeper psychological details
-  appearanceDescription?: string; // NEW: More detailed appearance for prompt injection
-  narrativeFunctionDescription?: string; // NEW: More detailed narrative function
-  promptKeywords?: string[]; // NEW: Keywords for specific tone/style
-  visualDNA?: string; // Direct property for easier access and generation
-  somaticSignature?: string; // Direct property for easier access and generation
+  psychometrics?: PrefectPsychometrics; 
+  appearanceDescription?: string; 
+  narrativeFunctionDescription?: string; 
+  promptKeywords?: string[]; 
+  visualDNA?: string; 
+  somaticSignature?: string; 
+}
+
+export interface GameState {
+  ledger: YandereLedger;
+  location: string;
+  turn: number;
+  nodes: GraphNode[]; 
+  links: any[]; 
+  seed: number;
+  subjects: Record<string, SubjectState>; // Nested subjects
+  prefects: PrefectDNA[]; // Nested prefects
+}
+
+export interface CombinedGameStoreState extends MultimodalSliceExports, SubjectSliceExports {
+  gameState: GameState;
+  kgot: KnowledgeGraph;
+  logs: LogEntry[];
+  choices: string[];
+  sessionActive: boolean; 
+  isThinking: boolean;
+  isMenuOpen: boolean;
+  isGrimoireOpen: boolean;
+  isDevOverlayOpen: boolean;
+  narratorOverride: NarratorMode | 'AUTO'; 
+  executedCode?: string;
+  lastSimulationLog?: string;
+  lastDirectorDebug?: string;
+  addLog: (log: LogEntry) => void;
+  setLogs: (logs: LogEntry[]) => void;
+  setChoices: (choices: string[]) => void;
+  setThinking: (isThinking: boolean) => void;
+  setMenuOpen: (isOpen: boolean) => void;
+  setGrimoireOpen: (isOpen: boolean) => void;
+  setDevOverlayOpen: (isOpen: boolean) => void;
+  setNarratorOverride: (mode: NarratorMode | 'AUTO') => void; 
+  updatePrefects: (prefects: PrefectDNA[]) => void;
+  updateGameState: (updates: Partial<GameState>) => void;
+  updateLogMedia: (logId: string, media: Partial<LogEntry>) => void;
+  applyServerState: (result: any) => void;
+  applyDirectorUpdates: (response: any) => void;
+  processPlayerTurn: (input: string) => void;
+  resetGame: () => void;
+  startSession: (isLiteMode?: boolean) => Promise<void>;
+  saveSnapshot: () => Promise<void>;
+  loadSnapshot: () => Promise<void>;
 }
 
 export interface PrefectDecision {
@@ -321,7 +325,7 @@ export interface PrefectDecision {
     action: string; 
     actionDetail: string;
     publicUtterance: string | null;
-    publicActionSummary: string | null; // NEW: For logging concise public action
+    publicActionSummary: string | null; 
     hiddenProposal: string | null;
     targetId: string | null;
     stateDelta: any;
@@ -350,8 +354,8 @@ export interface FilteredSceneContext {
     recentActions: string;
     favorScore: number;
     perceivedThreat: number;
-    psychometrics?: PrefectPsychometrics; // NEW: Include psychometrics
-    appearanceDescription?: string; // NEW: Include appearance
+    psychometrics?: PrefectPsychometrics; 
+    appearanceDescription?: string; 
   }>;
   yourFavorScore: number;
   yourRecentActions: string[];
@@ -370,9 +374,9 @@ export interface CharacterVisualState {
   emotionalState: string;
   injuries: string[];
   dominancePosture: number;
-  facialExpression?: string; // e.g., "cold amusement", "predatory smirk"
-  poseDescription?: string; // e.g., "seated on dais", "leaning forward"
-  activeProps?: string[]; // e.g., ["goblet of wine", "dagger"]
+  facialExpression?: string; 
+  poseDescription?: string; 
+  activeProps?: string[]; 
 }
 
 export interface EnvironmentState {
@@ -380,9 +384,9 @@ export interface EnvironmentState {
   lightingScheme: string;
   atmosphericEffects: string[];
   dominantColors: string[];
-  keyProps?: string[]; // e.g., ["iron restraints", "steam vents"]
-  surfaceMaterials?: string[]; // e.g., ["sweating stone", "polished basalt"]
-  architecturalStyle?: string; // e.g., "Roman Imperial decay", "Gothic Bedlam"
+  keyProps?: string[]; 
+  surfaceMaterials?: string[]; 
+  architecturalStyle?: string; 
 }
 
 export interface VisualMemory {

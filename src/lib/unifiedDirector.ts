@@ -3,12 +3,13 @@ import { KGotController } from "../controllers/KGotController";
 import { DIRECTOR_SYSTEM_INSTRUCTIONS } from "../config/directorCore";
 import { LORE_APPENDIX, LORE_CONSTITUTION } from "../config/loreInjection"; 
 import { THEMATIC_ENGINES, MOTIF_LIBRARY } from "../config/directorEngines";
-import { UnifiedDirectorOutputSchema } from "./schemas/unifiedDirectorSchema";
-import { PrefectDNA, YandereLedger } from "../types";
+import { UnifiedDirectorOutputSchema, UnifiedDirectorZodSchema } from "./schemas/unifiedDirectorSchema";
+import { PrefectDNA, YandereLedger, GameState } from "../types";
 import { INITIAL_LEDGER } from "../constants";
 import { callGeminiWithRetry } from "../utils/apiRetry";
 import { TensionManager } from "../services/TensionManager";
 import { localMediaService, localGrunt } from "../services/localMediaService";
+import { narrativeQualityEngine } from "../services/narrativeQualityEngine";
 
 const getApiKey = (): string => {
   if (typeof process !== 'undefined' && process.env?.API_KEY) return process.env.API_KEY;
@@ -29,7 +30,6 @@ function buildPrefectContextBlock(activePrefects: PrefectDNA[]): string {
 
 /**
  * Extracts explicit high-level state (Memories, Grudges, Secrets, Relationships) from the Knowledge Graph
- * to ensure the narrative remains continuous and reactive to past events.
  */
 function getNarrativeContext(controller: KGotController): string {
     const graph = controller.getGraph();
@@ -46,46 +46,18 @@ function getNarrativeContext(controller: KGotController): string {
         .join('\n');
 
     // 2. Active Grudges (Intensity > 20)
-    // Grudges are stored on Prefect nodes, targeting the player or other prefects
     const activeGrudges: string[] = [];
     Object.values(graph.nodes).forEach((node: any) => {
         if (node.type === 'PREFECT' || node.type === 'FACULTY') {
             const grudges = node.attributes?.grudges || {};
             Object.entries(grudges).forEach(([target, intensity]) => {
                 if ((intensity as number) > 20) {
-                    // Resolve target name
                     const targetName = graph.nodes[target]?.label || target;
                     activeGrudges.push(`- ${node.label} holds a GRUDGE against ${targetName} (Intensity: ${intensity})`);
                 }
             });
         }
     });
-
-    // 3. Relationship Dynamics (Trust/Favor)
-    const relationshipStates: string[] = [];
-    Object.values(graph.nodes).forEach((node: any) => {
-        if ((node.type === 'PREFECT' || node.type === 'SUBJECT') && node.attributes?.prefectDNA) {
-            const rels = node.attributes.prefectDNA.relationships || {};
-            const activeRels = Object.entries(rels)
-                .filter(([_, val]) => Math.abs(val as number) > 0.1) // Only significant relationships
-                .map(([target, val]) => {
-                    const targetName = graph.nodes[target]?.label || target;
-                    return `${targetName}: ${(val as number).toFixed(2)}`;
-                });
-            
-            if (activeRels.length > 0) {
-                relationshipStates.push(`- ${node.label} BONDS: [${activeRels.join(', ')}]`);
-            }
-        }
-    });
-
-    // 4. Known Secrets
-    const knownSecrets = (attributes.secrets || [])
-        .map((s: any) => `- SECRET: "${s.name}" discovered by ${s.discoveredBy}`)
-        .join('\n');
-
-    // 5. Physical Injuries
-    const injuries = (attributes.injuries || []).join(', ');
 
     return `
 === EXPLICIT MEMORY & RELATIONSHIP STATE ===
@@ -94,16 +66,30 @@ ${recentMemories || "None."}
 
 [ACTIVE GRUDGES & TENSIONS]
 ${activeGrudges.length > 0 ? activeGrudges.join('\n') : "None."}
-
-[RELATIONSHIP DYNAMICS]
-${relationshipStates.length > 0 ? relationshipStates.join('\n') : "None established."}
-
-[DISCOVERED SECRETS]
-${knownSecrets || "None."}
-
-[PHYSICAL TRAUMA]
-Injuries: ${injuries || "None."}
     `.trim();
+}
+
+/**
+ * Rule-based fallback for Lite Mode or API failure.
+ */
+function generateOfflineResponse(input: string, beat: string): any {
+    return {
+        meta_analysis: { selected_engine: 'OFFLINE_FALLBACK', player_psych_profile: 'Simulated' },
+        reasoning_graph: { nodes: [], selected_path: [] },
+        narrative_text: `[OFFLINE PROTOCOL] The system processes your input: "${input}".\n\nThe air in the Forge is still. The automated systems hum with a low, menacing thrum. Without the Architect's direct signal, the Prefects default to standard containment protocols. They watch you with cold, unblinking eyes, waiting for a violation.\n\nCurrent Narrative Beat: ${beat}.`,
+        visual_prompt: "Static. Low fidelity monochrome. Scanlines.",
+        choices: [
+            "Observe the silence",
+            "Test the restraints", 
+            "Recall a memory",
+            "Signal for attention"
+        ],
+        prefect_simulations: [],
+        script: [],
+        kgot_mutations: [],
+        ledger_update: {},
+        audio_cues: []
+    };
 }
 
 export async function executeUnifiedDirectorTurn(
@@ -115,16 +101,35 @@ export async function executeUnifiedDirectorTurn(
   modelId: string = 'gemini-2.5-flash'
 ): Promise<any> { 
   
-  // Re-instantiate controller with passed graph data
+  // Re-instantiate controller with passed graph data for READ-ONLY context generation
   const controller = new KGotController(currentGraphData);
   const graphSnapshot = controller.getGraph();
   const ledger = graphSnapshot.nodes['Subject_84']?.attributes?.ledger || INITIAL_LEDGER;
   const currentLocation = graphSnapshot.nodes['Subject_84']?.attributes?.currentLocation || 'The Calibration Chamber';
   const narrativeBeat = TensionManager.calculateNarrativeBeat(graphSnapshot.global_state.turn_count, 0);
 
+  // --- LITE MODE SHORT-CIRCUIT ---
+  if (isLiteMode) {
+      console.log("[UnifiedDirector] Lite Mode active. Returning offline response.");
+      return generateOfflineResponse(playerInput, narrativeBeat);
+  }
+
   // 1. TELEMETRY: Local Llama 3.2 (The Empath)
-  const telemetry = await localMediaService.analyzeIntent(playerInput)
-    .catch(() => ({ intent: 'neutral', subtext: 'genuine', intensity: 5 }));
+  let telemetry;
+  try {
+      telemetry = await localMediaService.analyzeIntent(playerInput);
+  } catch (e) {
+      console.warn("[UnifiedDirector] Telemetry failed, using defaults.", e);
+      telemetry = { intent: 'neutral', subtext: 'genuine', intensity: 5 };
+  }
+
+  // Double-check undefined to prevent crash
+  if (!telemetry) telemetry = { intent: 'neutral', subtext: 'genuine', intensity: 5 };
+
+  // STRICT TYPE CASTING to prevent .toUpperCase() on undefined/numbers
+  const intentStr = String(telemetry.intent || 'neutral').toUpperCase();
+  const subtextStr = String(telemetry.subtext || 'genuine').toUpperCase();
+  const intensityVal = typeof telemetry.intensity === 'number' ? telemetry.intensity : 5;
 
   // 2. LOGIC: Engine & Motif Selection
   let activeEngineKey = "PROTOCOL"; 
@@ -169,9 +174,9 @@ ${LORE_CONSTITUTION.VOICE_MANDATES}
 
 === PSYCHOMETRIC TELEMETRY (Llama-1B) ===
 INPUT: "${playerInput}"
-INTENT: ${telemetry.intent.toUpperCase()}
-SUBTEXT: ${telemetry.subtext.toUpperCase()}
-INTENSITY: ${telemetry.intensity}/10
+INTENT: ${intentStr}
+SUBTEXT: ${subtextStr}
+INTENSITY: ${intensityVal}/10
 
 === LONG-TERM MEMORY & CONTEXT (THE CONTINUOUS STORY) ===
 ${explicitContext}
@@ -212,12 +217,10 @@ Generate the JSON response strictly adhering to the schema.
 4. **SOMATIC STATE**: Populate the 'somatic_state'.
 5. **CONTINUOUS NARRATIVE MEMORY (THE LOOM)**:
    You are the Co-Writer. You MUST store internal state changes using 'kgot_mutations' to create a living world.
-   **Do not be passive. Record the impact of this turn.**
    - **GRUDGES**: If an agent is insulted or defied -> 'update_grudge' (+10 to +30).
    - **RELATIONSHIPS**: If an agent is obeyed, charmed, or manipulated -> 'update_relationship' (Trust/Favor delta).
    - **MEMORIES**: If a significant plot event occurs (a revelation, an injury, a betrayal) -> 'add_memory' (Describe the event clearly).
    - **INJURIES**: If the player is injured -> 'add_injury'.
-   *Every turn must impact the web of relationships.*
 
 6. **UPDATE**: Modify the YandereLedger.
 `;
@@ -240,7 +243,13 @@ Generate the JSON response strictly adhering to the schema.
       });
     });
 
-    let rawText = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    let rawText = response.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    // --- CRITICAL FIX: Empty Response Handling ---
+    if (!rawText || rawText.trim() === '' || rawText === '{}') {
+        throw new Error("AI returned empty or invalid response.");
+    }
+
     let cleanFixed = rawText.replace(/```json|```/g, '').trim();
     let unifiedOutput;
 
@@ -248,36 +257,122 @@ Generate the JSON response strictly adhering to the schema.
     try {
         unifiedOutput = JSON.parse(cleanFixed);
     } catch (e) {
-        console.warn("Initial JSON parse failed. Attempting Llama worker repair...");
-        
-        // --- CRITICAL REPAIR STEP ---
+        console.warn("Initial JSON parse failed. Attempting Narrative Quality Engine repair...");
         try {
-            // Use the local worker (Llama) to repair the string
-            const repairedJsonString = await localGrunt.repairJson(cleanFixed);
+            const repairedJsonString = await narrativeQualityEngine.repairMalformedJson(cleanFixed);
             unifiedOutput = JSON.parse(repairedJsonString);
-            console.log("JSON successfully repaired by Llama worker.");
+            console.log("JSON successfully repaired by Narrative Quality Engine.");
         } catch (repairError) {
-             console.error("Llama repair failed. Throwing original error.", repairError);
-             throw new Error(`Critical JSON failure after repair attempt: ${(repairError as Error).message}`);
+             console.error("Repair failed. Throwing original error.", repairError);
+             throw new Error(`Critical JSON failure: ${(repairError as Error).message}`);
         }
     }
-    // End CRITICAL REPAIR STEP
 
-    // Apply State Updates (Assuming successful parse/repair)
-    if (unifiedOutput.kgot_mutations) controller.applyMutations(unifiedOutput.kgot_mutations);
-    if (unifiedOutput.ledger_update) controller.updateLedger('Subject_84', unifiedOutput.ledger_update);
+    // Ensure unifiedOutput is an object
+    if (typeof unifiedOutput !== 'object' || unifiedOutput === null) {
+        unifiedOutput = {};
+    }
+
+    // --- RUNTIME ZOD VALIDATION WITH AGGRESSIVE FALLBACK ---
+    // If schema validation fails, we RECONSTRUCT a valid object instead of throwing.
+    const validation = UnifiedDirectorZodSchema.safeParse(unifiedOutput);
+    if (!validation.success) {
+        console.warn("Unified Director Schema Warning:", validation.error);
+        
+        // RECONSTRUCTION (Patching holes)
+        // Sanitization of potentially dangerous object types (e.g. {text: "..."} in string fields)
+        const sanitizeString = (val: any, defaultVal: string) => {
+            if (typeof val === 'string' && val.length > 0) return val;
+            if (typeof val === 'object' && val !== null) {
+                // If LLM returned { text: "..." } structure for a string field
+                if (val.text && typeof val.text === 'string') return val.text;
+                if (val.content && typeof val.content === 'string') return val.content;
+            }
+            return defaultVal;
+        };
+
+        const sanitizeChoices = (vals: any) => {
+            if (Array.isArray(vals) && vals.length > 0) {
+                return vals.map((v: any) => {
+                    if (typeof v === 'string') return v;
+                    if (typeof v === 'object' && v !== null && v.text) return v.text;
+                    return "Continue";
+                });
+            }
+            return ["Observe", "Wait"];
+        };
+
+        unifiedOutput = {
+            meta_analysis: unifiedOutput.meta_analysis || { selected_engine: 'FALLBACK', player_psych_profile: 'Unknown' },
+            reasoning_graph: unifiedOutput.reasoning_graph || { nodes: [], selected_path: [] },
+            
+            narrative_text: sanitizeString(unifiedOutput.narrative_text, "The system recalibrates... (Narrative Signal Recovered via Patch)"),
+            
+            choices: sanitizeChoices(unifiedOutput.choices),
+                
+            kgot_mutations: Array.isArray(unifiedOutput.kgot_mutations) ? unifiedOutput.kgot_mutations : [],
+            ledger_update: unifiedOutput.ledger_update || {},
+            prefect_simulations: Array.isArray(unifiedOutput.prefect_simulations) ? unifiedOutput.prefect_simulations : [],
+            visual_prompt: sanitizeString(unifiedOutput.visual_prompt, "Static."),
+            script: Array.isArray(unifiedOutput.script) ? unifiedOutput.script : []
+        };
+    } else {
+        unifiedOutput = validation.data;
+    }
+
+    // --- NARRATIVE QUALITY ENGINE INTEGRATION ---
+    // Critique and correct the narrative before it touches the game state
+    try {
+        const primaryPrefect = activePrefects[0];
+        const qualityResult = narrativeQualityEngine.analyzeNarrative(
+            unifiedOutput.narrative_text, 
+            ledger, 
+            primaryPrefect
+        );
+
+        if (!qualityResult.passesQuality) {
+            console.log(`[UnifiedDirector] ⚠️ Quality Checks Failed (${qualityResult.issues.length} issues). Engaging Auto-Fix.`);
+            
+            const fixContext: any = {
+                location: currentLocation,
+                ledger: ledger,
+                turn: graphSnapshot.global_state.turn_count,
+                nodes: [], 
+                links: [], 
+                seed: 0
+            };
+
+            const fixedNarrative = narrativeQualityEngine.autoFixNarrative(
+                unifiedOutput.narrative_text,
+                qualityResult.issues,
+                fixContext
+            );
+            
+            if (fixedNarrative !== unifiedOutput.narrative_text) {
+                console.log(`[UnifiedDirector] 🔧 Auto-Fix Applied. Added ${fixedNarrative.length - unifiedOutput.narrative_text.length} chars.`);
+                unifiedOutput.narrative_text = fixedNarrative;
+            }
+        }
+    } catch (qaError) {
+        console.warn("[UnifiedDirector] Narrative Quality Engine check failed (Non-critical):", qaError);
+    }
 
     return unifiedOutput;
 
   } catch (error: any) {
     console.error("Unified Director Failed:", error);
-    // Fallback schema matching structure
+    // Robust Fallback Schema for Catastrophic Failure
     return {
-        meta_analysis: { selected_engine: 'PROTOCOL', player_psych_profile: 'Error' },
+        meta_analysis: { selected_engine: 'FAILURE_PROTOCOL', player_psych_profile: 'Error' },
         reasoning_graph: { nodes: [], selected_path: [] },
-        narrative_text: `The Loom shudders. System disconnect. The Architect is offline. (${error.message || 'Unknown LLM error'})`,
-        visual_prompt: "Static. Chromatic Aberration.",
-        choices: ["Observe the damage", "Try to reset the panel"],
+        narrative_text: `[SYSTEM ERROR] The Loom shudders and disconnects. The Architect is offline. \n\nReason: ${error.message || 'Unknown Error'}.\n\n(Ensure your API Key is valid or switch to Lite Mode.)`,
+        visual_prompt: "Static. Glitch art. Red error text.",
+        choices: [
+            "Retry Connection", 
+            "Enter Lite Mode (Simulated)", 
+            "Analyze Error Logs", 
+            "Wait for Signal"
+        ],
         prefect_simulations: [],
         script: [],
         kgot_mutations: [],

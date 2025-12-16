@@ -1,12 +1,6 @@
 
-import { YandereLedger } from '../types';
+import { YandereLedger, NarratorMode } from '../types';
 import { THEME } from '../theme';
-
-export type NarratorMode = 
-  | 'MOCKING_JESTER' 
-  | 'SEDUCTIVE_DOMINATRIX' 
-  | 'CLINICAL_ANALYST' 
-  | 'SYMPATHETIC_CONFIDANTE';
 
 export interface NarratorVoice {
   tone: string;

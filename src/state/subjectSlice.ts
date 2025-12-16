@@ -12,7 +12,7 @@ export const createSubjectSlice: StateCreator<
   [],
   SubjectSliceExports
 > = (set, get) => ({
-  subjects: {},
+  // Note: 'subjects' state is now part of gameState, so we don't define it here at the root level.
 
   initializeSubjects: () => {
     // Initial state definitions based on the lore
@@ -75,81 +75,98 @@ export const createSubjectSlice: StateCreator<
       }
     };
     set((state) => ({ 
-      ...state, // Spread existing state
-      subjects: initialSubjects 
+      gameState: {
+        ...state.gameState,
+        subjects: initialSubjects
+      }
     }));
   },
 
   updateSubject: (id, updates) => {
     set((state) => ({
-      ...state, // Spread existing state
-      subjects: {
-        ...state.subjects,
-        [id]: { ...state.subjects[id], ...updates }
+      gameState: {
+        ...state.gameState,
+        subjects: {
+          ...state.gameState.subjects,
+          [id]: { ...state.gameState.subjects[id], ...updates }
+        }
       }
     }));
   },
 
   getSubject: (id) => {
-    return get().subjects[id];
+    return get().gameState.subjects[id];
   },
 
   triggerSubjectReaction: (playerActionType, context) => {
     set((state) => {
-      const newSubjects = { ...state.subjects };
+      const newSubjects = { ...state.gameState.subjects };
       
       // --- NICO: Responds to Defiance ---
       if (playerActionType === 'DEFY') {
-        newSubjects[CharacterId.NICO] = {
-          ...newSubjects[CharacterId.NICO],
-          respect: Math.min(100, newSubjects[CharacterId.NICO].respect + 10),
-          trust: Math.min(100, newSubjects[CharacterId.NICO].trust + 5),
-          willpower: Math.min(100, newSubjects[CharacterId.NICO].willpower + 5) // Inspired
-        };
+        if (newSubjects[CharacterId.NICO]) {
+            newSubjects[CharacterId.NICO] = {
+            ...newSubjects[CharacterId.NICO],
+            respect: Math.min(100, newSubjects[CharacterId.NICO].respect + 10),
+            trust: Math.min(100, newSubjects[CharacterId.NICO].trust + 5),
+            willpower: Math.min(100, newSubjects[CharacterId.NICO].willpower + 5) // Inspired
+            };
+        }
       } else if (playerActionType === 'COMPLY') {
-        newSubjects[CharacterId.NICO] = {
-          ...newSubjects[CharacterId.NICO],
-          respect: Math.max(0, newSubjects[CharacterId.NICO].respect - 10)
-        };
+        if (newSubjects[CharacterId.NICO]) {
+            newSubjects[CharacterId.NICO] = {
+            ...newSubjects[CharacterId.NICO],
+            respect: Math.max(0, newSubjects[CharacterId.NICO].respect - 10)
+            };
+        }
       }
 
       // --- DARIUS: Responds to Stability/Safety ---
       if (playerActionType === 'DEFY') {
         // Darius fears retribution for others when player defies
-        newSubjects[CharacterId.DARIUS] = {
-          ...newSubjects[CharacterId.DARIUS],
-          willpower: Math.max(0, newSubjects[CharacterId.DARIUS].willpower - 5), // Anxiety spikes
-          trust: Math.max(0, newSubjects[CharacterId.DARIUS].trust - 2)
-        };
+        if (newSubjects[CharacterId.DARIUS]) {
+            newSubjects[CharacterId.DARIUS] = {
+            ...newSubjects[CharacterId.DARIUS],
+            willpower: Math.max(0, newSubjects[CharacterId.DARIUS].willpower - 5), // Anxiety spikes
+            trust: Math.max(0, newSubjects[CharacterId.DARIUS].trust - 2)
+            };
+        }
       } else if (playerActionType === 'COMPLY') {
         // Compliance relieves his anxiety
-        newSubjects[CharacterId.DARIUS] = {
-          ...newSubjects[CharacterId.DARIUS],
-          willpower: Math.min(100, newSubjects[CharacterId.DARIUS].willpower + 2)
-        };
+        if (newSubjects[CharacterId.DARIUS]) {
+            newSubjects[CharacterId.DARIUS] = {
+            ...newSubjects[CharacterId.DARIUS],
+            willpower: Math.min(100, newSubjects[CharacterId.DARIUS].willpower + 2)
+            };
+        }
       }
 
       // --- SILAS: Responds to Intelligence ---
       if (playerActionType === 'OBSERVE' || playerActionType === 'SPEAK') {
-        newSubjects[CharacterId.SILAS] = {
-          ...newSubjects[CharacterId.SILAS],
-          respect: Math.min(100, newSubjects[CharacterId.SILAS].respect + 5)
-        };
+        if (newSubjects[CharacterId.SILAS]) {
+            newSubjects[CharacterId.SILAS] = {
+            ...newSubjects[CharacterId.SILAS],
+            respect: Math.min(100, newSubjects[CharacterId.SILAS].respect + 5)
+            };
+        }
       }
 
       // --- THEO: Responds to Tone (implied by action types) ---
       if (playerActionType === 'DEFY') {
-        newSubjects[CharacterId.THEO] = {
-          ...newSubjects[CharacterId.THEO],
-          compliance: Math.max(0, newSubjects[CharacterId.THEO].compliance - 5) // Confusion/Fear
-        };
+        if (newSubjects[CharacterId.THEO]) {
+            newSubjects[CharacterId.THEO] = {
+            ...newSubjects[CharacterId.THEO],
+            compliance: Math.max(0, newSubjects[CharacterId.THEO].compliance - 5) // Confusion/Fear
+            };
+        }
       }
-
-      // Log specific interactions
-      const logMessage = `SUBJECT_REACTION_MATRIX::UPDATED [Trigger: ${playerActionType}]`;
-      // We can push to logs via the main store function if needed, but here we just update state.
       
-      return { ...state, subjects: newSubjects }; // Spread existing state when returning new state
+      return { 
+          gameState: {
+              ...state.gameState,
+              subjects: newSubjects 
+          }
+      };
     });
   }
 });

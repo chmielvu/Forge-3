@@ -1,7 +1,8 @@
-import React from 'react';
+import * as React from 'react';
 
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
+// Exporting the interface and making children optional allows TS to accept {} as valid props in JSX
+export interface ErrorBoundaryProps {
+  children?: React.ReactNode;
 }
 
 interface ErrorBoundaryState {
@@ -12,7 +13,9 @@ interface ErrorBoundaryState {
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false };
+    this.state = {
+      hasError: false
+    };
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {

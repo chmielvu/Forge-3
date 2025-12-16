@@ -1,5 +1,3 @@
-
-
 import type { KGotCore } from './core';
 import forceAtlas2 from 'graphology-layout-forceatlas2'; // Import for main thread fallback
 import { BEHAVIOR_CONFIG } from '../../config/behaviorTuning';
@@ -10,7 +8,7 @@ let workerAvailable: boolean | null = null; // Track worker availability
 function getWorker(): Worker | null {
   // If TEST_MODE is active, explicitly disable workers.
   if (BEHAVIOR_CONFIG.TEST_MODE) {
-      if (workerAvailable !== false) { // Only log once if it's not already marked false
+      if (workerAvailable !== false) { 
           console.warn("[Layout] TEST_MODE active: Disabling Web Worker for layout.");
       }
       workerAvailable = false;
@@ -22,19 +20,21 @@ function getWorker(): Worker | null {
 
   if (!worker) {
     try {
-        worker = new Worker(new URL('./layout.worker.ts', import.meta.url).href, {
+        // Robust URL construction
+        const workerUrl = new URL('./layout.worker.ts', import.meta.url);
+        worker = new Worker(workerUrl.href, {
             type: 'module'
         });
         
         worker.onerror = (e) => {
             console.error("[Layout] Worker error:", e);
-            workerAvailable = false; // Mark as unavailable on error
-            worker = null; // Clear worker instance
+            workerAvailable = false; 
+            worker = null; 
         };
         workerAvailable = true;
     } catch (e) {
-        console.error("[Layout] Failed to initialize layout worker (falling back to main thread):", e);
-        workerAvailable = false; // Mark as unavailable
+        console.error("[Layout] Failed to construct worker URL (falling back to main thread):", e);
+        workerAvailable = false; 
         worker = null;
         return null;
     }
@@ -62,27 +62,27 @@ export async function runLayoutAsync(core: KGotCore, iterations = 50): Promise<v
   const w = getWorker();
   
   if (!w) {
-      if (workerAvailable !== false) { // Only log if not already logged by getWorker()
-        console.warn("[Layout] Worker not available, running layout on main thread (synchronous).");
-        workerAvailable = false; // Ensure it's marked
-      }
       // Fallback to synchronous execution on main thread
-      const positions = forceAtlas2(graph, {
-          iterations,
-          settings: {
-              gravity: 1.0,
-              barnesHutOptimize: true
+      try {
+        const positions = forceAtlas2(graph, {
+            iterations,
+            settings: {
+                gravity: 1.0,
+                barnesHutOptimize: true
+            }
+        });
+        Object.keys(positions).forEach((node) => {
+          if (graph.hasNode(node)) {
+            graph.mergeNodeAttributes(node, {
+              x: positions[node].x,
+              y: positions[node].y
+            });
           }
-      });
-      Object.keys(positions).forEach((node) => {
-        if (graph.hasNode(node)) {
-          graph.mergeNodeAttributes(node, {
-            x: positions[node].x,
-            y: positions[node].y
-          });
-        }
-      });
-      return Promise.resolve(); // Resolve immediately
+        });
+      } catch (e) {
+          console.warn("[Layout] Main thread layout calculation failed:", e);
+      }
+      return Promise.resolve(); 
   }
 
   return new Promise((resolve, reject) => {

@@ -12,7 +12,7 @@ import {
 import { CHARACTER_VOICE_MAP, resolveVoiceForSpeaker } from '../config/voices';
 import { audioService } from './AudioService';
 import { NarrativeBeat } from "./TensionManager";
-import { INITIAL_LEDGER } from "../constants"; // Added relative import for INITIAL_LEDGER
+import { INITIAL_LEDGER } from "../constants"; 
 
 
 // Re-export for compatibility
@@ -57,8 +57,7 @@ export const generateNarrativeImage = async (
 ): Promise<string | undefined> => {
   
   if (!BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableImages) {
-    if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log("[mediaService] Image generation is disabled by config.");
-    return undefined;
+    throw new Error("DISABLED_BY_CONFIG");
   }
 
   // Use the image prompt part of the coherence engine output
@@ -69,13 +68,13 @@ export const generateNarrativeImage = async (
     const imageData = await generateImageAction(finalCoherentPrompt);
     
     if (!imageData) {
-       throw new Error("Empty image data received.");
+       throw new Error("Empty image data received from API.");
     }
     
     return imageData;
   } catch (error: any) {
-    if (error.type === 'AUTH' || error.type === 'SAFETY') {
-         console.error(`[mediaService] Critical Image Error (${error.type}): ${error.message}`);
+    // If it's a safety/auth error, throw immediately (handled by controller)
+    if (error.message?.includes('SAFETY') || error.type === 'SAFETY' || error.type === 'AUTH') {
          throw error;
     }
 
@@ -85,8 +84,8 @@ export const generateNarrativeImage = async (
       return generateNarrativeImage(target, sceneContext, ledger, narrativeText, previousTurn, retryCount + 1, directorVisualPrompt, beat);
     }
     
-    console.error(`[mediaService] Image generation failed after ${MAX_IMAGE_RETRIES + 1} attempts.`, error);
-    return undefined;
+    // If max retries reached, throw the error to be caught by controller
+    throw new Error(`Image generation failed after ${MAX_IMAGE_RETRIES + 1} attempts: ${error.message}`);
   }
 };
 
@@ -97,26 +96,28 @@ export const generateDramaticAudio = async (
   script: ScriptItem[]
 ): Promise<{ audioData: string; duration: number; alignment: Array<{ index: number, start: number, end: number, speaker: string }> } | undefined> => {
   if (!BEHAVIOR_CONFIG.ANIMATION.ENABLE_TTS) {
-    if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log("[mediaService] TTS generation disabled by config.");
-    return undefined;
+    throw new Error("DISABLED_BY_CONFIG");
   }
 
   try {
-    // Map script items to speakerVoiceConfigs required by multi-speaker TTS
-    const speakerVoiceConfigs = script.map(item => ({
-      speaker: item.speaker,
-      voiceConfig: { prebuiltVoiceConfig: { voiceName: resolveVoiceForSpeaker(item.speaker) } }
+    // 1. Create Unique Speaker Configs (Gemini requires unique speaker definitions)
+    const uniqueSpeakers = Array.from(new Set(script.map(item => item.speaker)));
+    const speakerVoiceConfigs = uniqueSpeakers.map(speaker => ({
+      speaker: speaker,
+      voiceConfig: { prebuiltVoiceConfig: { voiceName: resolveVoiceForSpeaker(speaker) } }
     }));
 
-    // Construct multi-speaker prompt by joining script items
+    // 2. Construct Transcript
     const multiSpeakerText = script.map(item => `${item.speaker}: ${item.text}`).join('\n');
 
     let multiSpeakerResult: { audioData: string; duration: number } | undefined;
+    
+    // 3. Attempt Multi-Speaker Generation
     try {
         multiSpeakerResult = await generateMultiSpeakerSpeechAction(multiSpeakerText, speakerVoiceConfigs);
     } catch (e) {
         console.warn("[mediaService] Multi-speaker generation API call failed, falling back to sequential generation.", e);
-        multiSpeakerResult = undefined; // Ensure it's undefined on error
+        multiSpeakerResult = undefined;
     }
 
     if (multiSpeakerResult && typeof multiSpeakerResult.audioData === 'string' && multiSpeakerResult.audioData.length > 0) {
@@ -132,8 +133,7 @@ export const generateDramaticAudio = async (
         };
     }
     
-    // Fallback: Generate individual lines and stitch them (if multi-speaker fails or returns nothing)
-    // This provides better alignment data but is slower/more expensive
+    // 4. Fallback: Sequential Generation & Stitching
     console.log("[mediaService] Multi-speaker generation returned empty or failed, falling back to sequential generation.");
     
     const clipsPromise = script.map(async (line) => {
@@ -150,11 +150,13 @@ export const generateDramaticAudio = async (
     const clips = await Promise.all(clipsPromise);
     const validClips = clips.filter(c => c !== null) as Array<{ audioData: string, duration: number, speaker: string }>;
 
-    if (validClips.length === 0) return undefined;
+    if (validClips.length === 0) {
+        throw new Error("All audio clips failed to generate.");
+    }
 
     // Stitching logic using AudioService
     const ctx = audioService.getContext();
-    const buffers = validClips.map(clip => audioService.decodePCM(clip.audioData)); // CRITICAL FIX: Use decodePCM
+    const buffers = validClips.map(clip => audioService.decodePCM(clip.audioData));
     
     const GAP = 0.1; // Silence between lines
     const totalDuration = validClips.reduce((acc, c) => acc + c.duration + GAP, 0);
@@ -168,7 +170,11 @@ export const generateDramaticAudio = async (
 
     buffers.forEach((buffer, idx) => {
         const clipData = buffer.getChannelData(0);
-        channelData.set(clipData, Math.floor(offset * 24000));
+        // Ensure we don't overflow the buffer
+        const startSample = Math.floor(offset * 24000);
+        if (startSample + clipData.length <= totalSamples) {
+            channelData.set(clipData, startSample);
+        }
         
         alignment.push({
             index: idx,
@@ -190,9 +196,9 @@ export const generateDramaticAudio = async (
         alignment
     };
 
-  } catch (error) {
-    console.error("[mediaService] generateDramaticAudio failed:", error);
-    return undefined; // Fail gracefully
+  } catch (error: any) {
+    // Re-throw critical errors for controller to handle
+    throw error;
   }
 };
 

@@ -1,3 +1,4 @@
+
 import { YandereLedger, PrefectDNA, PrefectArchetype, GameState } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
 import { useGameStore } from '../state/gameStore';
@@ -114,7 +115,7 @@ export class NarrativeQualityEngine {
         return await this.critiqueLocal(narrative);
     }
 
-    // Remote Fallback (Gemini 2.5 Flash) - Kept for critical deep dives if needed
+    // Remote Fallback (Gemini 2.5 Flash-lite) - Kept for critical deep dives if needed
     try {
         const prompt = `
         ACT AS "THE AESTHETE". Strict Editor Mode.
@@ -127,7 +128,7 @@ export class NarrativeQualityEngine {
         `;
 
         const result = await this.ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.5-flash-lite',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 responseMimeType: "application/json",
@@ -168,6 +169,37 @@ export class NarrativeQualityEngine {
     const passesQuality = this.evaluateQuality(metrics, issues);
     
     return { metrics, issues, passesQuality };
+  }
+
+  /**
+   * Reparis malformed JSON strings.
+   * Uses simple heuristics first, then attempts a local LLM repair if available.
+   */
+  async repairMalformedJson(jsonString: string): Promise<string> {
+      // 1. Basic cleanup
+      let cleaned = jsonString
+          .replace(/```json|```/g, '') // Remove markdown
+          .trim();
+      
+      // 2. Try parse immediately after cleanup
+      try {
+          JSON.parse(cleaned);
+          return cleaned; 
+      } catch (e) {
+          // Continue to advanced repair
+      }
+
+      // 3. Attempt robust repair via localGrunt (Llama 3.2 1B)
+      console.warn("[NarrativeQualityEngine] Basic JSON parsing failed. Engaging Llama repair protocol...");
+      try {
+          const repaired = await localGrunt.repairJson(cleaned);
+          // Validate the result
+          JSON.parse(repaired); 
+          return repaired;
+      } catch (repairError) {
+          console.error("[NarrativeQualityEngine] Critical: JSON Repair failed.", repairError);
+          throw new Error("JSON_REPAIR_FAILED");
+      }
   }
 
   // --- HEURISTIC METHODS (Legacy/Fast Layer) ---

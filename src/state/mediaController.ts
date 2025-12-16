@@ -1,3 +1,4 @@
+
 import { useGameStore } from './gameStore';
 import { generateNarrativeImage, generateSpeech, buildVisualPrompt, generateDramaticAudio } from '../services/mediaService';
 import { MediaQueueItem, MediaStatus, MultimodalTurn, CharacterId, YandereLedger, PrefectDNA } from '../types';
@@ -59,6 +60,7 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
         break;
       case 'audio':
         if (BEHAVIOR_CONFIG.ANIMATION.ENABLE_TTS && BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableAudio) {
+          // 1. Try Dramatic Audio (Multi-speaker / Scripted)
           if (item.script && item.script.length > 0) {
               const dramaticResult = await generateDramaticAudio(item.script);
               if (dramaticResult) {
@@ -68,6 +70,7 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
               }
           } 
           
+          // 2. Fallback to Standard Narrator (Single Speaker) if no script or drama result
           if (!dataUrl) {
               const ledger = turn.metadata?.ledgerSnapshot || INITIAL_LEDGER;
               
@@ -82,23 +85,26 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
               );
 
               const ttsPrompt = coherence.ttsPrompt || item.narrativeText || item.prompt;
-              const mode = selectNarratorMode(ledger);
-              const voiceId = NARRATOR_VOICES[mode]?.voiceId || 'Zephyr';
+              
+              // Respect Manual Override for Narrator
+              const narratorMode = store.narratorOverride === 'AUTO' 
+                  ? selectNarratorMode(ledger) 
+                  : store.narratorOverride;
+              
+              const voiceId = NARRATOR_VOICES[narratorMode]?.voiceId || 'Zephyr';
 
               const result = await generateSpeech(
                  ttsPrompt, 
                  voiceId
               );
 
-              if (result && typeof result !== 'string') {
+              if (result) {
                  dataUrl = result.audioData;
                  duration = result.duration;
-              } else if (typeof result === 'string') {
-                 dataUrl = result;
               }
           }
         } else {
-          if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.warn("[MediaController] Audio generation disabled by config.");
+           throw new Error("DISABLED_BY_CONFIG");
         }
         break;
       default:
@@ -120,18 +126,41 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
       }
     }
   } catch (error: any) {
-    console.error(`[MediaController] Failed to generate ${item.type} for turn ${item.turnId}:`, error);
-    markMediaError(item.turnId, item.type, error.message || 'Unknown media generation error');
+    let errorMessage = error.message || 'Unknown error';
+    let shouldRetry = true;
+
+    // Handle "Disabled" case gracefully
+    if (errorMessage === "DISABLED_BY_CONFIG") {
+        if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MediaController] ${item.type} generation skipped (Disabled by config).`);
+        removeMediaFromQueue(item);
+        return;
+    }
+
+    // Determine error type and retry strategy
+    if (errorMessage.includes("SAFETY") || error.type === 'SAFETY') {
+        errorMessage = "Blocked by Content Safety Policy";
+        shouldRetry = false;
+    } else if (errorMessage.includes("API key") || error.type === 'AUTH') {
+        errorMessage = "Authentication Error (Check API Key)";
+        shouldRetry = false;
+    } else if (isRateLimitError(error)) {
+        errorMessage = "Network Congestion (Rate Limit)";
+        // Retry is handled below with backoff
+    }
+
+    console.error(`[MediaController] Failed to generate ${item.type} for turn ${item.turnId}: ${errorMessage}`);
+    markMediaError(item.turnId, item.type, errorMessage);
     
     const updatedStore = useGameStore.getState();
     const failedItem = updatedStore.mediaQueue.failed.find((q) => q.turnId === item.turnId && q.type === item.type);
     
-    if (failedItem && (failedItem.retries || 0) < BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.MAX_MEDIA_QUEUE_RETRIES) {
+    // RETRY LOGIC
+    if (shouldRetry && failedItem && (failedItem.retries || 0) < BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.MAX_MEDIA_QUEUE_RETRIES) {
       const isQuota = isRateLimitError(error);
       let delay = 3000; 
 
       if (isQuota) {
-        delay = 5000 * Math.pow(2, failedItem.retries || 0);
+        delay = 5000 * Math.pow(2, (failedItem.retries || 0) + 1); // Exponential backoff
         if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) {
             console.warn(`[MediaController] 🛑 Rate limit detected for ${item.type}. Backing off for ${delay/1000}s.`);
         }
@@ -146,7 +175,22 @@ const processSingleMediaItem = async (item: MediaQueueItem): Promise<void> => {
       }, delay);
 
     } else {
-      if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.warn(`[MediaController] Max retries reached for ${item.type} on turn ${item.turnId}. Item remains in failed queue.`);
+      if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.warn(`[MediaController] Max retries reached or fatal error for ${item.type} on turn ${item.turnId}.`);
+      
+      // Log critical failure to system logs for user visibility
+      if (shouldRetry && (failedItem?.retries || 0) >= BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.MAX_MEDIA_QUEUE_RETRIES) {
+          useGameStore.getState().addLog({
+              id: `sys-err-${Date.now()}`,
+              type: 'system',
+              content: `SYSTEM ALERT: ${item.type.toUpperCase()} GENERATION FAILED. Reason: Connection timed out.`
+          });
+      } else if (!shouldRetry) {
+           useGameStore.getState().addLog({
+              id: `sys-err-${Date.now()}`,
+              type: 'system',
+              content: `SYSTEM ALERT: ${item.type.toUpperCase()} GENERATION ABORTED. Reason: ${errorMessage}`
+          });
+      }
     }
   }
 };
@@ -212,7 +256,7 @@ export const regenerateMediaForTurn = async (turnId: string, type?: 'image' | 'a
   let target: string | PrefectDNA = CharacterId.PLAYER;
   if (turn.metadata?.activeCharacters && turn.metadata.activeCharacters.length > 0) {
       const prefectId = turn.metadata.activeCharacters[0];
-      const prefect = store.prefects.find(p => p.id === prefectId);
+      const prefect = store.gameState.prefects.find(p => p.id === prefectId);
       target = prefect || prefectId;
   }
 

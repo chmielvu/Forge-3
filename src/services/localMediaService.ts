@@ -1,7 +1,29 @@
-
 import { pipeline, env } from '@xenova/transformers';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning'; 
+import { GoogleGenAI } from "@google/genai";
+import { PrefectDNA } from '../types';
 
+// --- API CONFIGURATION ---
+const getApiKey = (): string => {
+  try {
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env?.API_KEY) return process.env.API_KEY;
+  } catch (e) {}
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
+  } catch (e) {}
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env?.API_KEY) return import.meta.env.API_KEY;
+  } catch (e) {}
+  return '';
+};
+
+const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
+const LITE_MODEL = 'gemini-2.5-flash';
+
+// --- WORKER SETUP (KEPT FOR AUDIO/CANVAS ONLY) ---
 // Worker Instance Singleton
 let mediaWorker: Worker | null = null;
 // Track worker availability status: null (unknown), true (available), false (unavailable/disabled)
@@ -10,39 +32,22 @@ let workerAvailable: boolean | null = null;
 // Stores pending worker requests, keyed by a unique ID
 const pendingRequests = new Map<string, { resolve: (value: any) => void; reject: (reason: any) => void }>();
 
-// Helper for chatty models (copied from worker for main thread fallback)
-function extractJSON(text: string) {
-    try {
-        const firstBracket = text.indexOf('{');
-        const lastBracket = text.lastIndexOf('}');
-        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-            const jsonString = text.substring(firstBracket, lastBracket + 1);
-            return JSON.parse(jsonString);
-        }
-        return null;
-    } catch {
-        return null;
-    }
-}
-
 function getWorker(): Worker | null {
     // If TEST_MODE is active, explicitly disable workers.
-    // This check must happen first.
     if (BEHAVIOR_CONFIG.TEST_MODE) {
         if (workerAvailable !== false) { 
-            console.warn("[LocalMediaService] TEST_MODE active: Disabling Web Worker for local LLMs.");
+            workerAvailable = false;
         }
-        workerAvailable = false;
         return null;
     }
 
-    // If workers were previously determined unavailable, respect that.
     if (workerAvailable === false) return null;
 
     if (!mediaWorker) {
         try {
-            // Attempt to create worker
-            mediaWorker = new Worker(new URL('../workers/media.worker.ts', import.meta.url).href, {
+            // Attempt to create worker with robust URL handling
+            const workerUrl = new URL('../workers/media.worker.ts', import.meta.url);
+            mediaWorker = new Worker(workerUrl.href, {
                 type: 'module'
             });
             
@@ -55,26 +60,21 @@ function getWorker(): Worker | null {
                 } else if (type === 'ERROR' && pendingRequests.has(id)) {
                     pendingRequests.get(id)!.reject(new Error(error));
                     pendingRequests.delete(id);
-                } else if (type === 'progress') {
-                    // console.debug('[Worker Progress]', payload);
-                } else if (type === 'status') {
-                    console.log(`[Worker Status] ${payload}`);
                 }
             };
             
             mediaWorker.onerror = (e) => {
                 console.error("[LocalMediaService] Worker Error:", e);
-                workerAvailable = false; // Mark as unavailable on error
-                mediaWorker = null; // Clean up worker instance
-                // Reject all pending requests immediately if the worker crashes
+                workerAvailable = false; 
+                mediaWorker = null; 
                 pendingRequests.forEach(req => req.reject(new Error("Worker crashed unexpectedly.")));
                 pendingRequests.clear();
             };
-            workerAvailable = true; // Mark as successfully created
+            workerAvailable = true; 
         } catch (e) {
             console.error("[LocalMediaService] Failed to construct worker (falling back to main thread):", e);
-            workerAvailable = false; // Mark as unavailable
-            mediaWorker = null; // Ensure worker is null
+            workerAvailable = false; 
+            mediaWorker = null; 
             return null;
         }
     }
@@ -107,101 +107,155 @@ async function dispatchToWorker(type: string, payload: any, timeoutMs = 45000): 
     });
 }
 
-// --- MAIN THREAD FALLBACK IMPLEMENTATIONS (Simplified / Mock) ---
+// --- MAIN THREAD FALLBACK IMPLEMENTATIONS ---
 async function executeOnMainThread(type: string, payload: any): Promise<any> {
     switch (type) {
-        case 'ANALYZE_TONE': {
-            const lowerText = payload.text.toLowerCase();
-            const isApproved = !lowerText.includes('wholesome') && !lowerText.includes('melodramatic');
-            return { isApproved, reason: "Main thread mock tone analysis." };
-        }
-        case 'SUMMARIZE': {
-            const words = payload.text.split(' ').slice(0, 20).join(' '); // Simple truncation
-            return `Summary: ${words}...`;
-        }
-        case 'REPAIR_JSON': {
-            try {
-                const parsed = extractJSON(payload.jsonString);
-                if (parsed) return JSON.stringify(parsed);
-            } catch (e) {
-                // Attempt a very basic repair, e.g., wrapping in {}
-                console.warn("[LocalMediaService:MainThread] Basic JSON repair attempt failed. Returning empty object.", e);
-            }
-            return JSON.stringify({}); // Fallback to empty JSON
-        }
-        case 'ANALYZE_INTENT': {
-            const lowerText = payload.text.toLowerCase();
-            if (lowerText.includes('defy') || lowerText.includes('resist')) {
-                return { intent: 'defiance', subtext: 'genuine', intensity: 8 };
-            } else if (lowerText.includes('submit') || lowerText.includes('comply')) {
-                return { intent: 'submission', subtext: 'genuine', intensity: 7 };
-            } else if (lowerText.includes('fear') || lowerText.includes('scared')) {
-                return { intent: 'fear', subtext: 'genuine', intensity: 6 };
-            }
-            return { intent: 'neutral', subtext: 'ambiguous', intensity: 5 };
-        }
         case 'GENERATE_SPEECH': {
-            // Simplified speech generation on main thread (mock AudioBuffer)
             const text = payload.text;
             const sampleRate = 24000;
             const durationPerChar = 0.08;
             const duration = Math.max(0.5, text.length * durationPerChar);
             const frameCount = sampleRate * duration;
             const audioBuffer = new Float32Array(frameCount);
-
             for (let i = 0; i < frameCount; i++) {
-                audioBuffer[i] = (Math.random() * 0.1 - 0.05); // Just random noise
+                audioBuffer[i] = (Math.random() * 0.1 - 0.05); 
             }
             return { audio: audioBuffer, sampling_rate: sampleRate };
         }
         default:
-            throw new Error(`Unknown main thread execution type: ${type}`);
+            // For logic tasks, we now use API, so main thread fallback is minimal/unused
+            return null;
     }
 }
 
-// --- LOCAL GRUNT API ---
+// --- GEMINI LITE HELPERS ---
+
+async function callGeminiLite(prompt: string, jsonMode = false): Promise<string> {
+    const apiKey = getApiKey();
+    if (!apiKey) throw new Error("API Key missing for Gemini Lite");
+
+    try {
+        const ai = getAI();
+        const config = jsonMode ? { responseMimeType: 'application/json' } : {};
+        const response = await ai.models.generateContent({
+            model: LITE_MODEL,
+            contents: prompt,
+            config
+        });
+        return response.text || "";
+    } catch (e) {
+        console.warn("[LocalMediaService] Gemini Lite call failed:", e);
+        throw e;
+    }
+}
+
+// --- INTELLIGENCE API (Replaces Local Grunt Worker) ---
 export const localGrunt = {
-    // 1. The Aesthete (Qwen) - Tone Check
     async checkTone(text: string): Promise<boolean> {
         try {
-            const result = await dispatchToWorker('ANALYZE_TONE', { text });
-            return result.isApproved;
+            const result = await callGeminiLite(
+                `Analyze the tone of this text. It should be DARK (clinical, cynical, gothic, sensual). If it is LIGHT (wholesome, melodramatic, cheerful), reject it.
+                Text: "${text.substring(0, 500)}"
+                Return JSON: { "isApproved": boolean, "reason": "string" }`,
+                true
+            );
+            const parsed = JSON.parse(result);
+            return parsed.isApproved;
         } catch (e) {
-            console.warn("[Local Service] Tone check failed/timed out:", e);
-            return true; // Fail open to allow gameplay
+            console.warn("[Local Service] Tone check failed, defaulting true.");
+            return true; 
         }
     },
-
-    // 2. The Grunt (SmolLM) - Summarization
     async summarizeHistory(text: string): Promise<string> {
         try {
-            return await dispatchToWorker('SUMMARIZE', { text });
+            return await callGeminiLite(`Summarize this narrative text in less than 50 words, focusing on key events and tension:\n"${text}"`);
         } catch (e) {
-            console.warn("[Local Service] Summarization failed:", e);
-            return "";
+            return text.substring(0, 100) + "...";
         }
     },
-
-    // 3. The Grunt (SmolLM) - Repair
     async repairJson(jsonString: string): Promise<string> {
-        return dispatchToWorker('REPAIR_JSON', { jsonString });
+        try {
+            const repaired = await callGeminiLite(
+                `You are a JSON repair engine. Fix this malformed JSON string and return ONLY the valid JSON object. No markdown.
+                
+                Input:
+                ${jsonString}`,
+                true
+            );
+            return repaired;
+        } catch (e) {
+            console.error("Critical JSON Repair Failed:", e);
+            // Last ditch fallback: empty valid state
+            return JSON.stringify({ 
+                narrative_text: "System Error: Narrative Matrix Corrupted.", 
+                choices: ["Reboot", "Wait"],
+                reasoning_graph: { nodes: [], selected_path: [] },
+                meta_analysis: { selected_engine: "ERROR", player_psych_profile: "Unknown" }
+            });
+        }
+    },
+    // --- NEW: THE CRITIC (Quality Control) ---
+    async runCritic(narrative: string): Promise<{ score: number, violations: string[] }> {
+        try {
+            const result = await callGeminiLite(`
+                You are THE AESTHETE. Strict Critic Mode.
+                Check for:
+                1. Euphemisms (e.g. "manhood" instead of "groin").
+                2. Generic emotion (e.g. "felt sad" instead of somatic "stomach dropped").
+                3. Tone mismatch (Cheerfulness in a dark setting).
+                
+                Text: "${narrative.substring(0, 500)}"
+                
+                Return JSON: { "score": number (0-100), "violations": string[] }
+            `, true);
+            return JSON.parse(result);
+        } catch (e) {
+            return { score: 100, violations: [] };
+        }
+    },
+    // --- NEW: AGENT SIMULATION (Prefects/Subjects) ---
+    async simulateAgent(agent: PrefectDNA, context: string): Promise<{ internal_monologue: string, action: string }> {
+        try {
+            const result = await callGeminiLite(`
+                Roleplay as ${agent.displayName} (${agent.archetype}).
+                Traits: ${JSON.stringify(agent.traitVector)}.
+                Drive: ${agent.drive}.
+                Context: "${context}"
+                
+                What do you think and do?
+                Return JSON: { "internal_monologue": "string", "action": "string" }
+            `, true);
+            return JSON.parse(result);
+        } catch (e) {
+            return { internal_monologue: "Observing.", action: "Watches silently." };
+        }
     }
 };
 
-// --- LOCAL EMPATH API (Llama 3.2) ---
+// --- EMPATH API (Replaces Llama Worker) ---
 export const localMediaService = {
     async analyzeIntent(text: string): Promise<{ intent: string, subtext: string, intensity: number }> {
         try {
-            return await dispatchToWorker('ANALYZE_INTENT', { text });
+            const result = await callGeminiLite(
+                `Analyze the player's input in a dark psychological thriller game.
+                Input: "${text}"
+                Return JSON:
+                {
+                  "intent": "submission" | "defiance" | "fear" | "flirtation" | "neutral",
+                  "subtext": "genuine" | "sarcastic" | "broken" | "manipulative" | "ambiguous",
+                  "intensity": 1-10
+                }`,
+                true
+            );
+            return JSON.parse(result);
         } catch (e) {
-            console.warn("[LocalMediaService] Intent analysis failed, using fallback.", e);
+            console.warn("[LocalMediaService] Intent analysis failed, using fallback.");
             return { intent: 'neutral', subtext: 'genuine', intensity: 5 };
         }
     }
 };
 
-// --- VISUAL ANALYSIS HELPERS (Kept on main thread as they are lightweight canvas ops) ---
-
+// --- VISUAL ANALYSIS HELPERS (Canvas Fallback) ---
 interface VisualParams {
   baseHue: number;
   secondaryHue: number;
@@ -216,34 +270,15 @@ interface VisualParams {
 
 function analyzePrompt(prompt: string): VisualParams {
   const lower = prompt.toLowerCase();
-  
   const params: VisualParams = {
-    baseHue: 30, 
-    secondaryHue: 0,
-    saturation: 60,
-    lightness: 20,
-    chaos: 0.3,
-    darkness: 0.8,
-    shapes: 'geometric',
-    composition: 'center',
-    texture: 'grain'
+    baseHue: 30, secondaryHue: 0, saturation: 60, lightness: 20,
+    chaos: 0.3, darkness: 0.8, shapes: 'geometric', composition: 'center', texture: 'grain'
   };
-
   if (lower.match(/blood|pain|rage|red|crimson|flesh|wound/)) {
-    params.baseHue = 350; 
-    params.secondaryHue = 20;
-    params.saturation = 80;
-    params.chaos += 0.3;
-    params.texture = 'scratch';
+    params.baseHue = 350; params.secondaryHue = 20; params.saturation = 80; params.chaos += 0.3; params.texture = 'scratch';
   } else if (lower.match(/cold|clinical|blue|cyan|freeze|ice|sterile|lab/)) {
-    params.baseHue = 200; 
-    params.secondaryHue = 240;
-    params.saturation = 40;
-    params.lightness = 30; 
-    params.darkness = 0.4;
-    params.texture = 'scanline';
+    params.baseHue = 200; params.secondaryHue = 240; params.saturation = 40; params.lightness = 30; params.darkness = 0.4; params.texture = 'scanline';
   }
-
   return params;
 }
 
@@ -251,31 +286,20 @@ export async function generateLocalImage(prompt: string): Promise<string> {
   return new Promise((resolve) => {
     const performGeneration = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
+        canvas.width = 512; canvas.height = 512;
         const ctx = canvas.getContext('2d');
         if (!ctx) { resolve(''); return; }
-
         const params = analyzePrompt(prompt);
-        
-        // Simple abstract render
         ctx.fillStyle = `hsl(${params.baseHue}, ${params.saturation}%, 10%)`;
         ctx.fillRect(0, 0, 512, 512);
-        
-        // Add noise
         for(let k=0; k<200; k++) {
-            const x = Math.random() * 512;
-            const y = Math.random() * 512;
+            const x = Math.random() * 512; const y = Math.random() * 512;
             ctx.fillStyle = `hsla(${params.secondaryHue}, 50%, 50%, 0.1)`;
             ctx.fillRect(x, y, 50, 50);
         }
-
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
         resolve(dataUrl.split(',')[1]);
     };
-
-    // Use requestIdleCallback if available to avoid blocking the main thread during UI updates
-    // Fallback to setTimeout(0) for environments without requestIdleCallback
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
         (window as any).requestIdleCallback(performGeneration);
     } else {
@@ -284,8 +308,8 @@ export async function generateLocalImage(prompt: string): Promise<string> {
   });
 }
 
+// --- LOCAL SPEECH (Worker fallback for dummy audio) ---
 export async function generateLocalSpeech(text: string): Promise<{ audioData: string; duration: number }> {
-    // Direct call to dispatchToWorker, which will handle worker vs main thread
     try {
         const data = await dispatchToWorker('GENERATE_SPEECH', { text });
         const wavBuffer = encodeWAV(data.audio, data.sampling_rate);
@@ -300,7 +324,7 @@ export async function generateLocalSpeech(text: string): Promise<{ audioData: st
 }
 
 export async function distortLocalImage(imageB64: string): Promise<string> {
-  return imageB64; // Placeholder
+  return imageB64; 
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -318,8 +342,8 @@ function encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
   writeString(view, 8, 'WAVE');
   writeString(view, 12, 'fmt ');
   view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
+  view.setUint16(20, 1, true); 
+  view.setUint16(22, 1, true); 
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, sampleRate * 2, true);
   view.setUint16(32, 2, true);
@@ -337,4 +361,3 @@ function encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
 function writeString(view: DataView, offset: number, string: string) {
   for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
 }
-    

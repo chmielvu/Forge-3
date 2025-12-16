@@ -19,7 +19,9 @@ const INITIAL_GAME_STATE: GameState = {
     turn: 0,
     nodes: [], 
     links: [],
-    seed: Date.now() 
+    seed: Date.now(),
+    subjects: {},
+    prefects: []
 };
 
 const INITIAL_LOGS: LogEntry[] = [
@@ -34,6 +36,8 @@ const INITIAL_LOGS: LogEntry[] = [
     content: 'SUBJECT_84 DETECTED. BIOMETRICS: ELEVATED CORTISOL.'
   }
 ];
+
+const DEFAULT_CHOICES = ['Observe the surroundings', 'Check your restraints', 'Recall your purpose', 'Assess the threat'];
 
 function simpleKMeans(vectors: Record<string, number[]>, k: number = 3): Record<string, string[]> {
     const keys = Object.keys(vectors);
@@ -153,8 +157,7 @@ const getInitialBaseState = () => ({
   gameState: INITIAL_GAME_STATE,
   kgot: { nodes: {}, edges: [], global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' as KnowledgeGraph['global_state']['narrative_phase'] } },
   logs: INITIAL_LOGS,
-  choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
-  prefects: [],
+  choices: DEFAULT_CHOICES,
   sessionActive: false,
   narrativeClusters: {},
   isLiteMode: BEHAVIOR_CONFIG.TEST_MODE,
@@ -162,15 +165,13 @@ const getInitialBaseState = () => ({
   isMenuOpen: false,
   isGrimoireOpen: false,
   isDevOverlayOpen: false,
+  narratorOverride: 'AUTO' as const, 
   executedCode: undefined,
   lastSimulationLog: undefined,
   lastDirectorDebug: undefined,
-  subjects: {},
 });
 
 export interface GameStoreWithPrefects extends CombinedGameStoreState {
-    prefects: PrefectDNA[];
-    updatePrefects: (prefects: PrefectDNA[]) => void;
     narrativeClusters: Record<string, string[]>;
     analyzeGraph: () => void;
     isLiteMode: boolean;
@@ -180,7 +181,8 @@ export interface GameStoreWithPrefects extends CombinedGameStoreState {
     loadSnapshot: () => Promise<void>;
     hasHydrated: boolean;
     setHasHydrated: (hasHydrated: boolean) => void;
-    requestMediaForTurn: (turn: any, target: any, ledger: any, previousTurn?: any, force?: boolean) => void; // Explicitly type if needed
+    requestMediaForTurn: (turn: any, target: any, ledger: any, previousTurn?: any, force?: boolean) => void; 
+    updateLog: (logId: string, updates: Partial<LogEntry>) => void; 
 }
 
 export const useGameStore = create<GameStoreWithPrefects>()(
@@ -202,12 +204,27 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           return { logs: updatedLogs };
       }),
       setLogs: (logs) => set({ logs }),
+      
+      updateLog: (logId, updates) => set((state) => {
+          const newLogs = state.logs.map(log => log.id === logId ? { ...log, ...updates } : log);
+          const newTimeline = state.multimodalTimeline.map(turn => {
+              if (turn.id === logId) {
+                  const turnUpdates: any = {};
+                  if (updates.content) turnUpdates.text = updates.content;
+                  return { ...turn, ...turnUpdates };
+              }
+              return turn;
+          });
+          return { logs: newLogs, multimodalTimeline: newTimeline };
+      }),
+
       setChoices: (choices) => set({ choices }),
       setThinking: (isThinking) => set({ isThinking }),
       setMenuOpen: (isMenuOpen) => set({ isMenuOpen }),
       setGrimoireOpen: (isGrimoireOpen) => set({ isGrimoireOpen }),
       setDevOverlayOpen: (isDevOverlayOpen) => set({ isDevOverlayOpen }),
-      updatePrefects: (prefects) => set({ prefects }),
+      setNarratorOverride: (mode) => set({ narratorOverride: mode }), 
+      updatePrefects: (prefects) => set((state) => ({ gameState: { ...state.gameState, prefects } })),
       setLiteMode: (isLiteMode) => set({ isLiteMode }),
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
@@ -240,52 +257,51 @@ export const useGameStore = create<GameStoreWithPrefects>()(
               );
               const activeId = sortedSims[0].prefect_id;
               const resolvedActiveId = controller.resolveEntityId(activeId) || activeId;
-              const prefect = get().prefects.find(p => p.id === resolvedActiveId);
+              const prefect = get().gameState.prefects.find(p => p.id === resolvedActiveId);
               if (prefect) {
                   primaryActor = prefect;
               }
           }
 
           let newTurnId: string | null = null;
-          if (result.narrative_text) {
-              const subjectNode = controller.getGraph().nodes['Subject_84'];
-              const currentLocation = subjectNode?.attributes?.currentLocation || state.gameState.location;
+          const narrativeContent = result.narrative_text || "System Update: State processed without narrative output.";
+          
+          const subjectNode = controller.getGraph().nodes['Subject_84'];
+          const currentLocation = subjectNode?.attributes?.currentLocation || state.gameState.location;
 
-              const newTurn = get().registerTurn(
-                  result.narrative_text, 
-                  result.visual_prompt, 
-                  result.audio_markup, 
-                  {
-                    ledgerSnapshot: result.ledger_update ? { ...get().gameState.ledger, ...result.ledger_update } : get().gameState.ledger,
-                    directorDebug: result.agot_trace ? JSON.stringify(result.agot_trace, null, 2) : "No trace.",
-                    activeCharacters: typeof primaryActor !== 'string' ? [primaryActor.id] : [primaryActor],
-                    location: currentLocation,
-                    simulationLog: simulations ? JSON.stringify(simulations, null, 2) : "No simulation."
-                  },
-                  result.script
-              );
-              newTurnId = newTurn.id;
-              
-              // CALL THE SLICE ACTION instead of imported function
-              get().requestMediaForTurn(
-                newTurn, 
-                primaryActor, 
-                get().gameState.ledger
-              );
-          }
+          const newTurn = get().registerTurn(
+              narrativeContent, 
+              result.visual_prompt || "Static.", 
+              result.audio_markup, 
+              {
+                ledgerSnapshot: result.ledger_update ? { ...get().gameState.ledger, ...result.ledger_update } : get().gameState.ledger,
+                directorDebug: result.agot_trace ? JSON.stringify(result.agot_trace, null, 2) : "No trace.",
+                activeCharacters: typeof primaryActor !== 'string' ? [primaryActor.id] : [primaryActor],
+                location: currentLocation,
+                simulationLog: simulations ? JSON.stringify(simulations, null, 2) : "No simulation."
+              },
+              result.script
+          );
+          newTurnId = newTurn.id;
+          
+          get().requestMediaForTurn(
+            newTurn, 
+            primaryActor, 
+            get().gameState.ledger
+          );
 
           if (result.agot_trace) {
               get().addLog({ id: `thought-${Date.now()}`, type: 'thought', content: JSON.stringify(result.agot_trace, null, 2) });
           }
-          if (result.narrative_text) {
-              get().addLog({ 
-                  id: newTurnId || `narrative-${Date.now()}`, 
-                  type: 'narrative', 
-                  content: result.narrative_text, 
-                  visualContext: result.visual_prompt,
-                  script: result.script
-              });
-          }
+          
+          get().addLog({ 
+              id: newTurnId || `narrative-${Date.now()}`, 
+              type: 'narrative', 
+              content: narrativeContent, 
+              visualContext: result.visual_prompt,
+              script: result.script
+          });
+
           if (result.psychosis_text) {
               get().addLog({
                   id: `psychosis-${Date.now()}`,
@@ -314,7 +330,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                  if ((mut.operation === 'add_injury' || mut.operation === 'inflict_somatic_trauma') && (mut.params || mut.target_id || mut.subject_id)) {
                      const rawTargetId = mut.target_id || mut.params?.target_id || mut.subject_id || mut.params?.subject_id;
                      const finalTarget = controller.resolveEntityId(rawTargetId) || rawTargetId;
-                     const subject = get().subjects[finalTarget];
+                     const subject = get().gameState.subjects[finalTarget];
                      if (subject) {
                          const injuryName = mut.description || mut.injury || mut.params?.injury_name || mut.params?.injury;
                          const updatedInjuries = [...new Set([...(subject.injuries || []), injuryName])];
@@ -332,7 +348,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                      const subjectId = controller.resolveEntityId(rawSubjectId) || rawSubjectId;
                      const secretName = mut.description || mut.params?.secret_name || mut.params?.description || "Hidden Truth";
                      const discoveredBy = mut.discovered_by || mut.params?.discovered_by || "Unknown";
-                     const subject = get().subjects[subjectId];
+                     const subject = get().gameState.subjects[subjectId];
                      if (subject) {
                          get().addLog({
                              id: `secret-${Date.now()}`,
@@ -341,7 +357,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                          });
                      }
                  }
-                 // NEW: Memory Logging
                  if (mut.operation === 'add_memory' && mut.memory) {
                      get().addLog({
                          id: `mem-log-${Date.now()}-${Math.random()}`,
@@ -349,7 +364,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
                          content: `🧠 MEMORY CONSOLIDATED: "${mut.memory.description.substring(0, 50)}..."`
                      });
                  }
-                 // NEW: Relationship Logging
                  if (mut.operation === 'update_relationship' || mut.operation === 'update_grudge') {
                      const sourceName = controller.getGraph().nodes[mut.source]?.label || mut.source;
                      const targetName = controller.getGraph().nodes[mut.target]?.label || mut.target;
@@ -369,7 +383,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
               controller.updateLedger(CharacterId.PLAYER, result.ledger_update);
           }
           
-          const updatedPrefectsInStore = get().prefects.map(p => {
+          const updatedPrefectsInStore = get().gameState.prefects.map(p => {
               const node = controller.getGraph().nodes[p.id];
               if (node && node.attributes) {
                   const nodeAttrs = node.attributes;
@@ -386,8 +400,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
               }
               return p;
           });
-          set({ prefects: updatedPrefectsInStore });
-
+          
           const finalGraph = controller.getGraph();
 
           set((state) => {
@@ -410,12 +423,13 @@ export const useGameStore = create<GameStoreWithPrefects>()(
 
               return {
                   kgot: finalGraph,
-                  choices: result.choices || [],
+                  choices: (result.choices && result.choices.length > 0) ? result.choices : DEFAULT_CHOICES,
                   isThinking: false,
                   gameState: {
                       ...state.gameState,
                       ledger: nextLedger,
-                      turn: nextTurn 
+                      turn: nextTurn,
+                      prefects: updatedPrefectsInStore 
                   },
                   lastSimulationLog: simulations ? JSON.stringify(simulations, null, 2) : state.lastSimulationLog,
                   lastDirectorDebug: result.agot_trace ? JSON.stringify(result.agot_trace, null, 2) : state.lastDirectorDebug,
@@ -444,11 +458,11 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         try {
           const history = state.logs.filter(l => l.type === 'narrative').map(l => l.content);
           
-          let currentPrefects = state.prefects;
+          let currentPrefects = state.gameState.prefects;
           if (currentPrefects.length === 0) {
             const newPrefects = initializePrefects(state.gameState.seed);
             currentPrefects = newPrefects;
-            set({ prefects: currentPrefects });
+            set((prev) => ({ gameState: { ...prev.gameState, prefects: newPrefects } }));
           }
           
           const activePrefects = selectActivePrefects(
@@ -472,7 +486,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           get().addLog({
             id: `error-${Date.now()}`,
             type: 'system',
-            content: `ERROR: Neuro-Symbolic disconnect. (${e.message || 'Unknown LLM error'})`
+            content: `ERROR: Neuro-Symbolic disconnect. The Architect is silent. (${e.message || 'Unknown LLM error'})`
           });
         }
       },
@@ -498,14 +512,14 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         }
 
         const state = get();
-        if (state.prefects.length === 0) {
+        if (state.gameState.prefects.length === 0) {
             const newPrefects = initializePrefects(state.gameState.seed);
-            set({ prefects: newPrefects });
+            set((prev) => ({ gameState: { ...prev.gameState, prefects: newPrefects } }));
         }
         
         get().initializeSubjects();
         
-        get().prefects.forEach(p => controller.updateAgentAttributes(p));
+        get().gameState.prefects.forEach(p => controller.updateAgentAttributes(p));
         set({ kgot: controller.getGraph() });
         
         try {
@@ -516,7 +530,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         }
 
         const currentLogs = get().logs;
-        if (currentLogs.length <= 2) { 
+        const hasNarrative = currentLogs.some(l => l.type === 'narrative');
+        if (!hasNarrative) { 
              const initialPrompt = "You awaken to the cold reality of The Forge. You are restrained, and the air hums with unseen power. Describe the first sensory input, your immediate physical state, and the oppressive silence. Awaiting the first lesson from Magistra Selene.";
              await get().processPlayerTurn(initialPrompt);
         }
@@ -529,11 +544,10 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           await forgeStorage.saveGameState('forge-snapshot', {
             gameState: lightweightState.gameState,
             logs: lightweightState.logs,
-            prefects: lightweightState.prefects,
             multimodalTimeline: lightweightState.multimodalTimeline,
             audioPlayback: lightweightState.audioPlayback,
             isLiteMode: lightweightState.isLiteMode,
-            subjects: lightweightState.subjects,
+            narratorOverride: lightweightState.narratorOverride,
           });
 
           const compressedNodes: Record<string, any> = {};
@@ -580,7 +594,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
               sessionActive: true, 
               isThinking: false,
               currentTurnId: baseState.multimodalTimeline?.[baseState.multimodalTimeline.length - 1]?.id || null,
-              choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
+              choices: (baseState.choices && baseState.choices.length > 0) ? baseState.choices : DEFAULT_CHOICES,
+              narratorOverride: baseState.narratorOverride || 'AUTO',
             }));
             console.log("Game state restored.");
             get().addLog({ id: `system-load-${Date.now()}`, type: 'system', content: 'SYSTEM STATE RESTORED FROM ARCHIVE.' });
@@ -603,17 +618,31 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       partialize: (state) => ({
         gameState: state.gameState,
         logs: state.logs,
-        prefects: state.prefects,
         multimodalTimeline: state.multimodalTimeline,
         audioPlayback: state.audioPlayback,
         isLiteMode: state.isLiteMode,
-        subjects: state.subjects,
         kgot: state.kgot,
+        choices: state.choices,
+        narratorOverride: state.narratorOverride,
       }),
       merge: (persistedState, currentState) => {
         const pState = (persistedState as any) || {}; 
         const currentKgot = currentState.kgot;
         const persistedKgot = pState.kgot as Partial<KnowledgeGraph> | undefined;
+
+        // Migration Logic: Move legacy root props to gameState if missing
+        const migratedGameState = {
+            ...currentState.gameState,
+            ...(pState.gameState || {}),
+        };
+        
+        if (pState.prefects && (!migratedGameState.prefects || migratedGameState.prefects.length === 0)) {
+            migratedGameState.prefects = pState.prefects;
+        }
+        
+        if (pState.subjects && (!migratedGameState.subjects || Object.keys(migratedGameState.subjects).length === 0)) {
+            migratedGameState.subjects = pState.subjects;
+        }
 
         const mergedGlobalState: KnowledgeGraph['global_state'] = {
             turn_count: persistedKgot?.global_state?.turn_count ?? currentKgot.global_state.turn_count,
@@ -633,6 +662,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         return { 
           ...currentState, 
           ...pState, 
+          gameState: migratedGameState,
           kgot: mergedKgot,
           isThinking: false 
         }; 
