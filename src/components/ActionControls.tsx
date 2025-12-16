@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -15,7 +14,7 @@ const ActionControls: React.FC<ActionControlsProps> = () => {
 
   const handleCustomSubmit = () => {
     if (!customInput.trim()) return;
-    audioService.playSfx('click'); // Direct call
+    audioService.playSfx('click');
     processPlayerTurn(customInput);
     setCustomInput('');
   };
@@ -48,12 +47,12 @@ const ActionControls: React.FC<ActionControlsProps> = () => {
                     <button
                       key={idx}
                       onClick={() => { 
-                        audioService.playSfx('click'); // Direct call
-                        if (typeof choice === 'string') { // Explicitly check type
+                        audioService.playSfx('click');
+                        if (typeof choice === 'string') { 
                           processPlayerTurn(choice);
                         }
                       }}
-                      onMouseEnter={() => audioService.playSfx('hover')} // Direct call
+                      onMouseEnter={() => audioService.playSfx('hover')}
                       className="group relative text-left px-5 py-4 bg-[#292524]/20 hover:bg-[#451a03]/30 border border-transparent hover:border-[#7f1d1d]/60 rounded-sm transition-all duration-300 w-full h-full overflow-hidden"
                       aria-label={`Choose: ${choice}`}
                     >
@@ -75,13 +74,13 @@ const ActionControls: React.FC<ActionControlsProps> = () => {
                   onChange={(e) => setCustomInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleCustomSubmit()}
                   placeholder="Assert your will..."
-                  className="w-full bg-[#0a0a0a] border border-[#44403c]/40 rounded-sm py-3 pl-5 pr-12 text-[#e7e5e4] font-serif placeholder:text-[#57534e] placeholder:italic focus:outline-none focus:border-[#065f46]/60 focus:bg-[#1c1917] transition-all shadow-inner" {/* Emerald focus border */}
+                  className="w-full bg-[#0a0a0a] border border-[#44403c]/40 rounded-sm py-3 pl-5 pr-12 text-[#e7e5e4] font-serif placeholder:text-[#57534e] placeholder:italic focus:outline-none focus:border-[#065f46]/60 focus:bg-[#1c1917] transition-all shadow-inner"
                   aria-label="Custom action input"
                 />
                 <button
                   onClick={handleCustomSubmit}
                   disabled={!customInput.trim()}
-                  onMouseEnter={() => audioService.playSfx('hover')} // Direct call
+                  onMouseEnter={() => audioService.playSfx('hover')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-[#a8a29e] hover:text-[#e7e5e4] disabled:opacity-30 transition-colors hover:bg-[#292524] rounded-sm"
                   aria-label="Send custom action"
                 >
@@ -95,14 +94,20 @@ const ActionControls: React.FC<ActionControlsProps> = () => {
         {/* Footer Metadata */}
         <div className="flex justify-between items-center mt-6 px-4 opacity-50">
           <div className="flex gap-6">
-            <button className="hover:text-[#e7e5e4] transition-colors flex items-center gap-2" title="Archives" 
-            onMouseEnter={() => audioService.playSfx('hover')} // Direct call
-            aria-label="View archives">
+            <button 
+              className="hover:text-[#e7e5e4] transition-colors flex items-center gap-2" 
+              title="Archives" 
+              onMouseEnter={() => audioService.playSfx('hover')}
+              aria-label="View archives"
+            >
               <Database size={12} aria-hidden="true" /> <span className="text-[9px] font-mono uppercase tracking-widest hidden md:inline">Archives</span>
             </button>
-            <button className="hover:text-[#e7e5e4] transition-colors flex items-center gap-2" title="Codex" 
-            onMouseEnter={() => audioService.playSfx('hover')} // Direct call
-            aria-label="View codex">
+            <button 
+              className="hover:text-[#e7e5e4] transition-colors flex items-center gap-2" 
+              title="Codex" 
+              onMouseEnter={() => audioService.playSfx('hover')}
+              aria-label="View codex"
+            >
               <BookOpen size={12} aria-hidden="true" /> <span className="text-[9px] font-mono uppercase tracking-widest hidden md:inline">Codex</span>
             </button>
           </div>

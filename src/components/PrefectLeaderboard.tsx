@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import { PrefectDNA } from '../types';
 import { Trophy, Skull, Crown, Activity } from 'lucide-react';
@@ -38,8 +37,8 @@ export default function PrefectLeaderboard({ prefects }: Props) {
             return (
                 <div key={prefect.id} className={`
                     relative p-2 rounded-sm border transition-all duration-300
-                    ${isTop ? 'bg-[#991b1b]/10 border-[#991b1b]/30' : 'bg-[#1c1917]/40 border-[#292524]'} /* Burgundy for top, charcoal for others */
-                    ${isDanger ? 'border-[#7f1d1d]/30' : ''} /* Burgundy for danger */
+                    ${isTop ? 'bg-[#991b1b]/10 border-[#991b1b]/30' : 'bg-[#1c1917]/40 border-[#292524]'}
+                    ${isDanger ? 'border-[#7f1d1d]/30' : ''}
                 `} role="row">
                     <div className="flex justify-between items-center mb-1" role="gridcell">
                         <div className="flex items-center gap-2">
@@ -74,7 +73,7 @@ export default function PrefectLeaderboard({ prefects }: Props) {
                     {/* Progress Bar */}
                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1c1917]" role="progressbar" aria-valuenow={prefect.favorScore} aria-valuemin={0} aria-valuemax={100} aria-label={`Favor score progress for ${prefect.displayName}`}> {/* Dark charcoal background */}
                         <div 
-                            className={`h-full ${isTop ? THEME.colors.accentGold : THEME.colors.accentBurgundy} transition-all duration-1000`} /* Muted gold for top, burgundy for others */
+                            className={`h-full ${isTop ? THEME.colors.accentGold : THEME.colors.accentBurgundy} transition-all duration-1000`}
                             style={{ width: `${prefect.favorScore}%` }}
                             aria-hidden="true"
                         />

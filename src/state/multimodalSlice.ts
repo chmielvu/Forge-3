@@ -1,4 +1,3 @@
-
 import { StateCreator } from 'zustand';
 import {
   MultimodalTurn,
@@ -6,20 +5,34 @@ import {
   MediaQueueItem,
   CombinedGameStoreState,
   MultimodalSliceExports,
-  ScriptItem
+  PrefectDNA,
+  CharacterId,
+  YandereLedger
 } from '../types';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
-import { INITIAL_LEDGER } from '../constants'; // Updated from @/constants
+import { INITIAL_LEDGER } from '../constants';
 import { audioService } from '../services/AudioService';
+import { processMediaQueue } from './mediaController'; // Import the processor logic
 
-// Helper to generate a unique ID
 const generateId = () => `mm_turn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+// Move priority calculation helper here
+function calculatePriorities(ledger: YandereLedger) {
+  let traumaBoost = 0;
+  if (ledger.traumaLevel > 70 || ledger.shamePainAbyssLevel > 60) traumaBoost += 0.5;
+  if (ledger.hopeLevel < 30) traumaBoost += 0.5;
+
+  let audioPriority = Math.max(0, 1 - traumaBoost);
+  let imagePriority = Math.max(0, 2 - traumaBoost);
+  
+  return { audioPriority, imagePriority };
+}
 
 export const createMultimodalSlice: StateCreator<
   CombinedGameStoreState,
   [],
   [],
-  MultimodalSliceExports 
+  MultimodalSliceExports & { requestMediaForTurn: (turn: MultimodalTurn, target: PrefectDNA | CharacterId | string, ledger: YandereLedger, previousTurn?: MultimodalTurn, force?: boolean) => void }
 > = (set, get) => ({
   multimodalTimeline: [],
   currentTurnId: null,
@@ -31,16 +44,14 @@ export const createMultimodalSlice: StateCreator<
   audioPlayback: {
     currentPlayingTurnId: null,
     isPlaying: false,
-    volume: 0.7, // Default volume
+    volume: 0.7,
     playbackRate: 1.0,
     autoAdvance: false,
-    hasUserInteraction: false, // Must be true for browser autoplay
+    hasUserInteraction: false,
   },
 
   registerTurn: (text, visualPrompt, audioMarkup, metadata, script) => {
-    // Access root state and safely drill down to gameState
     const state = get(); 
-    // Fallback to INITIAL_LEDGER if ledger is not yet ready to prevent undefined access
     const currentLedger = state.gameState?.ledger || INITIAL_LEDGER; 
     const currentLocation = state.gameState?.location || "Unknown";
 
@@ -49,9 +60,8 @@ export const createMultimodalSlice: StateCreator<
       id: generateId(),
       turnIndex: newTurnIndex,
       text,
-      script, // NEW: Store the script
+      script,
       visualPrompt,
-      // Updated to use strict MediaStatus enum members
       imageStatus: MediaStatus.idle,
       audioStatus: MediaStatus.idle,
       videoStatus: MediaStatus.idle,
@@ -67,21 +77,54 @@ export const createMultimodalSlice: StateCreator<
     };
     set((state) => ({
       multimodalTimeline: [...state.multimodalTimeline, newTurn],
-      currentTurnId: newTurn.id, // Automatically set new turn as current
+      currentTurnId: newTurn.id,
     }));
     return newTurn;
+  },
+
+  // Copied logic from mediaController's enqueueTurnForMedia, now an action
+  requestMediaForTurn: (turn, target, ledger, previousTurn, forceEnqueue = false) => {
+    if (BEHAVIOR_CONFIG.DEV_MODE.skipMediaGeneration) return;
+
+    const { audioPriority, imagePriority } = calculatePriorities(ledger);
+    const directorVisualPrompt = turn.visualPrompt;
+
+    if ((turn.imageStatus === MediaStatus.idle || forceEnqueue) && BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableImages) {
+      get().enqueueMediaForTurn({
+        turnId: turn.id,
+        type: 'image',
+        prompt: directorVisualPrompt || turn.text, 
+        narrativeText: turn.text,
+        target: target,
+        previousTurn: previousTurn,
+        priority: imagePriority,
+      });
+    }
+
+    if ((turn.audioStatus === MediaStatus.idle || forceEnqueue) && BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.enableAudio) {
+      get().enqueueMediaForTurn({
+        turnId: turn.id,
+        type: 'audio',
+        prompt: turn.text,
+        script: turn.script,
+        narrativeText: turn.metadata?.audioMarkup || turn.text,
+        target: target,
+        previousTurn: previousTurn,
+        priority: audioPriority,
+      });
+    }
+
+    // Trigger processing
+    processMediaQueue(); 
   },
 
   setCurrentTurn: (turnId) => {
     const turn = get().multimodalTimeline.find((t) => t.id === turnId);
     if (turn) {
       set({ currentTurnId: turnId });
-      // If audio is playing and we switch turn, pause it
       if (get().audioPlayback.currentPlayingTurnId !== turnId && get().audioPlayback.isPlaying) {
         get().pauseAudio();
       }
-    } else {
-      console.warn(`Attempted to set current turn to non-existent ID: ${turnId}`);
     }
   },
 
@@ -127,7 +170,6 @@ export const createMultimodalSlice: StateCreator<
 
   enqueueMediaForTurn: (item) => {
     set((state) => {
-      // Avoid duplicate enqueues for the same turnId and type
       const alreadyPending = state.mediaQueue.pending.some(
         (q) => q.turnId === item.turnId && q.type === item.type
       );
@@ -135,7 +177,6 @@ export const createMultimodalSlice: StateCreator<
         (q) => q.turnId === item.turnId && q.type === item.type
       );
       if (alreadyPending || alreadyInProgress) {
-        if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.log(`[MultimodalSlice] Skipping duplicate enqueue for ${item.type} on turn ${item.turnId}`);
         return state;
       }
       return {
@@ -158,7 +199,7 @@ export const createMultimodalSlice: StateCreator<
       },
       multimodalTimeline: state.multimodalTimeline.map((turn) =>
         turn.id === item.turnId
-          ? { ...turn, [`${item.type}Status`]: MediaStatus.inProgress } // Use strict Enum
+          ? { ...turn, [`${item.type}Status`]: MediaStatus.inProgress }
           : turn
       ),
     }));
@@ -174,7 +215,7 @@ export const createMultimodalSlice: StateCreator<
       },
       multimodalTimeline: state.multimodalTimeline.map((turn) => {
         if (turn.id === turnId) {
-          const update: Partial<MultimodalTurn> = { [`${type}Status`]: MediaStatus.ready }; // Use strict Enum
+          const update: Partial<MultimodalTurn> = { [`${type}Status`]: MediaStatus.ready };
           if (type === 'image') update.imageData = dataUrl;
           if (type === 'audio') {
             update.audioUrl = dataUrl;
@@ -203,7 +244,7 @@ export const createMultimodalSlice: StateCreator<
         },
         multimodalTimeline: state.multimodalTimeline.map((turn) =>
           turn.id === turnId
-            ? { ...turn, [`${type}Status`]: MediaStatus.error, [`${type}Error`]: errorMessage } // Use strict Enum
+            ? { ...turn, [`${type}Status`]: MediaStatus.error, [`${type}Error`]: errorMessage }
             : turn
         ),
       };
@@ -230,27 +271,29 @@ export const createMultimodalSlice: StateCreator<
         if (q.turnId === turnId && (!type || q.type === type)) {
           if ((q.retries || 0) < BEHAVIOR_CONFIG.MEDIA_THRESHOLDS.MAX_MEDIA_QUEUE_RETRIES) {
             newPending.push({ ...q, retries: (q.retries || 0) + 1, addedAt: Date.now() });
-            return false; // Remove from failed, add to pending
+            return false; 
           }
-          return true; // Keep in failed if max retries reached
+          return true;
         }
         return true;
       });
 
-      // Reset status in timeline for retried items
       const newTimeline = state.multimodalTimeline.map((turn) => {
         if (turn.id === turnId) {
           const updatedTurn = { ...turn };
           failedItems.forEach(item => {
             if (!type || item.type === type) {
-              updatedTurn[`${item.type}Status`] = MediaStatus.idle; // Reset to IDLE for retry
-              delete updatedTurn[`${item.type}Error`]; // Clear error message
+              updatedTurn[`${item.type}Status`] = MediaStatus.idle;
+              delete updatedTurn[`${item.type}Error`];
             }
           });
           return updatedTurn;
         }
         return turn;
       });
+
+      // Trigger processor after retry setup
+      setTimeout(() => processMediaQueue(), 100);
 
       return {
         mediaQueue: {
@@ -268,7 +311,6 @@ export const createMultimodalSlice: StateCreator<
     const turn = multimodalTimeline.find((t) => t.id === turnId);
 
     if (!turn || turn.audioStatus !== MediaStatus.ready || !turn.audioUrl) {
-      if (BEHAVIOR_CONFIG.DEV_MODE.verboseLogging) console.warn(`[MultimodalSlice] Cannot play turn ${turnId}: not ready or no audioUrl.`);
       return;
     }
 
@@ -317,7 +359,7 @@ export const createMultimodalSlice: StateCreator<
   },
 
   seekAudio: (time) => {
-    console.warn("[MultimodalSlice] Audio seeking is not supported with the current stateless architecture.");
+    console.warn("Audio seeking not supported.");
   },
 
   setVolume: (volume) => {
@@ -388,9 +430,7 @@ export const createMultimodalSlice: StateCreator<
   },
 
   resetMultimodalState: () => {
-    // Explicitly stop audio service to prevent ghosts
     audioService.stop();
-
     set({
       multimodalTimeline: [],
       currentTurnId: null,
@@ -405,7 +445,7 @@ export const createMultimodalSlice: StateCreator<
         volume: 0.7,
         playbackRate: 1.0,
         hasUserInteraction: false,
-        autoAdvance: false, // Ensure autoAdvance is reset
+        autoAdvance: false,
       },
     });
   },

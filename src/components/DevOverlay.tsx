@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -7,12 +6,12 @@ import { X, Activity, Terminal, Database, FileText, Layout, Clock, Play, Refresh
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
 import { CoherenceReport, MediaStatus } from '../types';
 import { regenerateMediaForTurn } from '../state/mediaController';
-import { KGotController } from '../controllers/KGotController'; // Updated to use relative path
+import { KGotController } from '../controllers/KGotController';
 import LedgerDisplay from './LedgerDisplay'; 
 import PrefectLeaderboard from './PrefectLeaderboard'; 
 import SubjectPanel from './SubjectPanel'; 
 import { THEME } from '../theme';
-import { audioService } from '../services/AudioService'; // Explicitly import audioService
+import { audioService } from '../services/AudioService';
 
 interface MediaStatusIndicatorProps {
   status: MediaStatus;
@@ -294,7 +293,7 @@ const DevOverlay: React.FC = () => {
                       <X size={10} aria-hidden="true" /> FAILED: {item.type} for turn {item.turnId} (Error: {item.errorMessage || 'Unknown'})
                       <button 
                         onClick={() => regenerateMediaForTurn(item.turnId, item.type)}
-                        className="ml-2 p-1 bg-[#7f1d1d]/50 hover:bg-[#7f1d1d]/70 rounded-sm flex items-center gap-1" {/* Burgundy button */}
+                        className="ml-2 p-1 bg-[#7f1d1d]/50 hover:bg-[#7f1d1d]/70 rounded-sm flex items-center gap-1"
                         aria-label={`Retry ${item.type} for turn ${item.turnId}`}
                       >
                         <RefreshCw size={8} aria-hidden="true" /> Retry
@@ -338,7 +337,7 @@ const DevOverlay: React.FC = () => {
                             <td className="p-2 flex gap-1" role="gridcell">
                               <button 
                                 onClick={() => setCurrentTurn(turn.id)} 
-                                className="px-2 py-1 bg-[#064e3b]/30 hover:bg-[#064e3b]/50 rounded-sm" {/* Deep emerald button */}
+                                className="px-2 py-1 bg-[#064e3b]/30 hover:bg-[#064e3b]/50 rounded-sm"
                                 title="Set as Current Turn"
                                 aria-label={`Set turn ${turn.turnIndex} as current`}
                               >
@@ -347,7 +346,7 @@ const DevOverlay: React.FC = () => {
                               <button 
                                 onClick={() => playTurn(turn.id)} 
                                 disabled={turn.audioStatus !== MediaStatus.ready} 
-                                className="px-2 py-1 bg-[#3b82f6]/30 hover:bg-[#3b82f6]/50 rounded-sm disabled:opacity-50" {/* Blue button */}
+                                className="px-2 py-1 bg-[#3b82f6]/30 hover:bg-[#3b82f6]/50 rounded-sm disabled:opacity-50"
                                 title="Play Audio"
                                 aria-label={`Play audio for turn ${turn.turnIndex}`}
                               >
@@ -355,7 +354,7 @@ const DevOverlay: React.FC = () => {
                               </button>
                               <button 
                                 onClick={() => regenerateMediaForTurn(turn.id)}
-                                className="px-2 py-1 bg-[#7f1d1d]/30 hover:bg-[#7f1d1d]/50 rounded-sm" {/* Burgundy button */}
+                                className="px-2 py-1 bg-[#7f1d1d]/30 hover:bg-[#7f1d1d]/50 rounded-sm"
                                 title="Regenerate All Media"
                                 aria-label={`Regenerate all media for turn ${turn.turnIndex}`}
                               >
@@ -381,7 +380,7 @@ const DevOverlay: React.FC = () => {
                           <input 
                             id="rag-query-input"
                             type="text" 
-                            className="flex-1 bg-[#0c0a09] border border-[#064e3b] p-2 text-[#86efac] focus:outline-none focus:border-[#065f46]" /* Deepest black bg, deep emerald border, light green text, emerald focus */
+                            className="flex-1 bg-[#0c0a09] border border-[#064e3b] p-2 text-[#86efac] focus:outline-none focus:border-[#065f46]"
                             placeholder="Enter query (e.g. 'history of Subject 84')" 
                             value={ragQuery}
                             onChange={e => setRagQuery(e.target.value)}

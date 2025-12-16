@@ -27,13 +27,92 @@ function buildPrefectContextBlock(activePrefects: PrefectDNA[]): string {
   `).join('\n');
 }
 
+/**
+ * Extracts explicit high-level state (Memories, Grudges, Secrets, Relationships) from the Knowledge Graph
+ * to ensure the narrative remains continuous and reactive to past events.
+ */
+function getNarrativeContext(controller: KGotController): string {
+    const graph = controller.getGraph();
+    const subjectNode = graph.nodes['Subject_84'];
+    
+    if (!subjectNode) return "No prior memory records found.";
+
+    const attributes = subjectNode.attributes || {};
+    
+    // 1. Recent Memories (Last 5 turns)
+    const recentMemories = (attributes.memories || [])
+        .slice(-5)
+        .map((m: any) => `- [Turn ${m.timestamp}] ${m.description} (${m.emotional_imprint})`)
+        .join('\n');
+
+    // 2. Active Grudges (Intensity > 20)
+    // Grudges are stored on Prefect nodes, targeting the player or other prefects
+    const activeGrudges: string[] = [];
+    Object.values(graph.nodes).forEach((node: any) => {
+        if (node.type === 'PREFECT' || node.type === 'FACULTY') {
+            const grudges = node.attributes?.grudges || {};
+            Object.entries(grudges).forEach(([target, intensity]) => {
+                if ((intensity as number) > 20) {
+                    // Resolve target name
+                    const targetName = graph.nodes[target]?.label || target;
+                    activeGrudges.push(`- ${node.label} holds a GRUDGE against ${targetName} (Intensity: ${intensity})`);
+                }
+            });
+        }
+    });
+
+    // 3. Relationship Dynamics (Trust/Favor)
+    const relationshipStates: string[] = [];
+    Object.values(graph.nodes).forEach((node: any) => {
+        if ((node.type === 'PREFECT' || node.type === 'SUBJECT') && node.attributes?.prefectDNA) {
+            const rels = node.attributes.prefectDNA.relationships || {};
+            const activeRels = Object.entries(rels)
+                .filter(([_, val]) => Math.abs(val as number) > 0.1) // Only significant relationships
+                .map(([target, val]) => {
+                    const targetName = graph.nodes[target]?.label || target;
+                    return `${targetName}: ${(val as number).toFixed(2)}`;
+                });
+            
+            if (activeRels.length > 0) {
+                relationshipStates.push(`- ${node.label} BONDS: [${activeRels.join(', ')}]`);
+            }
+        }
+    });
+
+    // 4. Known Secrets
+    const knownSecrets = (attributes.secrets || [])
+        .map((s: any) => `- SECRET: "${s.name}" discovered by ${s.discoveredBy}`)
+        .join('\n');
+
+    // 5. Physical Injuries
+    const injuries = (attributes.injuries || []).join(', ');
+
+    return `
+=== EXPLICIT MEMORY & RELATIONSHIP STATE ===
+[RECENT MEMORIES]
+${recentMemories || "None."}
+
+[ACTIVE GRUDGES & TENSIONS]
+${activeGrudges.length > 0 ? activeGrudges.join('\n') : "None."}
+
+[RELATIONSHIP DYNAMICS]
+${relationshipStates.length > 0 ? relationshipStates.join('\n') : "None established."}
+
+[DISCOVERED SECRETS]
+${knownSecrets || "None."}
+
+[PHYSICAL TRAUMA]
+Injuries: ${injuries || "None."}
+    `.trim();
+}
+
 export async function executeUnifiedDirectorTurn(
   playerInput: string,
   history: string[],
   currentGraphData: any, // Using any here to accept the raw graph object from store
   activePrefects: PrefectDNA[],
   isLiteMode: boolean = false,
-  modelId: string = 'gemini-2.5-flash-lite'
+  modelId: string = 'gemini-2.5-flash'
 ): Promise<any> { 
   
   // Re-instantiate controller with passed graph data
@@ -76,8 +155,8 @@ export async function executeUnifiedDirectorTurn(
   const engineData = THEMATIC_ENGINES[activeEngineKey];
   const beatInstruction = TensionManager.getBeatInstructions(narrativeBeat as any);
 
-  // 3. GRAPHRAG RETRIEVAL
-  // Retrieve relevant past memories and faded grudges to augment the context
+  // 3. RETRIEVAL & CONTEXT INJECTION (Uplifted Architecture)
+  const explicitContext = getNarrativeContext(controller);
   const ragContext = await controller.getRAGAugmentedPrompt(playerInput + " " + currentLocation);
 
   // 4. PROMPT CONSTRUCTION
@@ -94,7 +173,10 @@ INTENT: ${telemetry.intent.toUpperCase()}
 SUBTEXT: ${telemetry.subtext.toUpperCase()}
 INTENSITY: ${telemetry.intensity}/10
 
-=== GRAPHRAG CONTEXT (MEMORY & DECAY) ===
+=== LONG-TERM MEMORY & CONTEXT (THE CONTINUOUS STORY) ===
+${explicitContext}
+
+=== GRAPHRAG ASSOCIATIONS (Subconscious/Implicit) ===
 ${ragContext}
 
 === NARRATIVE COORDINATES ===
@@ -119,31 +201,35 @@ ${buildPrefectContextBlock(activePrefects)}
 HISTORY:
 ${history.slice(-5).join('\n')}
 
-=== TASK ===
+=== TASK: CREATIVE CO-WRITER & DIRECTOR ===
 Generate the JSON response strictly adhering to the schema.
 
-1. **THINK**: Plan the scene using the "Rhythm of Escalation" and retrieved memory evidence.
+1. **THINK**: Plan the scene. YOU MUST REFERENCE PAST EVENTS (Memories/Grudges) if relevant to maintain continuity.
 2. **NARRATE**: Use the **NARRATIVE TEXTURE** guidelines. Focus on SOMATIC SENSATION.
-3. **SOMATIC STATE**: Populate the 'somatic_state' field.
-4. **CONTINUOUS NARRATIVE MEMORY (CRITICAL)**:
-   You are the Co-Writer. You MUST store internal state changes using 'kgot_mutations' to create a living world:
-   - If an agent is insulted or defied -> 'update_grudge' (+10 to +30).
-   - If an agent is obeyed or manipulated -> 'update_relationship' (Trust/Favor).
-   - If a significant plot event occurs -> 'add_memory' (Describe the event clearly).
-   - If the player is injured -> 'add_injury'.
-   *DO NOT leave the graph static. Every turn must impact the web of relationships.*
+3. **DIALOGUE SCRIPTING (CRITICAL)**:
+   - If ANY character speaks, populate the 'script' array.
+   - Use 'narrative_text' for action/atmosphere.
+4. **SOMATIC STATE**: Populate the 'somatic_state'.
+5. **CONTINUOUS NARRATIVE MEMORY (THE LOOM)**:
+   You are the Co-Writer. You MUST store internal state changes using 'kgot_mutations' to create a living world.
+   **Do not be passive. Record the impact of this turn.**
+   - **GRUDGES**: If an agent is insulted or defied -> 'update_grudge' (+10 to +30).
+   - **RELATIONSHIPS**: If an agent is obeyed, charmed, or manipulated -> 'update_relationship' (Trust/Favor delta).
+   - **MEMORIES**: If a significant plot event occurs (a revelation, an injury, a betrayal) -> 'add_memory' (Describe the event clearly).
+   - **INJURIES**: If the player is injured -> 'add_injury'.
+   *Every turn must impact the web of relationships.*
 
-5. **UPDATE**: Modify the YandereLedger.
+6. **UPDATE**: Modify the YandereLedger.
 `;
 
-  // 5. EXECUTE FLASH-LITE (New SDK Syntax)
+  // 5. EXECUTE FLASH (New SDK Syntax)
   try {
     const response = await callGeminiWithRetry(async () => {
       return await ai.models.generateContent({
         model: modelId,
         contents: [{ role: 'user', parts: [{ text: finalPrompt }] }],
         config: {
-          // Lite Optimization: Thinking + Strict Schema
+          // Thinking + Strict Schema
           thinkingConfig: { 
             includeThoughts: true, 
             thinkingBudget: 1024 

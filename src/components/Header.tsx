@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -55,8 +54,8 @@ const Header: React.FC = () => {
         {/* Window Controls - Only Dev Overlay now */}
         <div className="flex gap-2">
           <button
-            className={`${THEME.classes.iconBtn} ${isDevOverlayOpen ? 'text-[#991b1b] border-[#991b1b]/30' : ''}`} {/* Burgundy accent */}
-            onClick={() => { audioService.playSfx('hover'); setDevOverlayOpen(!isDevOverlayOpen); }} // Direct call
+            className={`${THEME.classes.iconBtn} ${isDevOverlayOpen ? 'text-[#991b1b] border-[#991b1b]/30' : ''}`}
+            onClick={() => { audioService.playSfx('hover'); setDevOverlayOpen(!isDevOverlayOpen); }}
             title="Toggle Developer Overlay"
             aria-label="Toggle Developer Overlay"
           >

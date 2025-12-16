@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -12,7 +11,7 @@ import NarrativeLog from "./NarrativeLog";
 import ActionControls from "./ActionControls";
 import LedgerDisplay from "./LedgerDisplay";
 import { useGameStore } from '../state/gameStore';
-import { useReducedMotion } from '../hooks/useReducedMotion.ts';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { THEME } from "../theme";
 
 const containerVariants = {

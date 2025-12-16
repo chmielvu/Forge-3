@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,14 +12,27 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, (process as any).cwd(), '');
 
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+      nodePolyfills({
+        // Whether to polyfill `node:` protocol imports.
+        protocolImports: true,
+        // Set the globals to true to inject Buffer and process into global scope
+        globals: {
+          Buffer: true, 
+          global: true,
+          process: true,
+        },
+      }),
+    ],
     resolve: {
       alias: {
-        // Removed '@/': path.resolve(__dirname, './src'),
+        '@': path.resolve(__dirname, './src'),
       },
     },
     optimizeDeps: {
-      include: ['buffer', 'long']
+      include: ['buffer', 'long'],
+      exclude: ['@xenova/transformers'] // Often better to exclude wasm-heavy libs from optimization
     },
     define: {
       // Explicitly define global.process for browser compatibility
@@ -30,9 +44,7 @@ export default defineConfig(({ mode }) => {
           // Expose API_KEY specifically to process.env.API_KEY
           API_KEY: JSON.stringify(env.API_KEY || process.env.API_KEY),
         }
-      },
-      // Removed the generic 'process.env': {} as it can be too aggressive
-      // and prevent other env vars from being correctly exposed or accessed.
+      }
     }
   };
 });
