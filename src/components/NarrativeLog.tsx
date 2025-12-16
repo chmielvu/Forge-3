@@ -1,17 +1,18 @@
 
+
 'use client';
 
 import { motion, AnimatePresence } from "framer-motion";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "./ui/scroll-area";
+import { Badge } from "./ui/badge";
+import { Separator } from "./ui/separator";
 import { Loader2 } from "lucide-react";
 import { LogEntry } from '../types';
 import { useGameStore } from '../state/gameStore';
 import { useEffect, useRef } from 'react';
 import { useReducedMotion } from '../hooks/useReducedMotion.ts';
-import { cn } from "@/lib/utils";
-import { THEME } from "@/theme";
+import { cn } from "../utils"; // Updated to relative path
+import { THEME } from "../theme";
 
 // Updated speaker styles to match the new dark academia palette
 const speakerStyles: Record<string, string> = {
@@ -22,7 +23,12 @@ const speakerStyles: Record<string, string> = {
 };
 
 export default function NarrativeLog() {
-  const { logs, isThinking } = useGameStore();
+  // FIX: Make multimodalTimeline reactive by including it in the selector
+  const { logs, isThinking, multimodalTimeline } = useGameStore(s => ({
+    logs: s.logs,
+    isThinking: s.isThinking,
+    multimodalTimeline: s.multimodalTimeline,
+  }));
   const viewportRef = useRef<HTMLDivElement>(null);
   const prefersReduced = useReducedMotion();
 
@@ -37,7 +43,8 @@ export default function NarrativeLog() {
   const renderLogContent = (log: LogEntry) => {
     const isPsychosis = log.type === 'psychosis' || (log.type === 'narrative' && useGameStore.getState().gameState.ledger.traumaLevel > 80);
     const logId = log.id; // Access log ID for multimodal timeline check
-    const multimodalTurn = useGameStore.getState().multimodalTimeline.find(t => t.id === logId);
+    // FIX: Use the reactive multimodalTimeline from component scope
+    const multimodalTurn = multimodalTimeline.find(t => t.id === logId);
     const hasScript = log.type === 'narrative' && multimodalTurn?.script && multimodalTurn.script.length > 0;
 
     // Use raw content, as Typewriter and other formatting logic are now external to this component
@@ -53,7 +60,7 @@ export default function NarrativeLog() {
                     // Apply bolding and other styling based on desired dark academia feel
                     return (
                         <p key={idx} className={`text-lg leading-relaxed ${style} ${item.speaker === 'Narrator' ? 'italic' : 'font-semibold'}`}>
-                            {item.speaker}: {item.text}
+                            {item.speaker}: ${item.text}
                         </p>
                     );
                 })}

@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import { useGameStore } from '../state/gameStore';
 import { Users, Shield, Zap, Brain, HeartCrack } from 'lucide-react';

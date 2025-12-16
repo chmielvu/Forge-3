@@ -1,15 +1,18 @@
+
 /**
  * @file src/config/visualMandate.ts
  * @description The immutable aesthetic constitution for The Forge's Loom.
  * Defines the "Baroque Brutalism + Vampire Noir" style lock.
  */
 
+import { THEME } from '../theme';
+
 export const VISUAL_MANDATE = {
   // The immutable header injected into every image prompt
   ZERO_DRIFT_HEADER: "((MASTER STYLE LOCK)): Milo Manara style (clean ink lines, fluid contours, impossible elegance, feline eyes, cruel half-smile, teasing cruelty, liquid strands, languid dominance), high-contrast Neo-Noir, erotic dark academia, Eroticized Distress, Systemic Emasculation, Bored God Complex. Art by Milo Manara, J. Scott Campbell, Artgerm, Greg Rutkowski, Frank Frazetta for high-fidelity erotic realism. Clinical line, unforgiving precision, negative space isolation, wet surfaces, Art Deco geometry, smoke haze, clinical chiaroscuro, venetian blind shadows, Yves Saint Laurent tailoring, NO TEXT/WATERMARKS, NO GRADIENTS, NO CROSS-HATCHING, NO MUDDY TEXTURES.",
 
   // Core aesthetic definitions
-  STYLE: "Erotic Dark Academia + Neo-Noir + Milo Manara synthesis. Clean lines, high-fashion brutality, dreamlike eroticism, atmospheric density. From search: photorealistic painting, very short skirt, passionate kiss, heavy-lidded eyes, glossy strands.",
+  STYLE: "Erotic Dark Academia + Neo-Noir + Milo Manara synthesis: Clean lines, high-fashion brutality, dreamlike eroticism, atmospheric density. From search: photorealistic painting, very short skirt, passionate kiss, heavy-lidded eyes, glossy strands.",
   
   TECHNICAL: {
     camera: "intimate 50mm or 85mm close-up, shallow depth of field, bokeh background",

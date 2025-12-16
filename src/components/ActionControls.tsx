@@ -5,7 +5,7 @@ import * as React from 'react';
 import { Loader2, Send, Database, BookOpen } from 'lucide-react';
 import { useGameStore } from '../state/gameStore';
 import { audioService } from '../services/AudioService';
-import { THEME } from '@/theme';
+import { THEME } from '../theme';
 
 interface ActionControlsProps {}
 

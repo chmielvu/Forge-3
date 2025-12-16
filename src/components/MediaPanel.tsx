@@ -5,7 +5,7 @@ import { regenerateMediaForTurn } from '../state/mediaController';
 import { MediaStatus } from '../types';
 import { audioService } from '../services/AudioService';
 import { useGameStore } from '../state/gameStore';
-import { DEFAULT_MEDIA_BACKGROUND_URL, THEME } from '@/theme';
+import { DEFAULT_MEDIA_BACKGROUND_URL, THEME } from '../theme'; // Updated to relative paths
 
 // Placeholder for formatTime
 const formatTime = (seconds: number) => {

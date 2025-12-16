@@ -1,11 +1,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { KGotController } from "@/controllers/KGotController";
-import { DIRECTOR_SYSTEM_INSTRUCTIONS } from "@/config/directorCore";
-import { LORE_APPENDIX, LORE_CONSTITUTION } from "@/config/loreInjection"; 
-import { THEMATIC_ENGINES, MOTIF_LIBRARY } from "@/config/directorEngines";
-import { UnifiedDirectorOutputSchema } from "@/lib/schemas/unifiedDirectorSchema";
+import { KGotController } from "../controllers/KGotController";
+import { DIRECTOR_SYSTEM_INSTRUCTIONS } from "../config/directorCore";
+import { LORE_APPENDIX, LORE_CONSTITUTION } from "../config/loreInjection"; 
+import { THEMATIC_ENGINES, MOTIF_LIBRARY } from "../config/directorEngines";
+import { UnifiedDirectorOutputSchema } from "./schemas/unifiedDirectorSchema";
 import { PrefectDNA, YandereLedger } from "../types";
-import { INITIAL_LEDGER } from "@/constants";
+import { INITIAL_LEDGER } from "../constants";
 import { callGeminiWithRetry } from "../utils/apiRetry";
 import { TensionManager } from "../services/TensionManager";
 import { localMediaService, localGrunt } from "../services/localMediaService";

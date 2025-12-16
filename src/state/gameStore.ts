@@ -1,18 +1,18 @@
-
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { KnowledgeGraph } from '../lib/types/kgot';
 import { executeUnifiedDirectorTurn } from '../lib/unifiedDirector';
-import { INITIAL_LEDGER, INITIAL_NODES, INITIAL_LINKS } from '@/constants';
+import { INITIAL_LEDGER, INITIAL_NODES, INITIAL_LINKS } from '../constants'; // Updated from @/constants
 import { updateLedgerHelper } from './stateHelpers';
 import { createMultimodalSlice } from './multimodalSlice';
 import { createSubjectSlice } from './subjectSlice';
-import { LogEntry, CombinedGameStoreState, CharacterId, PrefectDNA, GameState, YandereLedger } from '../types';
-import { KGotController } from '../controllers/KGotController';
+import { LogEntry, CombinedGameStoreState, CharacterId, PrefectDNA, GameState, YandereLedger, SubjectSliceExports } from '../types';
+import { KGotController } from '../controllers/KGotController'; // Updated from @/controllers/KGotController
 import { enqueueTurnForMedia } from './mediaController';
 import { createIndexedDBStorage, forgeStorage } from '../utils/indexedDBStorage';
-import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
-import { audioService } from '../services/AudioService'; 
+import { BEHAVIOR_CONFIG } from '../config/behaviorTuning'; // Updated from @/config/behaviorTuning
+import { audioService } from '../services/AudioService';
+import { initializePrefects } from '../lib/agents/PrefectGenerator'; // Updated from lazy import
 
 // Use a factory function for initial graph to avoid global state pollution
 const getInitialGraph = (): KnowledgeGraph => {
@@ -177,6 +177,28 @@ function selectActivePrefects(
     .slice(0, count);
 }
 
+// FIX: Add a factory function for the initial base state
+const getInitialBaseState = () => ({
+  gameState: INITIAL_GAME_STATE,
+  kgot: getInitialGraph(), // Ensure a fresh graph is always generated
+  logs: INITIAL_LOGS,
+  choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
+  prefects: [], // Prefects are re-initialized on session start
+  sessionActive: false,
+  narrativeClusters: {},
+  isLiteMode: BEHAVIOR_CONFIG.TEST_MODE, // Set initial lite mode from config
+  
+  isThinking: false,
+  isMenuOpen: false,
+  isGrimoireOpen: false,
+  isDevOverlayOpen: false,
+  
+  executedCode: undefined,
+  lastSimulationLog: undefined,
+  lastDirectorDebug: undefined,
+  subjects: {}, // Initialize subjects state
+});
+
 export interface GameStoreWithPrefects extends CombinedGameStoreState {
     prefects: PrefectDNA[];
     updatePrefects: (prefects: PrefectDNA[]) => void;
@@ -193,23 +215,7 @@ export interface GameStoreWithPrefects extends CombinedGameStoreState {
 export const useGameStore = create<GameStoreWithPrefects>()(
   persist(
     (set, get, api) => ({
-      gameState: INITIAL_GAME_STATE,
-      kgot: getInitialGraph(),
-      logs: INITIAL_LOGS,
-      choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
-      prefects: [], 
-      sessionActive: false,
-      narrativeClusters: {},
-      isLiteMode: false,
-      
-      isThinking: false,
-      isMenuOpen: false,
-      isGrimoireOpen: false,
-      isDevOverlayOpen: false,
-      
-      executedCode: undefined,
-      lastSimulationLog: undefined,
-      lastDirectorDebug: undefined,
+      ...getInitialBaseState(), // Initialize with the base state factory
 
       ...createMultimodalSlice(set, get, api),
       ...createSubjectSlice(set, get, api),
@@ -481,8 +487,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           
           let currentPrefects = state.prefects;
           if (currentPrefects.length === 0) {
-            const { initializePrefects } = await import('../lib/agents/PrefectGenerator');
-            currentPrefects = initializePrefects(state.gameState.seed);
+            const newPrefects = initializePrefects(state.gameState.seed);
+            currentPrefects = newPrefects;
             set({ prefects: currentPrefects });
           }
           
@@ -513,28 +519,12 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         }
       },
 
+      // FIX: Refactor resetGame to use the initial base state factory
       resetGame: () => {
-        get().resetMultimodalState();
-        // Use local controller to generate fresh state
-        const freshController = new KGotController({ nodes: {}, edges: [], global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' } });
-        const newSeed = Date.now();
-        
-        set({
-          gameState: { ...INITIAL_GAME_STATE, seed: newSeed },
-          kgot: freshController.getGraph(),
-          logs: INITIAL_LOGS,
-          choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
-          prefects: [], // Reset prefects as well
-          sessionActive: false, 
-          narrativeClusters: {},
-          isThinking: false,
-          executedCode: undefined,
-          lastSimulationLog: undefined,
-          lastDirectorDebug: undefined,
-          isLiteMode: BEHAVIOR_CONFIG.TEST_MODE, // Ensure lite mode is reset correctly
-        });
+        get().resetMultimodalState(); // Reset multimodal slice
+        get().initializeSubjects();   // Re-initialize subjects slice
+        set({ ...getInitialBaseState() }); // Reset main store state
         audioService.stopDrone(); // Stop drone on reset
-        get().initializeSubjects(); // Initialize subjects on reset
       },
 
       startSession: async (isLiteMode = false) => {
@@ -542,7 +532,6 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         const state = get();
         
         if (state.prefects.length === 0) {
-            const { initializePrefects } = await import('../lib/agents/PrefectGenerator');
             const newPrefects = initializePrefects(state.gameState.seed);
             set({ prefects: newPrefects });
         }
@@ -636,7 +625,8 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         multimodalTimeline: state.multimodalTimeline,
         audioPlayback: state.audioPlayback,
         isLiteMode: state.isLiteMode,
-        subjects: state.subjects, // Ensure subjects are persisted
+        subjects: state.subjects,
+        kgot: state.kgot, // <--- CRITICAL ADDITION: Persist Knowledge Graph (Memories/Grudges)
       }),
       merge: (persistedState, currentState) => {
         // Defensively handle persistedState possibly being null or undefined

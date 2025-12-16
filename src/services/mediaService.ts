@@ -12,6 +12,8 @@ import {
 import { CHARACTER_VOICE_MAP, resolveVoiceForSpeaker } from '../config/voices';
 import { audioService } from './AudioService';
 import { NarrativeBeat } from "./TensionManager";
+import { INITIAL_LEDGER } from "../constants"; // Added relative import for INITIAL_LEDGER
+
 
 // Re-export for compatibility
 export { CHARACTER_VOICE_MAP, resolveVoiceForSpeaker };

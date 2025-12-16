@@ -1,4 +1,3 @@
-
 import { StateCreator } from 'zustand';
 import { 
   CombinedGameStoreState, 
@@ -75,11 +74,15 @@ export const createSubjectSlice: StateCreator<
         injuries: ["Panic Hyperventilation", "Bruised Wrists"]
       }
     };
-    set({ subjects: initialSubjects });
+    set((state) => ({ 
+      ...state, // Spread existing state
+      subjects: initialSubjects 
+    }));
   },
 
   updateSubject: (id, updates) => {
     set((state) => ({
+      ...state, // Spread existing state
       subjects: {
         ...state.subjects,
         [id]: { ...state.subjects[id], ...updates }
@@ -146,7 +149,7 @@ export const createSubjectSlice: StateCreator<
       const logMessage = `SUBJECT_REACTION_MATRIX::UPDATED [Trigger: ${playerActionType}]`;
       // We can push to logs via the main store function if needed, but here we just update state.
       
-      return { subjects: newSubjects };
+      return { ...state, subjects: newSubjects }; // Spread existing state when returning new state
     });
   }
 });

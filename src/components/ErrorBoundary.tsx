@@ -1,5 +1,5 @@
 // Fix: Refactor to use direct imports from React to ensure proper type inference for class components.
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from 'react'; // Removed 'React' from direct import
 
 interface Props {
   children: ReactNode; // Use ReactNode directly
@@ -10,10 +10,11 @@ interface State {
   error?: Error;
 }
 
-export class ErrorBoundary extends React.Component<Props, State> { // Use React.Component directly
-  // FIX: Added explicit constructor to ensure `this.props` is correctly initialized
+export class ErrorBoundary extends Component<Props, State> { // Use Component directly
+  // FIX: Added explicit constructor to ensure `this.props` is correctly initialized and state is set
   constructor(props: Props) {
     super(props);
+    this.state = { hasError: false, error: undefined }; // Initialize state here
   }
 
   public static getDerivedStateFromError(error: Error): State {

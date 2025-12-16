@@ -1,5 +1,7 @@
 
 // @ts-nocheck
+import { PrefectDNA, TraitVector, PrefectArchetype, PrefectPsychometrics } from '../../types';
+
 export const KAELEN_AGENT_PROMPT = `
 ### SYSTEM INSTRUCTION: INDEPENDENT CHARACTER AGENT (v4.1 SOTA) ###
 

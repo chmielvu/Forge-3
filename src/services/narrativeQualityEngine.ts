@@ -1,8 +1,8 @@
-
-import { YandereLedger, GameState, PrefectDNA, PrefectArchetype } from '../types';
+import { YandereLedger, PrefectDNA, PrefectArchetype, GameState } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
 import { useGameStore } from '../state/gameStore';
 import { localGrunt } from './localMediaService';
+import { THEME } from '../theme'; // Updated from @/theme
 
 // API Key retrieval for internal use (Legacy fallback)
 const getApiKey = (): string => {
@@ -13,6 +13,10 @@ const getApiKey = (): string => {
   try {
     // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
+  } catch (e) {}
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env?.API_KEY) return import.meta.env.API_KEY;
   } catch (e) {}
   return '';
 };

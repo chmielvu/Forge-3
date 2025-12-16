@@ -1,8 +1,7 @@
-
 import Graph from 'graphology';
 import { z } from 'zod';
-import { KnowledgeGraph, KGotNode, KGotEdge } from '@/lib/types/kgot';
-import { INITIAL_NODES, INITIAL_LINKS, INITIAL_LEDGER } from '@/constants';
+import { KnowledgeGraph, KGotNode, KGotEdge } from '../types/kgot';
+import { INITIAL_NODES, INITIAL_LINKS, INITIAL_LEDGER } from '../../constants';
 
 export class KGotCore {
   private graph: Graph;
@@ -50,7 +49,7 @@ export class KGotCore {
     this.graph.clear();
     
     if (kg.nodes) {
-      Object.values(kg.nodes).forEach((node) => {
+      Object.values(kg.nodes).forEach((node: KGotNode) => { // FIX: Cast node to KGotNode
         if (!this.graph.hasNode(node.id)) {
           this.graph.addNode(node.id, {
             type: node.type,
@@ -115,7 +114,8 @@ export class KGotCore {
                 meta: {
                     tension: link.weight
                 }
-            });
+            }
+        });
     });
     
     // Apply initial mutations to THIS graph instance

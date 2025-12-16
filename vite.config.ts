@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
+        // Removed '@/': path.resolve(__dirname, './src'),
       },
     },
     optimizeDeps: {

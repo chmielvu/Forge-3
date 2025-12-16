@@ -170,6 +170,13 @@ export class AudioService {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+      
+      // FIX: Disconnect nodes onended to prevent memory leaks
+      osc.onended = () => {
+          osc.disconnect();
+          gain.disconnect();
+      };
+
       osc.start(now);
       osc.stop(now + 1.0);
   }

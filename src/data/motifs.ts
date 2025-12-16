@@ -1,3 +1,4 @@
+
 /**
  * @file src/data/motifs.ts
  * @description Extendable library of visual motifs (Manara-esque and Narrative-specific).
@@ -7,6 +8,8 @@
  * predatory female gaze, and symbolic inversion of virility (testis/testimony covenant).
  * New additions emphasize psychological horror, somatic betrayal, matriarchal inversion, and Baroque Brutalism elements.
  */
+
+import { THEME } from '../theme'; // Updated from @/theme
 
 export const FORGE_MOTIFS = {
   // --- Core Manara Signatures (Clean Line Precision and Erotic Detachment) ---
@@ -75,17 +78,7 @@ export const FORGE_MOTIFS = {
   PedagogicalHammer: "Faculty hands as hammers, striking with precise lines, textures showing the necessary cruelty framed as education.",
   GaslightVeil: "Veiled shadows over Faculty expressions, soft maternal motifs hiding iron intent, symbolizing the Lie of Guardianship.",
 
-  // --- Additional Motifs from Refactoring Reports and Aesthetics of Power/Pain ---
-  AlchemicalConvergence: "Symbolic fusion of logic (geometric lines) and eros (fluid curves), motifs blending rigid architecture with soft flesh.",
-  BaroqueCanvas: "Dramatic Baroque compositions with high-contrast light, figures twisted in agony like Caravaggio martyrs, but inverted to female dominance.",
-  TenseFrames: "Cinematic framing with tense noir shadows, close-ups on pain-testimony, evoking psychological thriller suspense.",
-  GrammarOfSuffering: "Sequential motifs showing pain progression: anticipation (tense lines), spike (fractured shadows), aftermath (quenched calm).",
-  EtymologicalInversion: "Symbolic hand-on-thigh oath inverted, lines showing seizure of vulnerability, testis as forced testimony locus.",
-  WeaponizedNurture: "Soft, caring gestures with underlying cruelty, velvet textures over iron restraints, evoking conflicting signals.",
-  MoralCallous: "Faculty figures with hardening lines over time, eyes shifting from empathetic to assessing, symbolizing corruption of innocence.",
-  PredatoryGaze: "Eyes locked downward, rim-lit to emphasize fixation on vulnerability, inverting male gaze to matriarchal scrutiny.",
-
-  // --- Missing Motifs added for visualCoherenceEngine.ts compatibility ---
+  // --- Additional Motifs added for visualCoherenceEngine.ts compatibility ---
   OntologicalVertigo: "Dutch angle, distorted perspective. The architecture of the room seems to twist. The Subject clutching the floor as if falling.",
   SomaticBetrayal: "Macro shot of flushed skin, sweat beads, and dilated pupils. Visual evidence of unwilling physiological arousal or terror.",
   ToxicLullaby: "Intimate close-up. Lips whispering into an ear. A tear track catching the light. The 'Whump' aesthetic of vulnerable comfort.",

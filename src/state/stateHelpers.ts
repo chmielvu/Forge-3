@@ -1,6 +1,6 @@
 
 import { YandereLedger } from '../types';
-import { KnowledgeGraph, KGotNode, KGotEdge } from '@/lib/types/kgot';
+import { KnowledgeGraph, KGotNode, KGotEdge } from '../lib/types/kgot';
 
 /**
  * Safely updates the ledger with clamping logic for 0-100 ranges

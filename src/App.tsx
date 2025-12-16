@@ -19,16 +19,12 @@ import {
 import { useGameStore } from './state/gameStore';
 import { audioService } from './services/AudioService';
 import { BEHAVIOR_CONFIG } from './config/behaviorTuning'; 
-import { THEME, DEFAULT_MEDIA_BACKGROUND_URL, DARK_ACADEMIA_GRID_TEXTURE_URL } from '@/theme'; // Updated to use alias
+import { THEME, DEFAULT_MEDIA_BACKGROUND_URL, DARK_ACADEMIA_GRID_TEXTURE_URL } from './theme'; // Updated to use relative path
 
 // New UI Components
-import StartScreen from './components/StartScreen'; // Corrected import
+import StartScreen from './components/StartScreen'; 
 import GameLayout from './components/GameLayout'; 
 import DevOverlay from './components/DevOverlay';
-
-// Re-export constants for backward compatibility if any legacy imports exist, 
-// though direct imports from 'theme' are preferred.
-export { THEME, DEFAULT_MEDIA_BACKGROUND_URL, DARK_ACADEMIA_GRID_TEXTURE_URL };
 
 // --- GLOBAL STYLES & FONTS ---
 const GlobalStyles = () => (
@@ -109,7 +105,7 @@ const Vignette = () => (
 // --- APP ENTRY POINT ---
 
 export default function App() {
-  const { sessionActive, startSession, gameState, resetGame } = useGameStore();
+  const { sessionActive, startSession, resetGame } = useGameStore();
 
   const handleStartSession = React.useCallback((isLite: boolean) => {
     // Crucial: Update BEHAVIOR_CONFIG.TEST_MODE before `startSession` might trigger worker-dependent logic

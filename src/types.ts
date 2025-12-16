@@ -1,4 +1,3 @@
-
 import { KnowledgeGraph } from './lib/types/kgot';
 
 export enum CharacterId {
@@ -121,47 +120,6 @@ export interface CoherenceReport {
   completionPercentage: number;
 }
 
-export interface MultimodalSliceExports {
-  multimodalTimeline: MultimodalTurn[];
-  currentTurnId: string | null;
-  mediaQueue: {
-    pending: MediaQueueItem[];
-    inProgress: MediaQueueItem[];
-    failed: MediaQueueItem[];
-  };
-  audioPlayback: {
-    currentPlayingTurnId: string | null;
-    isPlaying: boolean;
-    volume: number;
-    playbackRate: number;
-    autoAdvance: boolean;
-    hasUserInteraction: boolean;
-  };
-  registerTurn: (text: string, visualPrompt: string, audioMarkup?: string, metadata?: any, script?: ScriptItem[]) => MultimodalTurn;
-  setCurrentTurn: (turnId: string) => void;
-  goToNextTurn: () => void;
-  goToPreviousTurn: () => void;
-  getTurnById: (turnId: string) => MultimodalTurn | undefined;
-  getTimelineStats: () => { totalTurns: number; loadedTurns: number; pendingMedia: number; failedMedia: number; completionRate: number }; // Fixed typo
-  pruneOldTurns: (keepCount: number) => void;
-  enqueueMediaForTurn: (item: MediaQueueItem) => void;
-  markMediaPending: (item: MediaQueueItem) => void;
-  markMediaReady: (turnId: string, type: 'image' | 'audio' | 'video', dataUrl: string, duration?: number, alignment?: any[]) => void;
-  markMediaError: (turnId: string, type: 'image' | 'audio' | 'video', errorMessage: string) => void;
-  removeMediaFromQueue: (item: MediaQueueItem) => void;
-  retryFailedMedia: (turnId: string, type?: 'image' | 'audio' | 'video') => void;
-  playTurn: (turnId: string) => void;
-  pauseAudio: () => void;
-  resumeAudio: () => void;
-  seekAudio: (time: number) => void;
-  setVolume: (volume: number) => void;
-  setPlaybackRate: (rate: number) => void;
-  toggleAutoAdvance: () => void;
-  setHasUserInteraction: () => void;
-  getCoherenceReport: (turnId: string) => CoherenceReport;
-  resetMultimodalState: () => void;
-}
-
 export type SubjectStatus = 'ACTIVE' | 'BROKEN' | 'ISOLATED' | 'COMPLIANT' | 'REBELLIOUS';
 
 export interface SubjectState {
@@ -179,20 +137,79 @@ export interface SubjectState {
   injuries: string[]; // NEW: Specific injury tracking (e.g. "Bruised Tunica")
 }
 
+export interface MultimodalSliceExports {
+  multimodalTimeline: MultimodalTurn[];
+  currentTurnId: string | null;
+  mediaQueue: {
+    pending: MediaQueueItem[];
+    inProgress: MediaQueueItem[];
+    failed: MediaQueueItem[];
+  };
+  audioPlayback: {
+    currentPlayingTurnId: string | null;
+    isPlaying: boolean;
+    volume: number;
+    playbackRate: number;
+    autoAdvance: boolean;
+    hasUserInteraction: boolean;
+  };
+  registerTurn: (
+    text: string,
+    visualPrompt: string,
+    audioMarkup: string | undefined,
+    metadata: MultimodalTurn['metadata'],
+    script?: ScriptItem[]
+  ) => MultimodalTurn;
+  setCurrentTurn: (turnId: string) => void;
+  goToNextTurn: () => void;
+  goToPreviousTurn: () => void;
+  getTurnById: (turnId: string) => MultimodalTurn | undefined;
+  getTimelineStats: () => {
+    totalTurns: number;
+    loadedTurns: number;
+    pendingMedia: number;
+    failedMedia: number;
+    completionRate: number;
+  };
+  pruneOldTurns: (keepCount: number) => void;
+  enqueueMediaForTurn: (item: MediaQueueItem) => void;
+  markMediaPending: (item: MediaQueueItem) => void;
+  markMediaReady: (
+    turnId: string,
+    type: 'image' | 'audio' | 'video',
+    dataUrl: string,
+    duration?: number,
+    alignment?: Array<{ index: number; start: number; end: number; speaker: string }>
+  ) => void;
+  markMediaError: (turnId: string, type: 'image' | 'audio' | 'video', errorMessage: string) => void;
+  removeMediaFromQueue: (item: MediaQueueItem) => void;
+  retryFailedMedia: (turnId: string, type?: 'image' | 'audio' | 'video') => void;
+  playTurn: (turnId: string) => Promise<void>;
+  pauseAudio: () => void;
+  resumeAudio: () => void;
+  seekAudio: (time: number) => void;
+  setVolume: (volume: number) => void;
+  setPlaybackRate: (rate: number) => void;
+  toggleAutoAdvance: () => void;
+  setHasUserInteraction: () => void;
+  getCoherenceReport: (turnId: string) => CoherenceReport;
+  resetMultimodalState: () => void;
+}
+
 export interface SubjectSliceExports {
   subjects: Record<string, SubjectState>;
   initializeSubjects: () => void;
   updateSubject: (id: string, updates: Partial<SubjectState>) => void;
-  getSubject: (id: string) => SubjectState;
-  triggerSubjectReaction: (actionType: 'COMPLY' | 'DEFY' | 'OBSERVE' | 'SPEAK', context: any) => void;
+  getSubject: (id: string) => SubjectState | undefined;
+  triggerSubjectReaction: (playerActionType: 'COMPLY' | 'DEFY' | 'OBSERVE' | 'SPEAK', context: string) => void;
 }
 
 export interface GameState {
   ledger: YandereLedger;
   location: string;
   turn: number;
-  nodes: GraphNode[];
-  links: any[];
+  nodes: GraphNode[]; 
+  links: any[]; // Consider defining a more specific type for links if they are not KGotEdge
   seed: number;
 }
 
@@ -317,7 +334,7 @@ export interface PrefectThought {
   hiddenMotivation: string;
   internalMonologue: string;
   sabotageAttempt: { target: string; method: string; deniability: number } | null;
-  allianceSignal: { target: string; message: string } | null;
+  allianceSignal: { target: string; message: string };
   emotionalState: { paranoia: number; desperation: number; confidence: number };
   secretsUncovered: string[];
   favorScoreDelta: number;

@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { Heart, Skull, Target, Brain, Activity } from 'lucide-react';
 import { YandereLedger } from '../types';
-import { THEME } from '@/theme';
+import { THEME } from '../theme';
 
 export default function LedgerDisplay({ ledger }: { ledger: YandereLedger }) {
   const metrics = [

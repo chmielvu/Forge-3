@@ -1,5 +1,6 @@
+
 import { YandereLedger } from '../types';
-import { THEME } from '@/theme';
+import { THEME } from '../theme';
 
 export type NarratorMode = 
   | 'MOCKING_JESTER' 

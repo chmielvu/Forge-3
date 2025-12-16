@@ -1,6 +1,9 @@
+
+
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
-import { VISUAL_MANDATE } from "@/config/visualMandate";
+import { VISUAL_MANDATE } from "../config/visualMandate";
+import { useGameStore } from '../state/gameStore'; 
 
 // Robust API Key Retrieval
 const getApiKey = (): string => {
@@ -11,6 +14,10 @@ const getApiKey = (): string => {
   try {
     // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
+  } catch (e) {}
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env?.API_KEY) return import.meta.env.API_KEY;
   } catch (e) {}
   return '';
 };

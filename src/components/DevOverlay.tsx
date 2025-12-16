@@ -7,11 +7,11 @@ import { X, Activity, Terminal, Database, FileText, Layout, Clock, Play, Refresh
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
 import { CoherenceReport, MediaStatus } from '../types';
 import { regenerateMediaForTurn } from '../state/mediaController';
-import { KGotController } from '@/controllers/KGotController'; // Updated to use alias
+import { KGotController } from '../controllers/KGotController'; // Updated to use relative path
 import LedgerDisplay from './LedgerDisplay'; 
 import PrefectLeaderboard from './PrefectLeaderboard'; 
 import SubjectPanel from './SubjectPanel'; 
-import { THEME } from '@/theme';
+import { THEME } from '../theme';
 import { audioService } from '../services/AudioService'; // Explicitly import audioService
 
 interface MediaStatusIndicatorProps {
@@ -64,7 +64,7 @@ const DevOverlay: React.FC = () => {
   const debugTrace = useGameStore(s => s.lastDirectorDebug);
   const kgot = useGameStore(s => s.kgot);
   const prefects = useGameStore(s => s.prefects);
-  const subjects = useGameStore(s => s.subjects);
+  const subjects = useGameStore(s => s.subjects); 
 
   // Multimodal state
   const {

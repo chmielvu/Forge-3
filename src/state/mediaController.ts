@@ -3,7 +3,7 @@ import { useGameStore } from './gameStore';
 import { generateNarrativeImage, generateSpeech, buildVisualPrompt, generateDramaticAudio } from '../services/mediaService';
 import { MediaQueueItem, MediaStatus, MultimodalTurn, CharacterId, YandereLedger, PrefectDNA } from '../types';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
-import { INITIAL_LEDGER } from '@/constants';
+import { INITIAL_LEDGER } from '../constants'; // Updated from @/constants
 import { selectNarratorMode, NARRATOR_VOICES } from '../services/narratorEngine';
 import { TensionManager } from '../services/TensionManager';
 

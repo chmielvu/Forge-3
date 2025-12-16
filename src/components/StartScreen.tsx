@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { Feather, Skull, Database } from 'lucide-react';
 import { audioService } from '../services/AudioService';
-import { THEME, DARK_ACADEMIA_GRID_TEXTURE_URL } from '@/theme';
+import { THEME, DARK_ACADEMIA_GRID_TEXTURE_URL } from '../theme';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning'; 
 
 interface StartScreenProps {

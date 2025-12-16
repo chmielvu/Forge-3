@@ -9,7 +9,7 @@ import {
   ScriptItem
 } from '../types';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning';
-import { INITIAL_LEDGER } from '@/constants';
+import { INITIAL_LEDGER } from '../constants'; // Updated from @/constants
 import { audioService } from '../services/AudioService';
 
 // Helper to generate a unique ID

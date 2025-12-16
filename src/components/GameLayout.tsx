@@ -1,10 +1,11 @@
 
+
 'use client';
 
 import * as React from 'react';
 import { motion } from "framer-motion";
-import { Card } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card } from "./ui/card";
+import { ScrollArea } from "./ui/scroll-area";
 import Header from "./Header";
 import MediaPanel from "./MediaPanel";
 import NarrativeLog from "./NarrativeLog";
@@ -12,7 +13,7 @@ import ActionControls from "./ActionControls";
 import LedgerDisplay from "./LedgerDisplay";
 import { useGameStore } from '../state/gameStore';
 import { useReducedMotion } from '../hooks/useReducedMotion.ts';
-import { THEME } from "@/theme";
+import { THEME } from "../theme";
 
 const containerVariants = {
   hidden: { opacity: 0 },

@@ -292,6 +292,31 @@ import { preloadUpcomingMedia } from './state/mediaController';
 await preloadUpcomingMedia(currentTurnId, 2);
 ```
 
+### Session Branching
+
+```ts
+// Save current state as a named session
+const { saveSnapshot } = useGameStore();
+saveSnapshot(); // Includes full multimodal timeline
+
+// Later, load it back
+const { loadSnapshot } = useGameStore();
+loadSnapshot();
+```
+
+### Batch Media Regeneration
+
+```ts
+import { batchRegenerateMedia } from './state/mediaController';
+
+// Regenerate media for multiple turns
+const failedTurns = multimodalTimeline
+  .filter(t => t.imageStatus === 'error')
+  .map(t => t.id);
+
+await batchRegenerateMedia(failedTurns);
+```
+
 ---
 
 ## Configuration
@@ -344,55 +369,6 @@ The multimodal tab shows:
 * `1-9` - Quick choice selection
 
 * `←/→` - Navigate timeline (when MediaPanel focused)
-
----
-
-## Advanced Patterns
-
-### Auto-Advance Playback
-
-```ts
-const { toggleAutoAdvance, audioPlayback } = useGameStore();
-
-// Enable auto-advance (plays next turn when audio ends)
-if (!audioPlayback.autoAdvance) {
-  toggleAutoAdvance();
-}
-```
-
-### Timeline Replay
-
-```ts
-import { turnService } from './state/turnService';
-
-// Replay entire timeline with auto-advance
-await turnService.replayTimeline(true);
-```
-
-### Session Branching
-
-```ts
-// Save current state as a named session
-const { saveSnapshot } = useGameStore();
-saveSnapshot(); // Includes full multimodal timeline
-
-// Later, load it back
-const { loadSnapshot } = useGameStore();
-loadSnapshot();
-```
-
-### Batch Media Regeneration
-
-```ts
-import { batchRegenerateMedia } from './state/mediaController';
-
-// Regenerate media for multiple turns
-const failedTurns = multimodalTimeline
-  .filter(t => t.imageStatus === 'error')
-  .map(t => t.id);
-
-await batchRegenerateMedia(failedTurns);
-```
 
 ---
 

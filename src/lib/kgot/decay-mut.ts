@@ -4,7 +4,7 @@
 // Modular: Call standalone or via mutations.apply.
 
 import Graph from 'graphology'; // Core graph type
-import { KGOT_CONFIG } from '@/config/behaviorTuning';
+import { KGOT_CONFIG } from '../../config/behaviorTuning';
 
 interface DecayConfig {
   rate: number; // 0.05 = 5% loss/turn

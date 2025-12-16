@@ -5,7 +5,7 @@ import * as React from 'react';
 import { Brain, Clock, MapPin, Skull, Terminal } from 'lucide-react';
 import { useGameStore } from '../state/gameStore';
 import { audioService } from '../services/AudioService';
-import { THEME } from '@/theme';
+import { THEME } from '../theme';
 
 const Header: React.FC = () => {
   const { gameState, isThinking, isDevOverlayOpen, setDevOverlayOpen } = useGameStore();

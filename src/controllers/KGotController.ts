@@ -1,4 +1,5 @@
-import { KnowledgeGraph, KGotNode, KGotEdge } from '@/lib/types/kgot';
+
+import { KnowledgeGraph, KGotNode, KGotEdge } from '../lib/types/kgot';
 import { UnifiedDirectorOutput } from '../lib/schemas/unifiedDirectorSchema';
 import { YandereLedger, PrefectDNA } from '../types';
 import { KGotCore } from '../lib/kgot/core';
@@ -6,9 +7,9 @@ import { applyMutations } from '../lib/kgot/mutations';
 import { fuzzyResolve } from '../lib/kgot/search';
 import { runLayoutAsync } from '../lib/kgot/layout';
 import { updateCentrality, detectCommunities, calculateDominancePath, pruneGraph } from '../lib/kgot/metrics';
-import { INITIAL_LEDGER, INITIAL_NODES, INITIAL_LINKS } from '@/constants';
+import { INITIAL_LEDGER, INITIAL_NODES, INITIAL_LINKS } from '../constants';
 import { GraphRAGIndexer } from '../lib/kgot/graphrag';
-import { KGOT_CONFIG } from '@/config/behaviorTuning';
+import { KGOT_CONFIG } from '../config/behaviorTuning';
 import { applyDecayMutation } from '../lib/kgot/decay-mut';
 
 /**

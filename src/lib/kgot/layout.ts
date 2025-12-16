@@ -1,7 +1,8 @@
 
+
 import type { KGotCore } from './core';
 import forceAtlas2 from 'graphology-layout-forceatlas2'; // Import for main thread fallback
-import { BEHAVIOR_CONFIG } from '@/config/behaviorTuning';
+import { BEHAVIOR_CONFIG } from '../../config/behaviorTuning';
 
 let worker: Worker | null = null;
 let workerAvailable: boolean | null = null; // Track worker availability

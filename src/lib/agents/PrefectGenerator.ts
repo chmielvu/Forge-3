@@ -1,4 +1,3 @@
-
 import { PrefectDNA, TraitVector, PrefectArchetype, PrefectPsychometrics } from '../../types';
 
 // --- 1. Deterministic PRNG (Mulberry32) ---
@@ -63,7 +62,7 @@ const PROCEDURAL_ARCHETYPES: Record<string, ArchetypeTemplate> = {
       somaticSignature: "Muscles tense like a spring, darting eyes, restless energy"
     },
     appearanceDescription: "A lean, wiry woman with erratic, wild hair often in a messy braid. Piercing, gleeful green eyes. Wears cropped, utilitarian clothing that reveals a scarred midriff. Often fidgeting with a small, sharp object.",
-    narrativeFunctionDescription: "Specializes in direct physical coercion. Translates theoretical pain into visceral reality. Seeks the 'perfect break' in subjects.",
+    narrativeFunctionDescription: "Specializes in direct physical coercion. Translates theoretical pain into visceral reality. Seeks the 'perfect break' in Subjects.",
     promptKeywords: ["kinetic_impact", "gleeful_cruelty", "scarred_midriff", "predatory_grin"],
     visualDNA: "Feral, athletic, coiled, predatory grin, scarred midriff, tight leather",
     somaticSignature: "Muscles tense like a spring, darting eyes, restless energy, body language like a coiled viper"
@@ -134,7 +133,7 @@ const PROCEDURAL_ARCHETYPES: Record<string, ArchetypeTemplate> = {
     narrativeFunctionDescription: "The Double Agent. Provides narrative contrast between the institution's brutality and hidden resistance. Offers high-risk, high-reward alliances.",
     promptKeywords: ["double_agent", "coded_signals", "cynical_mask", "hidden_fire"],
     visualDNA: "Chameleon, fiery red hair, intense green eyes, worn pragmatic clothes",
-    somaticSignature: "Smoker's slouch, eyes dart to exits, clenched jaw (public)"
+    somaticSignature: "Smoker's slouch, eyes dart to exits, clenched jaw (public), urgent gestures in private (dropping a key)"
   },
   'The Zealot': {
     // Bias: High Submission, Low Cunning, High Anxiety
@@ -396,16 +395,6 @@ export function initializePrefects(seed: number, count: number = 4): PrefectDNA[
       promptKeywords: template.promptKeywords,
       visualDNA: template.visualDNA,
       somaticSignature: template.somaticSignature
-    });
-  });
-
-  // Initialize relationships (random affinity)
-  prefects.forEach(p1 => {
-    prefects.forEach(p2 => {
-      if (p1.id !== p2.id) {
-        // -1.0 to 1.0
-        p1.relationships[p2.id] = (rand() * 2) - 1;
-      }
     });
   });
 

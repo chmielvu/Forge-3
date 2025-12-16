@@ -1,4 +1,3 @@
-
 import Graph from 'graphology';
 import louvain from 'graphology-communities-louvain';
 import { KGotCore } from './core';
@@ -7,7 +6,8 @@ import * as tf from '@tensorflow/tfjs';
 import { localGrunt } from '../../services/localMediaService'; // For summaries
 import { openDB } from 'idb'; // Lightweight IDB wrapper (from 'idb' dep)
 import { applyDecayMutation, triggerPeriodicDecay } from './decay-mut'; // Modular decay import
-import { KGOT_CONFIG } from '@/config/behaviorTuning';
+import { KGOT_CONFIG } from '../../config/behaviorTuning';
+import { KGotNode, KGotEdge } from '../types/kgot'; // Import KGotNode for attribute typing
 
 interface GraphRAGIndex {
   entities: Record<string, { label: string; features: number[] }>;
@@ -152,10 +152,10 @@ export class GraphRAGIndexer {
     const entities: Record<string, { label: string; features: number[] }> = {};
     const internalGraph = this.core.internalGraph;
     
-    internalGraph.forEachNode((nodeId, attrs) => {
+    internalGraph.forEachNode((nodeId, attrs: KGotNode['attributes']) => { // FIX: Cast attrs to KGotNode['attributes']
       const pr = (attrs.pagerank as number) || 0;
-      const dom = (attrs.attributes?.agent_state?.dominance as number) ?? 0;
-      const par = (attrs.attributes?.currentEmotionalState?.paranoia as number) ?? 0;
+      const dom = (attrs.agent_state?.dominance as number) ?? 0;
+      const par = (attrs.currentEmotionalState?.paranoia as number) ?? 0;
       entities[nodeId] = { label: (attrs.label as string), features: [pr, dom, par] }; 
     });
 
@@ -281,8 +281,8 @@ export class GraphRAGIndexer {
                 // FIXED: Use internalGraph.edges() for multigraphs
                 internalGraph.edges(source, target).forEach(edgeId => {
                     // FIX: Cast attrs to any
-                    const attrs: any = internalGraph.getEdgeAttributes(edgeId);
-                    if ((attrs.weight as number) > 0.3) {
+                    const attrs: KGotEdge = internalGraph.getEdgeAttributes(edgeId) as KGotEdge;
+                    if (attrs.weight > 0.3) {
                         evidenceEdges.push({ source, target, ...attrs });
                     }
                 });

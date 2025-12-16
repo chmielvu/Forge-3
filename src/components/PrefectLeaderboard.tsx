@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { PrefectDNA } from '../types';
 import { Trophy, Skull, Crown, Activity } from 'lucide-react';
-import { THEME } from '@/theme';
+import { THEME } from '../theme';
 
 interface Props {
   prefects: PrefectDNA[];

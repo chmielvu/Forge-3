@@ -5,7 +5,7 @@ import { LIGHTING_PRESETS } from '../config/visualMandate';
 import { CHARACTER_VOICE_MAP } from '../config/voices';
 import { FORGE_MOTIFS, ARCHETYPE_VISUAL_MAP } from '../data/motifs'; 
 import { NarrativeBeat } from '../services/TensionManager';
-import { THEME } from '@/theme';
+import { THEME } from '../theme'; // Updated from @/theme
 
 /**
  * AudioCoherenceEngine v2
