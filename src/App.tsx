@@ -101,11 +101,24 @@ const Vignette = () => (
   <div className="absolute inset-0 pointer-events-none z-[6] bg-[radial-gradient(circle_at_center,transparent_8%,rgba(12,10,9,0.85)_80%,#0c0a09_100%)]" />
 );
 
+// New Boot Loader Component
+const BootLoader = () => (
+  <div className="flex flex-col items-center justify-center h-screen bg-[#0c0a09] text-[#065f46] font-mono z-50">
+    <div className="flex flex-col gap-4 items-center">
+      <Loader2 size={48} className="animate-spin text-[#065f46] opacity-80" />
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-sm tracking-[0.3em] uppercase animate-pulse">Initializing Neuro-Symbolic Engine</span>
+        <span className="text-xs text-[#065f46]/50">Restoring System State...</span>
+      </div>
+    </div>
+  </div>
+);
+
 
 // --- APP ENTRY POINT ---
 
 export default function App() {
-  const { sessionActive, startSession, resetGame } = useGameStore();
+  const { sessionActive, startSession, resetGame, hasHydrated } = useGameStore();
 
   const handleStartSession = React.useCallback((isLite: boolean) => {
     // Crucial: Update BEHAVIOR_CONFIG.TEST_MODE before `startSession` might trigger worker-dependent logic
@@ -119,6 +132,19 @@ export default function App() {
     // Now start the session which will use the updated TEST_MODE
     startSession(isLite);
   }, [startSession, resetGame]);
+
+  // Gate rendering: Do not show ANY UI until the store has rehydrated from IndexedDB.
+  // This prevents race conditions where default state overwrites persisted state.
+  if (!hasHydrated) {
+    return (
+      <div className={`relative w-full h-screen flex flex-col ${THEME.colors.bg} ${THEME.colors.textMain} overflow-hidden font-serif`}>
+        <GlobalStyles />
+        <div className="scanline" />
+        <GrainOverlay />
+        <BootLoader />
+      </div>
+    );
+  }
 
   return (
     <div className={`relative w-full h-screen flex flex-col ${THEME.colors.bg} ${THEME.colors.textMain} overflow-hidden selection:bg-[#7f1d1d]/50 selection:text-white font-serif animate-fade-in`}>

@@ -1,6 +1,7 @@
 
+
 import * as React from 'react';
-import { Play, Pause, FastForward, Rewind, Volume2, VolumeX, Loader2, RefreshCw, Speaker, ImageOff, MicOff } from 'lucide-react';
+import { Play, Pause, FastForward, Rewind, Volume2, VolumeX, Loader2, RefreshCw, Speaker, ImageOff, MicOff, Terminal } from 'lucide-react';
 import { regenerateMediaForTurn } from '../state/mediaController';
 import { MediaStatus } from '../types';
 import { audioService } from '../services/AudioService';
@@ -131,14 +132,20 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ variant = 'full', className = '
     <div className={`relative flex flex-col items-center justify-center bg-black font-serif overflow-hidden ${className}`}>
       <div className="relative flex-1 w-full h-full flex items-center justify-center overflow-hidden">
         
-        {/* Loading Overlay */}
+        {/* Thematic Loading Overlay */}
         {(videoStatus === MediaStatus.pending || imageStatus === MediaStatus.pending) && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40 text-[#e7e5e4] animate-pulse backdrop-blur-[1px]" role="status" aria-live="polite">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70 text-[#e7e5e4] backdrop-blur-[2px]" role="status" aria-live="polite">
             {variant === 'full' && (
-              <>
-                <Loader2 size={32} className={`animate-spin mb-4 opacity-80 ${THEME.colors.accent}`} aria-hidden="true" /> {/* Emerald green loader */}
-                <span className="font-mono text-xs uppercase tracking-widest opacity-80">GENERATING_VISUALS...</span>
-              </>
+              <div className="flex flex-col items-center gap-4 animate-pulse-slow">
+                <div className={`relative p-4 border border-[#065f46]/30 rounded-full`}>
+                    <Loader2 size={32} className={`animate-spin text-[#065f46]`} aria-hidden="true" />
+                    <div className="absolute inset-0 border border-[#065f46]/10 rounded-full animate-ping" />
+                </div>
+                <div className="flex flex-col items-center gap-1 font-mono text-xs uppercase tracking-widest text-[#065f46]">
+                    <span className="flex items-center gap-2"><Terminal size={12} /> Constructing Narrative Architecture...</span>
+                    <span className="text-[10px] opacity-60">Resolving Somatic Data</span>
+                </div>
+              </div>
             )}
           </div>
         )}

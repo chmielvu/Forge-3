@@ -210,12 +210,18 @@ export interface GameStoreWithPrefects extends CombinedGameStoreState {
     startSession: (isLiteMode?: boolean) => Promise<void>; 
     saveSnapshot: () => Promise<void>;
     loadSnapshot: () => Promise<void>;
+    
+    // Hydration tracking
+    hasHydrated: boolean;
+    setHasHydrated: (hasHydrated: boolean) => void;
 }
 
 export const useGameStore = create<GameStoreWithPrefects>()(
   persist(
     (set, get, api) => ({
       ...getInitialBaseState(), // Initialize with the base state factory
+      
+      hasHydrated: false, // Default to false until rehydration completes
 
       ...createMultimodalSlice(set, get, api),
       ...createSubjectSlice(set, get, api),
@@ -239,6 +245,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       setDevOverlayOpen: (isDevOverlayOpen) => set({ isDevOverlayOpen }),
       updatePrefects: (prefects) => set({ prefects }),
       setLiteMode: (isLiteMode) => set({ isLiteMode }),
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
       updateGameState: (updates) => set((state) => ({
         gameState: { ...state.gameState, ...updates }
@@ -523,7 +530,7 @@ export const useGameStore = create<GameStoreWithPrefects>()(
       resetGame: () => {
         get().resetMultimodalState(); // Reset multimodal slice
         get().initializeSubjects();   // Re-initialize subjects slice
-        set({ ...getInitialBaseState() }); // Reset main store state
+        set({ ...getInitialBaseState(), hasHydrated: true }); // Reset main store state but keep hydrated
         audioService.stopDrone(); // Stop drone on reset
       },
 
@@ -626,12 +633,16 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         audioPlayback: state.audioPlayback,
         isLiteMode: state.isLiteMode,
         subjects: state.subjects,
-        kgot: state.kgot, // <--- CRITICAL ADDITION: Persist Knowledge Graph (Memories/Grudges)
+        kgot: state.kgot, // Persist Knowledge Graph
       }),
       merge: (persistedState, currentState) => {
-        // Defensively handle persistedState possibly being null or undefined
         const state = persistedState ? (persistedState as Partial<CombinedGameStoreState>) : {};
+        // Ensure sessionActive is false on reload so we don't auto-start audio contexts without interaction
         return { ...currentState, ...state, sessionActive: false, isThinking: false }; 
+      },
+      onRehydrateStorage: () => (state) => {
+        // Hydration callback: Mark state as hydrated to allow UI to render
+        state?.setHasHydrated(true);
       },
     }
   )
