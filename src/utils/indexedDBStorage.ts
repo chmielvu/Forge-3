@@ -1,4 +1,3 @@
-
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 
 interface ForgeDB extends DBSchema {
@@ -22,6 +21,9 @@ interface ForgeDB extends DBSchema {
   };
 }
 
+// @google/genai: Implement the Storage interface for zustand's persist middleware compatibility
+// FIX: Removed "implements Storage" as IndexedDB operations are asynchronous and do not conform to the synchronous Web Storage API.
+// Zustand's persist middleware supports custom async storage objects without this explicit interface.
 class ForgeStorageManager {
   private db: IDBPDatabase<ForgeDB> | null = null;
   private dbPromise: Promise<IDBPDatabase<ForgeDB>> | null = null;
@@ -68,25 +70,56 @@ class ForgeStorageManager {
     return this.db;
   }
 
-  async saveGameState(key: string, data: any) {
+  // --- Methods implementing the Web Storage API interface (for zustand's persist middleware) ---
+
+  // @google/genai: Implements Storage.getItem for zustand's persist middleware
+  async getItem(key: string): Promise<string | null> {
     const db = await this.getDb();
-    if (!db) return;
+    if (!db) return JSON.stringify({}); // FIX: Return empty JSON on DB error
     try {
-      await db.put('game-state', data, key);
+      const data = await db.get('game-state', key);
+      return data ? JSON.stringify(data) : JSON.stringify({}); // FIX: Return empty JSON if no data, or on parse error
     } catch (error) {
-      console.error(`[ForgeStorageManager] Failed to save game state ${key}:`, error);
+      console.error(`[ForgeStorageManager] Failed to get item ${key}:`, error);
+      return JSON.stringify({}); // FIX: Return empty JSON string to prevent rehydration failure
     }
   }
   
-  async loadGameState(key: string) {
+  // @google/genai: Implements Storage.setItem for zustand's persist middleware
+  async setItem(key: string, value: string): Promise<void> {
     const db = await this.getDb();
-    if (!db) return null;
+    if (!db) return;
     try {
-      return await db.get('game-state', key);
+      const data = JSON.parse(value);
+      await db.put('game-state', data, key);
     } catch (error) {
-      console.error(`[ForgeStorageManager] Failed to load game state ${key}:`, error);
-      return null;
+      console.error(`[ForgeStorageManager] Failed to set item ${key}:`, error);
     }
+  }
+  
+  // @google/genai: Implements Storage.removeItem for zustand's persist middleware
+  async removeItem(key: string): Promise<void> {
+    const db = await this.getDb();
+    if (!db) return;
+    try {
+      await db.delete('game-state', key);
+    } catch (error) {
+      console.error(`[ForgeStorageManager] Failed to remove item ${key}:`, error);
+    }
+  }
+
+  // --- Custom methods for game-state and graph-state specific to this application ---
+  // These are *not* part of the standard `Storage` interface but are used by gameStore.ts directly.
+
+  async saveGameState(key: string, data: any) {
+    // This calls the `setItem` method which handles the 'game-state' object store
+    await this.setItem(key, JSON.stringify(data));
+  }
+  
+  async loadGameState(key: string): Promise<any | null> {
+    // This calls the `getItem` method, then parses the JSON
+    const data = await this.getItem(key);
+    return data ? JSON.parse(data) : null;
   }
   
   async saveGraphState(key: string, graphData: any) {
@@ -99,7 +132,7 @@ class ForgeStorageManager {
     }
   }
   
-  async loadGraphState(key: string) {
+  async loadGraphState(key: string): Promise<any | null> {
     const db = await this.getDb();
     if (!db) return null;
     try {
@@ -109,120 +142,37 @@ class ForgeStorageManager {
       return null;
     }
   }
-  
-  async cacheMedia(id: string, type: 'image' | 'audio', data: string) {
-    const db = await this.getDb();
-    if (!db) return;
-    try {
-      await db.put('media-cache', {
-        id,
-        type,
-        data,
-        timestamp: Date.now()
-      });
-    } catch (error) {
-      console.error(`[ForgeStorageManager] Failed to cache media ${id}:`, error);
-    }
+
+  // --- Properties and methods required by the Storage interface but not typically used for IndexedDB ---
+
+  // @google/genai: Implements Storage.length (stubbed as it's not practical for IndexedDB)
+  get length(): number {
+    console.warn("Storage.length not actively maintained for IndexedDB custom storage.");
+    return 0; // Not a useful metric for IDB
+  }
+
+  // @google/genai: Implements Storage.key(index) (stubbed)
+  key(index: number): string | null {
+    console.warn("Storage.key(index) not actively maintained for IndexedDB custom storage.");
+    return null; // Not practical for IDB
   }
   
-  async getMediaCache(id: string) {
-    const db = await this.getDb();
-    if (!db) return null;
-    try {
-      return await db.get('media-cache', id);
-    } catch (error) {
-      console.error(`[ForgeStorageManager] Failed to get media cache ${id}:`, error);
-      return null;
-    }
-  }
-  
-  async clearOldMedia(maxAge: number = 7 * 24 * 60 * 60 * 1000) {
-    const db = await this.getDb();
-    if (!db) return;
-    try {
-      const threshold = Date.now() - maxAge;
-      const tx = db.transaction('media-cache', 'readwrite');
-      const index = tx.store.index('by-timestamp');
-      
-      for await (const cursor of index.iterate()) {
-        if (cursor.value.timestamp < threshold) {
-          await cursor.delete();
-        }
-      }
-      await tx.done;
-    } catch (error) {
-      console.error("[ForgeStorageManager] Failed to clear old media:", error);
-    }
-  }
-  
-  async exportFullState() {
-    const db = await this.getDb();
-    if (!db) return null;
-    try {
-      const gameState = await db.getAll('game-state');
-      const graphState = await db.getAll('graph-state');
-      
-      return {
-        gameState,
-        graphState,
-        exportedAt: new Date().toISOString()
-      };
-    } catch (error) {
-      console.error("[ForgeStorageManager] Failed to export full state:", error);
-      return null;
-    }
-  }
-  
-  async importFullState(data: any) {
-    const db = await this.getDb();
-    if (!db) return;
-    try {
-      const tx = db.transaction(['game-state', 'graph-state'], 'readwrite');
-      
-      if (data.gameState) {
-        for (const [key, value] of Object.entries(data.gameState)) {
-          await tx.objectStore('game-state').put(value, key);
-        }
-      }
-      
-      if (data.graphState) {
-        for (const [key, value] of Object.entries(data.graphState)) {
-          await tx.objectStore('graph-state').put(value, key);
-        }
-      }
-      
-      await tx.done;
-    } catch (error) {
-      console.error("[ForgeStorageManager] Failed to import full state:", error);
-    }
+  // @google/genai: Implements Storage.clear() (stubbed to prevent accidental full wipe)
+  clear(): void {
+    console.warn("Storage.clear() is not implemented to prevent accidental full wipe. Use specific removeItem for game-state, and clear other object stores explicitly.");
+    // To clear all data in 'game-state', one would need to iterate and delete.
+    // To clear other stores, explicitly call `db.clear('store-name')`.
   }
 }
 
+// @google/genai: Export a single instance of the storage manager
 export const forgeStorage = new ForgeStorageManager();
 
-// Zustand middleware adapter
-export const createIndexedDBStorage = () => ({
-  getItem: async (name: string): Promise<string | null> => {
-    try {
-      const data = await forgeStorage.loadGameState(name);
-      return data ? JSON.stringify(data) : null;
-    } catch (error) {
-      console.error(`[createIndexedDBStorage] getItem failed for ${name}:`, error);
-      // FIX: Return a valid empty JSON string on error to prevent Zustand from breaking.
-      return JSON.stringify({}); 
-    }
-  },
-  setItem: async (name: string, value: string): Promise<void> => {
-    try {
-      const data = JSON.parse(value); // Ensure value is parseable
-      await forgeStorage.saveGameState(name, data);
-    } catch (error) {
-      console.error(`[createIndexedDBStorage] setItem failed for ${name}:`, error);
-      // Do not re-throw, fail gracefully
-    }
-  },
-  removeItem: async (name: string): Promise<void> => {
-    // Implement if needed
-  }
-});
-    
+// @google/genai: Export a factory function that returns the forgeStorage instance for zustand's createJSONStorage
+// FIX: The returned object should conform to Zustand's PersistStorage, which allows async methods.
+// By omitting 'length', 'key', and 'clear', it implicitly satisfies the requirements for an async storage object.
+export const createIndexedDBStorage = (): {
+  getItem: (name: string) => Promise<string | null>;
+  setItem: (name: string, value: string) => Promise<void>;
+  removeItem: (name: string) => Promise<void>;
+} => forgeStorage;

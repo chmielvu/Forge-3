@@ -11,9 +11,11 @@ export class KGotCore {
     if (initial) this.importGraph(initial);
 
     // Auto-bootstrap if graph is empty after initial import
-    if (this.graph.order === 0) {
-      this.initializeCanonicalNodes();
-    }
+    // FIX: Removed automatic initialization from constructor.
+    // Initialization of canonical nodes will now be explicitly called in startSession().
+    // if (this.graph.order === 0) {
+    //   this.initializeCanonicalNodes();
+    // }
   }
 
   getGraph(): KnowledgeGraph {
@@ -81,7 +83,7 @@ export class KGotCore {
   }
 
   // --- NEW: Canonical Node Initialization ---
-  private initializeCanonicalNodes(): void {
+  public initializeCanonicalNodes(): void {
     const muts: any[] = [];
 
     // 1. Add Nodes from Constants
@@ -126,7 +128,11 @@ export class KGotCore {
         case 'add_node':
           // FIX: Add checks for mut.node existence
           if (mut.node && mut.node.id && !this.graph.hasNode(mut.node.id)) {
-            this.graph.addNode(mut.node.id, mut.node.attributes);
+            this.graph.addNode(mut.node.id, {
+              type: mut.node.type, // Make sure type is transferred
+              label: mut.node.label, // Make sure label is transferred
+              ...mut.node.attributes
+            });
           }
           break;
         case 'add_edge':

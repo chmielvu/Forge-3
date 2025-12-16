@@ -1,6 +1,3 @@
-
-'use client';
-
 import { motion, AnimatePresence } from "framer-motion";
 import { ScrollArea } from "./ui/scroll-area";
 import { Badge } from "./ui/badge";
@@ -10,7 +7,7 @@ import { LogEntry } from '../types';
 import { useGameStore } from '../state/gameStore';
 import { useEffect, useRef } from 'react';
 import { useReducedMotion } from '../hooks/useReducedMotion.ts';
-import { cn } from "../utils"; // Updated to relative path
+import { cn } from "../utils";
 import { THEME } from "../theme";
 
 // Updated speaker styles to match the new dark academia palette
@@ -22,6 +19,7 @@ const speakerStyles: Record<string, string> = {
 };
 
 export default function NarrativeLog() {
+  // Use individual selectors for maximum stability and performance
   const logs = useGameStore(s => s.logs);
   const isThinking = useGameStore(s => s.isThinking);
   const multimodalTimeline = useGameStore(s => s.multimodalTimeline);
@@ -36,19 +34,18 @@ export default function NarrativeLog() {
     }
   }, [logs.length, isThinking]); // Dependency on logs.length for new entries
 
-  // Render the full log content, as the TypewriterText and ScriptRenderer logic were internal
+  // Render the full log content
   const renderLogContent = (log: LogEntry) => {
     const state = useGameStore.getState();
     // FIX: Safely access traumaLevel using optional chaining and default value
     const traumaLevel = state.gameState?.ledger?.traumaLevel ?? 0; 
     const isPsychosis = log.type === 'psychosis' || (log.type === 'narrative' && traumaLevel > 80);
     const logId = log.id; // Access log ID for multimodal timeline check
+    
     // FIX: Use the reactive multimodalTimeline from component scope
     const multimodalTurn = multimodalTimeline.find(t => t.id === logId);
     const hasScript = log.type === 'narrative' && multimodalTurn?.script && multimodalTurn.script.length > 0;
 
-    // Use raw content, as Typewriter and other formatting logic are now external to this component
-    // If you wish to re-enable Typewriter, you'd need to re-integrate its component
     const contentToRender = log.content;
 
     if (hasScript && multimodalTurn?.script) {

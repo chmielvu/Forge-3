@@ -125,8 +125,8 @@ Generate the JSON response strictly adhering to the schema.
 1. **THINK**: Plan the scene using the "Rhythm of Escalation" and retrieved memory evidence.
 2. **NARRATE**: Use the **NARRATIVE TEXTURE** guidelines. Focus on SOMATIC SENSATION.
 3. **SOMATIC STATE**: Populate the 'somatic_state' field.
-4. **MEMORY & RELATIONAL STORAGE (CRITICAL)**:
-   You are the Co-Writer. You MUST store internal state changes using 'kgot_mutations':
+4. **CONTINUOUS NARRATIVE MEMORY (CRITICAL)**:
+   You are the Co-Writer. You MUST store internal state changes using 'kgot_mutations' to create a living world:
    - If an agent is insulted or defied -> 'update_grudge' (+10 to +30).
    - If an agent is obeyed or manipulated -> 'update_relationship' (Trust/Favor).
    - If a significant plot event occurs -> 'add_memory' (Describe the event clearly).

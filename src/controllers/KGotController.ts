@@ -1,4 +1,3 @@
-
 import { KnowledgeGraph, KGotNode, KGotEdge } from '../lib/types/kgot';
 import { UnifiedDirectorOutput } from '../lib/schemas/unifiedDirectorSchema';
 import { YandereLedger, PrefectDNA } from '../types';
@@ -31,9 +30,11 @@ export class KGotController {
     this.core = new KGotCore(initialGraph);
     
     // Auto-bootstrap if empty (Initial Session Start)
-    if (Object.keys(this.core.getGraph().nodes).length === 0) {
-      this.initializeCanonicalNodes();
-    }
+    // FIX: Removed automatic initialization from constructor.
+    // Initialization of canonical nodes will now be explicitly called in startSession().
+    // if (Object.keys(this.core.getGraph().nodes).length === 0) {
+    //   this.initializeCanonicalNodes();
+    // }
 
     // Initialize GraphRAG
     this.graphRAG = new GraphRAGIndexer(this.core);

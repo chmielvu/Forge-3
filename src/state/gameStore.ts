@@ -9,24 +9,14 @@ import { createSubjectSlice } from './subjectSlice';
 import { LogEntry, CombinedGameStoreState, CharacterId, PrefectDNA, GameState, YandereLedger, SubjectSliceExports } from '../types';
 import { KGotController } from '../controllers/KGotController'; // Updated from @/controllers/KGotController
 import { enqueueTurnForMedia } from './mediaController';
+// @google/genai: Fixed import paths for createIndexedDBStorage and forgeStorage
 import { createIndexedDBStorage, forgeStorage } from '../utils/indexedDBStorage';
 import { BEHAVIOR_CONFIG } from '../config/behaviorTuning'; // Updated from @/config/behaviorTuning
 import { audioService } from '../services/AudioService';
 import { initializePrefects } from '../lib/agents/PrefectGenerator'; // Updated from lazy import
 
-// Use a factory function for initial graph to avoid global state pollution
-const getInitialGraph = (): KnowledgeGraph => {
-    // Create an empty graph first
-    const emptyGraph: KnowledgeGraph = { 
-        nodes: {}, 
-        edges: [], 
-        global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' } 
-    };
-    // Initialize a controller with the empty graph.
-    // The KGotController constructor will automatically call initializeCanonicalNodes if the graph is empty.
-    const controller = new KGotController(emptyGraph);
-    return controller.getGraph();
-};
+// FIX: Removed the getInitialGraph factory.
+// Canonical nodes will now be initialized explicitly in startSession().
 
 const INITIAL_GAME_STATE: GameState = {
     ledger: INITIAL_LEDGER,
@@ -180,7 +170,7 @@ function selectActivePrefects(
 // FIX: Add a factory function for the initial base state
 const getInitialBaseState = () => ({
   gameState: INITIAL_GAME_STATE,
-  // Fix: Ensure narrative_phase is strictly typed as 'ACT_1' here.
+  // FIX: Initialize kgot with an empty, but structured, object
   kgot: { nodes: {}, edges: [], global_state: { turn_count: 0, tension_level: 0, narrative_phase: 'ACT_1' as KnowledgeGraph['global_state']['narrative_phase'] } },
   logs: INITIAL_LOGS,
   choices: ['Observe the surroundings', 'Check your restraints', 'Recall your purpose'],
@@ -545,6 +535,17 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         // Update global config only once as a fallback for non-reactive services
         BEHAVIOR_CONFIG.TEST_MODE = isLiteMode; 
         
+        // FIX: Explicitly initialize canonical nodes if the KGoT is empty (new game)
+        // Ensure we operate on the freshest state
+        let currentKgot = get().kgot;
+        const controller = new KGotController(currentKgot);
+        
+        if (Object.keys(controller.getGraph().nodes).length === 0) {
+            console.log("[GameStore] Initializing canonical KGoT nodes for new session.");
+            controller.initializeCanonicalNodes();
+            set({ kgot: controller.getGraph() }); // Update store with initialized graph
+        }
+
         if (state.prefects.length === 0) {
             const newPrefects = initializePrefects(state.gameState.seed);
             set({ prefects: newPrefects });
@@ -552,10 +553,9 @@ export const useGameStore = create<GameStoreWithPrefects>()(
         
         get().initializeSubjects(); // Initialize subjects when starting a session
         
-        // Sync initial prefects to KGoT
-        const controller = new KGotController(get().kgot);
+        // Sync initial prefects to KGoT (if graph was already loaded or just initialized)
         get().prefects.forEach(p => controller.updateAgentAttributes(p));
-        set({ kgot: controller.getGraph() });
+        set({ kgot: controller.getGraph() }); // Ensure the updated graph is set after prefects sync
         
         // Guard audio start with a check for the AudioContext state
         try {
@@ -563,6 +563,14 @@ export const useGameStore = create<GameStoreWithPrefects>()(
           audioService.startDrone();
         } catch (e) {
           console.warn("Audio failed to auto-start - waiting for interaction", e);
+        }
+
+        // *** NEW: Trigger the very first narrative turn (Auto-Start) ***
+        // Only trigger if logs are empty (system logs only) to prevent double-generation on reloads
+        const currentLogs = get().logs;
+        if (currentLogs.length <= 2) { 
+             const initialPrompt = "You awaken to the cold reality of The Forge. You are restrained, and the air hums with unseen power. Describe the first sensory input, your immediate physical state, and the oppressive silence. Awaiting the first lesson from Magistra Selene.";
+             await get().processPlayerTurn(initialPrompt);
         }
       },
 

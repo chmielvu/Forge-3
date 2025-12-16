@@ -174,9 +174,9 @@ export default function App() {
      useGameStore.persist.rehydrate();
   }, []);
 
-  // Gate rendering: Do not show ANY UI until the store has rehydrated from IndexedDB.
-  // This prevents race conditions where default state overwrites persisted state.
-  // Also check for essential game state data (like ledger.subjectId) for a more robust hydration check.
+  // FIX: Robust hydration gate check for essential data.
+  // Do not show ANY UI until the store has rehydrated from IndexedDB
+  // AND the gameState.ledger.subjectId is present (indicating meaningful data).
   if (!hasHydrated || !gameState?.ledger?.subjectId) {
     return (
       <div className={`relative w-full h-screen flex flex-col ${THEME.colors.bg} ${THEME.colors.textMain} overflow-hidden font-serif`}>
@@ -204,4 +204,3 @@ export default function App() {
     </div>
   );
 }
-    
