@@ -1,4 +1,3 @@
-
 import { useGameStore } from './gameStore';
 import { generateNarrativeImage, generateSpeech, buildVisualPrompt, generateDramaticAudio } from '../services/mediaService';
 import { MediaQueueItem, MediaStatus, MultimodalTurn, CharacterId, YandereLedger, PrefectDNA } from '../types';
@@ -242,46 +241,6 @@ export const processMediaQueue = async (): Promise<void> => {
   mediaProcessingTimeout = window.setTimeout(processMediaQueue, MEDIA_PROCESSING_DELAY_MS);
 };
 
-export const regenerateMediaForTurn = async (turnId: string, type?: 'image' | 'audio' | 'video') => {
-  const store = useGameStore.getState();
-  const turn = store.getTurnById(turnId);
-  if (!turn) {
-    console.warn(`[MediaController] Cannot regenerate media for non-existent turn ${turnId}`);
-    return;
-  }
-
-  const previousTurnIndex = turn.turnIndex - 1;
-  const previousTurn = previousTurnIndex >= 0 ? store.multimodalTimeline[previousTurnIndex] : undefined;
-  
-  let target: string | PrefectDNA = CharacterId.PLAYER;
-  if (turn.metadata?.activeCharacters && turn.metadata.activeCharacters.length > 0) {
-      const prefectId = turn.metadata.activeCharacters[0];
-      const prefect = store.gameState.prefects.find(p => p.id === prefectId);
-      target = prefect || prefectId;
-  }
-
-  const itemsToRemove: MediaQueueItem[] = [];
-  if (!type || type === 'image') itemsToRemove.push({ turnId, type: 'image', prompt: '', priority: 0 });
-  if (!type || type === 'audio') itemsToRemove.push({ turnId, type: 'audio', prompt: '', priority: 0 });
-
-  itemsToRemove.forEach(item => store.removeMediaFromQueue(item));
-
-  useGameStore.setState((state) => ({
-    multimodalTimeline: state.multimodalTimeline.map((t) => {
-      if (t.id === turnId) {
-        const updatedTurn = { ...t };
-        if (!type || type === 'image') updatedTurn.imageStatus = MediaStatus.idle;
-        if (!type || type === 'audio') updatedTurn.audioStatus = MediaStatus.idle;
-        return updatedTurn;
-      }
-      return t;
-    }),
-  }));
-
-  const ledgerToUse = turn.metadata?.ledgerSnapshot || store.gameState.ledger;
-  store.requestMediaForTurn(turn, target, ledgerToUse, previousTurn, true);
-};
-
 export const preloadUpcomingMedia = (currentTurnId: string, count: number) => {
   const store = useGameStore.getState();
   const { multimodalTimeline } = store;
@@ -302,7 +261,8 @@ export const preloadUpcomingMedia = (currentTurnId: string, count: number) => {
 };
 
 export const batchRegenerateMedia = async (turnIds: string[]) => {
+  const store = useGameStore.getState();
   for (const turnId of turnIds) {
-    await regenerateMediaForTurn(turnId);
+    store.regenerateMediaForTurn(turnId);
   }
 };

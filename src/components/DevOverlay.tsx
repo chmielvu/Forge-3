@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useGameStore } from '../state/gameStore';
 import { NarratorMode, LogEntry } from '../types';
@@ -185,7 +186,6 @@ export default function DevOverlay() {
              <div>SHAME: <span className="text-[#e7e5e4]">{gameState.ledger.shamePainAbyssLevel}</span></div>
              <div>COMPLIANCE: <span className="text-[#e7e5e4]">{gameState.ledger.complianceScore}</span></div>
              <div>HOPE: <span className="text-[#e7e5e4]">{gameState.ledger.hopeLevel}</span></div>
-             <div>AROUSAL: <span className="text-[#e7e5e4]">{gameState.ledger.arousalLevel}</span></div>
           </div>
         </div>
 

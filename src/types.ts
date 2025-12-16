@@ -1,4 +1,3 @@
-
 import { KnowledgeGraph } from './lib/types/kgot';
 
 export enum CharacterId {
@@ -29,16 +28,12 @@ export interface YandereLedger {
   subjectId: string;
   physicalIntegrity: number;
   traumaLevel: number;
-  shamePainAbyssLevel: number;
+  shamePainAbyssLevel: number; // Used as a proxy for deep psychological distress/arousal mix
   hopeLevel: number;
   complianceScore: number;
   fearOfAuthority: number;
   desireForValidation: number;
   capacityForManipulation: number;
-  arousalLevel: number;
-  prostateSensitivity: number;
-  ruinedOrgasmCount: number;
-  castrationAnxiety: number;
   traumaBonds: Record<string, number>;
   phase: 'alpha' | 'beta' | 'gamma';
 }
@@ -64,8 +59,8 @@ export interface ScriptItem {
 export type LogEntry = 
   | { id: string; type: 'system'; content: string }
   | { id: string; type: 'thought'; content: string }
-  | { id: string; type: 'narrative'; content: string; visualContext?: string; script?: ScriptItem[]; speaker?: string } // Added speaker property
-  | { id: string; type: 'psychosis'; content: string; speaker?: string }; // Added speaker property
+  | { id: string; type: 'narrative'; content: string; visualContext?: string; script?: ScriptItem[]; speaker?: string } 
+  | { id: string; type: 'psychosis'; content: string; speaker?: string }; 
 
 export enum MediaStatus {
   idle = 'idle',
@@ -79,7 +74,7 @@ export interface MultimodalTurn {
   id: string;
   turnIndex: number;
   text: string;
-  script?: ScriptItem[]; // The structured play script
+  script?: ScriptItem[]; 
   visualPrompt: string;
   imageStatus: MediaStatus;
   imageData?: string;
@@ -87,7 +82,7 @@ export interface MultimodalTurn {
   audioStatus: MediaStatus;
   audioUrl?: string;
   audioDuration?: number;
-  audioAlignment?: Array<{ index: number; start: number; end: number; speaker: string }>; // For syncing text highlights
+  audioAlignment?: Array<{ index: number; start: number; end: number; speaker: string }>; 
   audioError?: string;
   videoStatus: MediaStatus;
   videoUrl?: string;
@@ -108,13 +103,13 @@ export interface MediaQueueItem {
   type: 'image' | 'audio' | 'video';
   prompt: string;
   narrativeText?: string;
-  script?: ScriptItem[]; // Optional structured script for dramatic audio
+  script?: ScriptItem[]; 
   target?: string | PrefectDNA;
   previousTurn?: MultimodalTurn;
   addedAt?: number;
   retries?: number;
-  priority?: number; // NEW: Lower number = higher priority
-  errorMessage?: string; // Added to MediaQueueItem for failed queue
+  priority?: number; 
+  errorMessage?: string; 
 }
 
 export interface CoherenceReport {
@@ -141,7 +136,7 @@ export interface SubjectState {
   currentLocation: string;
   visualCondition: string;
   flags: string[];
-  injuries: string[]; // NEW: Specific injury tracking (e.g. "Bruised Tunica")
+  injuries: string[]; 
 }
 
 export interface MultimodalSliceExports {
@@ -191,6 +186,7 @@ export interface MultimodalSliceExports {
   markMediaError: (turnId: string, type: 'image' | 'audio' | 'video', errorMessage: string) => void;
   removeMediaFromQueue: (item: MediaQueueItem) => void;
   retryFailedMedia: (turnId: string, type?: 'image' | 'audio' | 'video') => void;
+  regenerateMediaForTurn: (turnId: string, type?: 'image' | 'audio' | 'video') => void;
   playTurn: (turnId: string) => Promise<void>;
   pauseAudio: () => void;
   resumeAudio: () => void;
@@ -244,7 +240,6 @@ export interface PrefectPsychometrics {
   vocalQuirk?: string; 
   visualDNA?: string; 
   somaticSignature?: string; 
-  arousal?: number; 
   dominance?: number; 
 }
 
@@ -262,7 +257,6 @@ export interface PrefectDNA {
       paranoia: number;
       desperation: number;
       confidence: number;
-      arousal?: number; 
       dominance?: number; 
   };
   lastPublicAction?: string;
@@ -282,8 +276,8 @@ export interface GameState {
   nodes: GraphNode[]; 
   links: any[]; 
   seed: number;
-  subjects: Record<string, SubjectState>; // Nested subjects
-  prefects: PrefectDNA[]; // Nested prefects
+  subjects: Record<string, SubjectState>; 
+  prefects: PrefectDNA[]; 
 }
 
 export interface CombinedGameStoreState extends MultimodalSliceExports, SubjectSliceExports {

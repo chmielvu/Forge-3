@@ -5,7 +5,7 @@ import { LIGHTING_PRESETS } from '../config/visualMandate';
 import { CHARACTER_VOICE_MAP } from '../config/voices';
 import { FORGE_MOTIFS, ARCHETYPE_VISUAL_MAP } from '../data/motifs'; 
 import { NarrativeBeat } from '../services/TensionManager';
-import { THEME } from '../theme'; // Updated from @/theme
+import { THEME } from '../theme';
 
 /**
  * AudioCoherenceEngine v2
@@ -74,7 +74,7 @@ class AudioCoherenceEngine {
 export const audioCoherenceEngine = new AudioCoherenceEngine();
 
 /**
- * VisualCoherenceEngine v3.2 – Enhanced Manara-Noir Style Lock
+ * VisualCoherenceEngine v3.2 – Enhanced Manara-Noir Style Lock with Safety Protocol
  */
 class VisualCoherenceEngine {
   private memory: VisualMemory;
@@ -124,7 +124,7 @@ class VisualCoherenceEngine {
       dirs.push("violent handheld camera shake, extreme macro 100mm lens, shallow depth f/1.2, aggressive 45° Dutch tilt, blurred periphery, focus on dilated pupils");
     } else if (ledger.traumaLevel > 60 || ledger.shamePainAbyssLevel > 60) {
       dirs.push("Dutch angle 20°, subtle handheld tremor, low-angle power shot, slightly distorted perspective");
-    } else if (ledger.arousalLevel > 50) {
+    } else if (ledger.shamePainAbyssLevel > 50) { // Replaced arousal check with shame/abyss
       dirs.push("intimate close-up, shallow depth of field, focus on glistening skin and trembling lips");
     } else if (ledger.hopeLevel < 30) {
       dirs.push("high-angle shot, wide to emphasize isolation, subject small in frame");
@@ -167,20 +167,15 @@ class VisualCoherenceEngine {
 
     // Ledger-based lighting dynamics
     if (ledger.traumaLevel > 80) {
-      // More aggressive crimson rim light, deeper shadows
       return "single dramatic crimson rim light from above, extreme chiaroscuro, deep crushed blacks, volumetric dust, almost blood-like in intensity";
     } else if (ledger.shamePainAbyssLevel > 70) {
-      // Shaming spotlight, drowning in shadows
       return "harsh, isolating overhead spotlight on subject, rest of scene in impenetrable shadow, emphasizing exposure and shame";
-    } else if (ledger.arousalLevel > 50) {
-      // Conflicting sensual and clinical lights
+    } else if (ledger.shamePainAbyssLevel > 50) { // Replaced arousal check
       return "flickering gaslight warm tones mixed with cold, clinical observation lights, creating an atmosphere of eroticized tension and scrutiny";
     } else if (ledger.traumaLevel > 50) {
-      // Existing trauma lighting
       return "single dramatic crimson rim light from above, extreme chiaroscuro, deep crushed blacks, volumetric dust";
     }
     
-    // Fallback to determined archetype preset or default
     return lightingPreset;
   }
 
@@ -189,7 +184,7 @@ class VisualCoherenceEngine {
     const lower = narrativeText.toLowerCase();
 
     if (ledger.traumaLevel > 40) details.push("sweat-beaded forehead, pale complexion");
-    if (ledger.arousalLevel > 50) details.push("unwillingly flushed skin, dilated pupils");
+    if (ledger.shamePainAbyssLevel > 50) details.push("unwillingly flushed skin, dilated pupils");
     if (lower.match(/pain|hurt|ache|throb/)) details.push("visible wince, clenched jaw");
     if (lower.match(/trembl|shiver|shak/)) details.push("uncontrollable fine trembling");
     if (lower.match(/sweat|perspir/)) details.push("glistening sweat on exposed skin");
@@ -208,10 +203,9 @@ class VisualCoherenceEngine {
     // Ledger-based motif triggers
     if (ledger.traumaLevel > 70) motifs.push(FORGE_MOTIFS.TearTracks, FORGE_MOTIFS.AvertedGaze, FORGE_MOTIFS.GlisteningSweat);
     if (ledger.shamePainAbyssLevel > 60) motifs.push(FORGE_MOTIFS.AvertedGaze, FORGE_MOTIFS.TearTracks, FORGE_MOTIFS.OntologicalVertigo);
-    if (ledger.arousalLevel > 50) motifs.push(FORGE_MOTIFS.FlushedSkin, FORGE_MOTIFS.DilatedPupils, FORGE_MOTIFS.SomaticBetrayal);
+    if (ledger.shamePainAbyssLevel > 50) motifs.push(FORGE_MOTIFS.FlushedSkin, FORGE_MOTIFS.DilatedPupils, FORGE_MOTIFS.SomaticBetrayal);
     if (ledger.hopeLevel < 30) motifs.push(FORGE_MOTIFS.RigidPosture, FORGE_MOTIFS.OntologicalVertigo, FORGE_MOTIFS.CrushedBlacks);
 
-    // Keyword-based motif triggers
     if (lowerNarrative.includes("kneel")) motifs.push(FORGE_MOTIFS.RigidPosture);
     if (lowerNarrative.includes("whisper")) motifs.push(FORGE_MOTIFS.ToxicLullaby, FORGE_MOTIFS.ForeignEndearment);
     if (lowerNarrative.includes("touch")) motifs.push(FORGE_MOTIFS.HealersBind); 
@@ -242,13 +236,12 @@ class VisualCoherenceEngine {
         }
     }
 
-    // Dynamic pose and expression based on ledger
     if (ledger.traumaLevel > 80) poseAndExpression.push("body convulsing slightly, eyes wide with terror and dissociation");
     else if (ledger.traumaLevel > 60) poseAndExpression.push("trembling posture, eyes fixed on an unseen threat");
     
     if (ledger.shamePainAbyssLevel > 70) poseAndExpression.push("head bowed in deep shame, shoulders hunched, attempting to hide");
     
-    if (ledger.arousalLevel > 50) poseAndExpression.push("pose of unwilling arousal, body subtly arching, eyes half-lidded with conflict");
+    if (ledger.shamePainAbyssLevel > 50) poseAndExpression.push("pose of unwilling fever, body subtly arching, eyes half-lidded with conflict");
     
     if (ledger.hopeLevel < 30) poseAndExpression.push("defeated slump, eyes dull and vacant, resigned expression");
     else if (ledger.hopeLevel > 70) poseAndExpression.push("faint spark of defiance in eyes, tense but ready posture");

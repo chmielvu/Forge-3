@@ -1,3 +1,4 @@
+
 import { YandereLedger, PrefectPsychometrics } from '../../types';
 
 // Knowledge Graph of Thoughts (KGoT) Schema
@@ -42,7 +43,6 @@ export interface AgentState {
   active_schemes?: string[];
   
   // New Emotional States
-  arousal?: number;
   dominance?: number;
 
   // Simulation Data
@@ -50,7 +50,6 @@ export interface AgentState {
       paranoia: number;
       desperation: number;
       confidence: number;
-      arousal?: number;
       dominance?: number;
   };
   last_action?: string;

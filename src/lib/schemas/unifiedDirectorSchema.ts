@@ -28,7 +28,6 @@ export interface UnifiedDirectorOutput {
           paranoia: number;
           desperation: number;
           confidence: number;
-          arousal?: number;
           dominance?: number;
       };
       public_action: string;
@@ -83,7 +82,6 @@ export const UnifiedDirectorZodSchema = z.object({
         paranoia: z.number().default(0),
         desperation: z.number().default(0),
         confidence: z.number().default(0.5),
-        arousal: z.number().optional(),
         dominance: z.number().optional()
     }).optional().default({ paranoia: 0, desperation: 0, confidence: 0.5 }),
     public_action: z.string().default("Observes."),
@@ -252,7 +250,6 @@ export const UnifiedDirectorOutputSchema = {
                         paranoia: { type: Type.NUMBER },
                         desperation: { type: Type.NUMBER },
                         confidence: { type: Type.NUMBER },
-                        arousal: { type: Type.NUMBER },
                         dominance: { type: Type.NUMBER }
                     },
                     required: ["paranoia", "desperation", "confidence"]

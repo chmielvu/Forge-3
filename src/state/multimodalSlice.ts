@@ -306,6 +306,45 @@ export const createMultimodalSlice: StateCreator<
     });
   },
 
+  regenerateMediaForTurn: (turnId, type) => {
+    const turn = get().getTurnById(turnId);
+    if (!turn) {
+      console.warn(`[MultimodalSlice] Cannot regenerate media for non-existent turn ${turnId}`);
+      return;
+    }
+
+    const previousTurnIndex = turn.turnIndex - 1;
+    const previousTurn = previousTurnIndex >= 0 ? get().multimodalTimeline[previousTurnIndex] : undefined;
+    
+    let target: string | PrefectDNA = CharacterId.PLAYER;
+    if (turn.metadata?.activeCharacters && turn.metadata.activeCharacters.length > 0) {
+        const prefectId = turn.metadata.activeCharacters[0];
+        const prefect = get().gameState.prefects.find(p => p.id === prefectId);
+        target = prefect || prefectId;
+    }
+
+    const itemsToRemove: MediaQueueItem[] = [];
+    if (!type || type === 'image') itemsToRemove.push({ turnId, type: 'image', prompt: '', priority: 0 });
+    if (!type || type === 'audio') itemsToRemove.push({ turnId, type: 'audio', prompt: '', priority: 0 });
+
+    itemsToRemove.forEach(item => get().removeMediaFromQueue(item));
+
+    set((state) => ({
+      multimodalTimeline: state.multimodalTimeline.map((t) => {
+        if (t.id === turnId) {
+          const updatedTurn = { ...t };
+          if (!type || type === 'image') updatedTurn.imageStatus = MediaStatus.idle;
+          if (!type || type === 'audio') updatedTurn.audioStatus = MediaStatus.idle;
+          return updatedTurn;
+        }
+        return t;
+      }),
+    }));
+
+    const ledgerToUse = turn.metadata?.ledgerSnapshot || get().gameState.ledger;
+    get().requestMediaForTurn(turn, target, ledgerToUse, previousTurn, true);
+  },
+
   playTurn: async (turnId) => {
     const { multimodalTimeline, setHasUserInteraction } = get();
     const turn = multimodalTimeline.find((t) => t.id === turnId);

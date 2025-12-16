@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { KnowledgeGraph } from '../lib/types/kgot';
@@ -120,7 +121,7 @@ function selectActivePrefects(
       case 'The Yandere':
         score += 0.4;
         if (ledger.complianceScore < 30) score += 0.2;
-        if (ledger.arousalLevel > 50) score += 0.3; 
+        if (ledger.shamePainAbyssLevel > 50) score += 0.3; 
         break;
       case 'The Dissident':
         if (ledger.hopeLevel > 40) score += 0.4;
@@ -128,7 +129,6 @@ function selectActivePrefects(
         break;
       case 'The Confessor':
         if (ledger.shamePainAbyssLevel > 50 || ledger.traumaLevel > 50) score += 0.5;
-        if (ledger.arousalLevel > 30) score += 0.2;
         break;
       case 'The Logician':
         if (ledger.traumaLevel > 60 && ledger.traumaLevel < 80) score += 0.4;

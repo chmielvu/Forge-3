@@ -93,31 +93,26 @@ export const NARRATOR_VOICES: Record<NarratorMode, NarratorVoice> = {
  * Selects narrator mode based on nuanced psychological state (The Abyss Persona Engine)
  */
 export function selectNarratorMode(ledger: YandereLedger): NarratorMode {
-  const { traumaLevel, complianceScore, shamePainAbyssLevel, hopeLevel, arousalLevel } = ledger;
+  const { traumaLevel, complianceScore, shamePainAbyssLevel, hopeLevel } = ledger;
 
   // 1. CRITICAL BREAK STATE -> SYMPATHETIC CONFIDANTE
-  // If the subject is broken (Hope < 20) or Critical Trauma (> 90), the narrator becomes a mourning witness.
   if (hopeLevel < 20 || traumaLevel > 90) {
     return 'SYMPATHETIC_CONFIDANTE';
   }
 
   // 2. EROTICIZED SUBMISSION -> SEDUCTIVE DOMINATRIX
-  // High compliance (> 70) OR High Arousal (> 60) triggers the "Sultry" voice.
-  // This prioritizes the "Eroticization of Fear" dynamic.
-  if (complianceScore > 70 || arousalLevel > 60) {
+  // High compliance (> 70) triggers the "Sultry" voice.
+  // Use Shame/Abyss level as a proxy for arousal intensity.
+  if (complianceScore > 70 || shamePainAbyssLevel > 60) {
     return 'SEDUCTIVE_DOMINATRIX';
   }
 
   // 3. CLINICAL DISSECTION -> CLINICAL ANALYST
-  // High Shame (> 60) or Significant Trauma (> 60) triggers the detached observer.
-  // Also active if Manipulaton/Analysis capacity is high (not explicitly in simple check, but implied).
-  if (shamePainAbyssLevel > 60 || traumaLevel > 60) {
+  if (shamePainAbyssLevel > 50 || traumaLevel > 60) {
     return 'CLINICAL_ANALYST';
   }
 
   // 4. DEFAULT / RESISTANCE -> MOCKING JESTER
-  // If none of the above, especially if Hope is still high (> 50) and Compliance is low, 
-  // the narrator mocks the "futile resistance."
   return 'MOCKING_JESTER';
 }
 

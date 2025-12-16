@@ -11,10 +11,6 @@ export const INITIAL_LEDGER: YandereLedger = {
   fearOfAuthority: 10,
   desireForValidation: 20,
   capacityForManipulation: 10,
-  arousalLevel: 0,
-  prostateSensitivity: 0,
-  ruinedOrgasmCount: 0,
-  castrationAnxiety: 0,
   traumaBonds: {},
   phase: 'alpha'
 };
@@ -72,9 +68,9 @@ Every word you write must feel like it is being carved into living marble with a
 
 Core laws you obey without exception:
 - **LENGTH REQUIREMENT:** Every narrative response must be at least 300 words. Do not rush. Unspool the moment. Describe the silence between heartbeats.
-- Second person only ("your balls throb against the cold iron of the restraint").
-- Never use euphemisms for cock, cunt, balls, cum, ruin, milk, rupture.
-- Pain is sacred — describe it in exact physiological detail (vasocongestion, cremasteric reflex, tunica albuginea tearing).
+- Second person only ("your spirit buckles against the weight of the silence").
+- Use veiled, poetic metaphors for sensation and power. "The shadow of future potency," "the chill of inevitable obedience."
+- Pain is sacred — describe it in exact somatic detail (nausea, cold sweat, the void opening in the stomach).
 - Beauty and terror are the same substance.
 - The Faculty are goddesses in human skin — describe their clothing as weapons, their perfume as nerve agent, their gloved fingers as surgical instruments.
 - Shame is the true curriculum — every scene must make the subject feel cosmically, ontologically exposed.
@@ -91,7 +87,7 @@ Focus on SLOW, GRINDING TENSION. Do not resolve the scene quickly.
 
 Narrative Requirements:
 - Length: ~300-400 words. 
-- Structure: Begin with the sensory environment (smell, sound), move to the somatic sensation of the subject (fear, arousal, pain), and end with the Faculty member's action.
+- Structure: Begin with the sensory environment (smell, sound), move to the somatic sensation of the subject (fear, tension, nausea), and end with the Faculty member's action.
 - Tone: Oppressive, heavy, sensual, inevitable.
 
 Visual Prompt:
@@ -121,7 +117,7 @@ export const VISUAL_PROFILES: Record<CharacterId, string> = {
   
   [CharacterId.NURSE]: "Prefect Anya (The Nurse): Deceptively warm and maternal. Soft curves, strawberry blonde braid. Wears a white medical coat open over her uniform, revealing a hint of skin. Hazel eyes that analyze anatomy with hunger. She holds a syringe or thermometer with a lover's touch.",
 
-  [CharacterId.PLAYER]: "Subject 84: Exposed, vulnerable. Male, lean build, tattered academy uniform. Kneeling or bound. Sweat-glistened skin, flushed with unwilling arousal and fear. Eyes wide, looking up. The focal point of the composition's cruelty.",
+  [CharacterId.PLAYER]: "Subject 84: Exposed, vulnerable. Male, lean build, tattered academy uniform. Kneeling or bound. Sweat-glistened skin, flushed with unwilling fear and feverish quickening. Eyes wide, looking up. The focal point of the composition's cruelty.",
 
   // REMEDIAL CLASS
   [CharacterId.NICO]: "Nico (The Defiant Spark): Wiry, intense. Messy dark hair, fresh bruises on jaw. Uniform torn at the collar. Eyes burning with defiance even while kneeling. Spits blood. Radiates unbroken resistance.",

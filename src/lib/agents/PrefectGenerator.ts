@@ -1,3 +1,4 @@
+
 import { PrefectDNA, TraitVector, PrefectArchetype, PrefectPsychometrics } from '../../types';
 
 // --- 1. Deterministic PRNG (Mulberry32) ---
@@ -386,7 +387,6 @@ export function initializePrefects(seed: number, count: number = 4): PrefectDNA[
         paranoia: 0.2,
         desperation: 0.1,
         confidence: 0.5,
-        arousal: 0,
         dominance: 0.5
       },
       psychometrics: template.psychometrics,
