@@ -1,24 +1,11 @@
-
 import * as React from 'react';
 import {
-  BookOpen,
-  Skull,
-  Feather,
-  Terminal,
-  Loader2,
-  Send,
-  Database,
-  Brain,
-  Clock,
-  MapPin,
-  Scroll,
-  Activity
+  Loader2
 } from 'lucide-react';
 
 import { useGameStore } from './state/gameStore';
-import { audioService } from './services/AudioService';
 import { BEHAVIOR_CONFIG } from './config/behaviorTuning'; 
-import { THEME, DEFAULT_MEDIA_BACKGROUND_URL, DARK_ACADEMIA_GRID_TEXTURE_URL } from './theme'; 
+import { THEME } from './theme'; 
 
 // New UI Components
 import StartScreen from './components/StartScreen'; 

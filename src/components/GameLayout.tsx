@@ -1,75 +1,47 @@
-
-'use client';
-
-import * as React from 'react';
-import { motion } from "framer-motion";
-import { Card } from "./ui/card";
-import { ScrollArea } from "./ui/scroll-area";
-import Header from "./Header";
-import MediaPanel from "./MediaPanel";
-import NarrativeLog from "./NarrativeLog";
-import ActionControls from "./ActionControls";
-import LedgerDisplay from "./LedgerDisplay";
+import React from 'react';
 import { useGameStore } from '../state/gameStore';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { THEME } from "../theme";
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.12 } }
-};
-
-const childVariants = {
-  hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0 }
-};
+import { THEME } from '../theme';
 
 export default function GameLayout() {
-  const prefersReduced = useReducedMotion();
-  const { gameState } = useGameStore();
+  const { gameState, processPlayerTurn, isThinking, logs } = useGameStore();
+  const [input, setInput] = React.useState('');
+  const scrollRef = React.useRef<HTMLDivElement>(null);
 
-  const animated = (children: React.ReactNode) => prefersReduced ? children : (
-    <motion.div variants={containerVariants} initial="hidden" animate="visible">
-      {children}
-    </motion.div>
-  );
+  React.useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isThinking) return;
+    processPlayerTurn(input);
+    setInput('');
+  };
 
   return (
-    <div className="relative h-screen flex flex-col bg-[#0c0a09] overflow-hidden font-serif">
-      {/* Subtle grain for parchment feel */}
-      <div className="absolute inset-0 pointer-events-none opacity-5 mix-blend-overlay bg-[url('data:image/svg+xml,%3Csvg width=\"100\" height=\"100\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cfilter id=\"noise\"%3E%3CfeTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"4\"/%3E%3C/filter%3E%3Crect width=\"100\" height=\"100\" filter=\"url(%23noise)\" opacity=\"0.3\"/%3E%3C/svg%3E')] z-0" />
-
-      <Header />
-
-      {animated(
-        <main className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-8 p-8">
-          <motion.div variants={childVariants} className="lg:col-span-2">
-            <Card className="h-full bg-black/30 backdrop-blur-xl border border-[#292524]/40 shadow-2xl overflow-hidden rounded-3xl">
-              <MediaPanel variant="full" />
-            </Card>
-          </motion.div>
-
-          <div className="flex flex-col gap-8">
-            <motion.div variants={childVariants} className="flex-1">
-              <Card className="h-full bg-black/30 backdrop-blur-xl border border-[#292524]/40 shadow-2xl overflow-hidden rounded-3xl">
-                <ScrollArea className="h-full">
-                  <NarrativeLog />
-                </ScrollArea>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={childVariants}>
-              <Card className="bg-black/30 backdrop-blur-xl border border-[#292524]/40 p-6 shadow-2xl rounded-3xl">
-                <LedgerDisplay ledger={gameState.ledger} />
-              </Card>
-            </motion.div>
+    <div className="flex flex-col h-full p-8 max-w-4xl mx-auto w-full z-10">
+      <div className="flex-1 overflow-auto custom-scrollbar mb-4 space-y-6 p-4 bg-black/40 border border-[#292524]" ref={scrollRef}>
+        {logs.map((log) => (
+          <div key={log.id} className={`p-4 border-l-2 ${log.type === 'system' ? 'border-[#a8a29e] text-[#a8a29e] font-mono text-xs' : 'border-[#7f1d1d] text-[#e7e5e4] font-serif'}`}>
+            <div className="whitespace-pre-wrap">{log.content}</div>
           </div>
-        </main>
-      )}
-
-      <motion.div variants={childVariants}>
-        <ActionControls />
-      </motion.div>
+        ))}
+        {isThinking && <div className="text-[#7f1d1d] animate-pulse">The Loom is weaving...</div>}
+      </div>
+      
+      <form onSubmit={handleSubmit} className="w-full">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Respond..."
+          className="w-full bg-[#0c0a09] border border-[#44403c] p-4 text-[#e7e5e4] focus:outline-none focus:border-[#7f1d1d] transition-colors font-serif"
+          disabled={isThinking}
+          autoFocus
+        />
+      </form>
     </div>
   );
 }
